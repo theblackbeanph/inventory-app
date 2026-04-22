@@ -1,11 +1,11 @@
 "use client";
-import { useEffect, useState, useMemo, useRef, useCallback } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
 import { db, COLS, saveDocById, saveDoc } from "@/lib/firebase";
 import { CATALOG, CATALOG_MAP, stockDocId, beginningDocId } from "@/lib/items";
 import { collection, onSnapshot, query, where, getDocs, writeBatch, doc } from "@/lib/firebase";
-import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, ItemCategory } from "@/lib/types";
+import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, ItemCategory, DailyClose } from "@/lib/types";
 import { parseSalesCSV, applyCsvMapping, allMappedPosNames } from "@/lib/csv-mapping";
 import BottomNav from "@/components/BottomNav";
 
@@ -21,6 +21,12 @@ const CATEGORY_FILTERS: { id: FilterTab; label: string }[] = [
 
 function todayPHT(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function addDays(date: string, days: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 interface DailyMetrics {
@@ -76,7 +82,6 @@ export default function StockPage() {
 
   // End count tab
   const [endCounts, setEndCounts] = useState<Record<string, string>>({});
-  const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
   const [showReview, setShowReview] = useState(false);
   const [recountItems, setRecountItems] = useState<Set<string>>(new Set());
 
@@ -84,6 +89,7 @@ export default function StockPage() {
   const [showReset, setShowReset] = useState(false);
   const [adjustItem, setAdjustItem] = useState<string | null>(null);
   const [showCSVImport, setShowCSVImport] = useState(false);
+  const [dayClose, setDayClose] = useState<DailyClose | null>(null);
 
   useEffect(() => {
     const session = getSession();
@@ -110,7 +116,12 @@ export default function StockPage() {
       setBeginnings(map);
     });
 
-    return () => { unsubStock(); unsubAdj(); unsubBeg(); };
+    const closeQ = query(collection(db, COLS.dailyClose), where("branch", "==", b), where("department", "==", dept), where("date", "==", today));
+    const unsubClose = onSnapshot(closeQ, snap => {
+      setDayClose(snap.empty ? null : snap.docs[0].data() as DailyClose);
+    });
+
+    return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); };
   }, [router, today]);
 
   // Fetch summary data when summaryDate changes
@@ -161,34 +172,6 @@ export default function StockPage() {
 
   const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
-  const saveEndCount = useCallback(async (item: string, valStr: string) => {
-    if (!branch || !department || valStr === "") return;
-    const qty = Number(valStr);
-    if (isNaN(qty) || qty < 0) return;
-    const now = Date.now();
-    const adj: StockAdjustment = {
-      id: now, branch, department, date: today, item,
-      type: "count", qty,
-      loggedBy: BRANCH_LABELS[branch],
-    };
-    const catalogItem = CATALOG_MAP.get(item)!;
-    const stockId = stockDocId(branch, department, item);
-    const stockDoc: BranchStock = {
-      id: stockId, branch, department, item,
-      category: catalogItem.category,
-      unit: catalogItem.unit,
-      qty,
-      reorderAt: catalogItem.reorderAt,
-      lastUpdated: today,
-      lastUpdatedBy: BRANCH_LABELS[branch],
-    };
-    await Promise.all([
-      saveDocById(COLS.branchStock, stockId, stockDoc as unknown as Record<string, unknown>),
-      saveDoc(COLS.adjustments, adj as unknown as Record<string, unknown>),
-    ]);
-    setSavedItems(prev => new Set([...prev, item]));
-    setTimeout(() => setSavedItems(prev => { const s = new Set(prev); s.delete(item); return s; }), 2000);
-  }, [branch, department, today]);
 
   if (!branch || !department) return null;
 
@@ -258,15 +241,15 @@ export default function StockPage() {
         />
       )}
       {subTab === "endcount" && (
-        <EndCountContent
-          items={filtered}
-          metrics={dailyMetrics}
-          endCounts={endCounts}
-          savedItems={savedItems}
-          onCountChange={(item, val) => setEndCounts(prev => ({ ...prev, [item]: val }))}
-          onBlur={saveEndCount}
-          onReview={() => setShowReview(true)}
-        />
+        dayClose?.isLocked
+          ? <EndCountCompleted dayClose={dayClose} />
+          : <EndCountContent
+              items={filtered}
+              metrics={dailyMetrics}
+              endCounts={endCounts}
+              onCountChange={(item, val) => setEndCounts(prev => ({ ...prev, [item]: val }))}
+              onReview={() => setShowReview(true)}
+            />
       )}
       {subTab === "adjust" && (
         <AdjustContent
@@ -289,6 +272,7 @@ export default function StockPage() {
             if (!branch || !department) return;
             const batch = writeBatch(db);
             const now = Date.now();
+            const closeItems: DailyClose["items"] = {};
             for (const item of filtered) {
               if (recountItems.has(item.name)) continue;
               const val = endCounts[item.name];
@@ -303,9 +287,37 @@ export default function StockPage() {
                 unit: item.unit, qty, reorderAt: item.reorderAt,
                 lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
               });
+              const m = dailyMetrics[item.name];
+              const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : qty;
+              closeItems[item.name] = {
+                beginning: m.beginning ?? 0, inQty: m.inQty, outQty: m.outQty,
+                expected, endCount: qty, variance: qty - expected,
+              };
             }
             await batch.commit();
-            // clear recount items' local state
+
+            // Lock the day
+            const closeId = `${branch}__${department}__${today}`;
+            await saveDocById(COLS.dailyClose, closeId, {
+              id: closeId, branch, department, date: today,
+              countType: "manual", closedAt: new Date().toISOString(),
+              closedBy: BRANCH_LABELS[branch], isLocked: true, items: closeItems,
+            });
+
+            // Carry forward today's confirmed counts as tomorrow's beginning
+            const tomorrow = addDays(today, 1);
+            const begBatch = writeBatch(db);
+            let begCount = 0;
+            for (const [itemName, data] of Object.entries(closeItems)) {
+              const begId = beginningDocId(branch, department, itemName, tomorrow);
+              begBatch.set(doc(db, COLS.dailyBeginning, begId), {
+                id: begId, branch, department, item: itemName, date: tomorrow,
+                qty: data.endCount, setBy: BRANCH_LABELS[branch], updatedAt: today,
+              });
+              begCount++;
+            }
+            if (begCount > 0) await begBatch.commit();
+
             setEndCounts(prev => {
               const next = { ...prev };
               recountItems.forEach(item => { delete next[item]; });
@@ -457,13 +469,11 @@ function SummaryContent({ items, metrics, summaryDate, today, varOnly, onDateCha
 
 // ── End Count tab ─────────────────────────────────────────────────────────────
 
-function EndCountContent({ items, metrics, endCounts, savedItems, onCountChange, onBlur, onReview }: {
+function EndCountContent({ items, metrics, endCounts, onCountChange, onReview }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   endCounts: Record<string, string>;
-  savedItems: Set<string>;
   onCountChange: (item: string, val: string) => void;
-  onBlur: (item: string, val: string) => void;
   onReview: () => void;
 }) {
   const enteredCount = items.filter(i => endCounts[i.name] !== undefined && endCounts[i.name] !== "").length;
@@ -478,7 +488,6 @@ function EndCountContent({ items, metrics, endCounts, savedItems, onCountChange,
           const m = metrics[item.name];
           const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : null;
           const val = endCounts[item.name] ?? "";
-          const isSaved = savedItems.has(item.name);
 
           return (
             <div key={item.name} style={{ background: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--border)" }}>
@@ -489,23 +498,19 @@ function EndCountContent({ items, metrics, endCounts, savedItems, onCountChange,
                   {expected !== null && <span> · Expected: <strong>{expected}</strong></span>}
                 </div>
               </div>
-              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
-                <input
-                  type="number"
-                  inputMode="numeric"
-                  value={val}
-                  placeholder="—"
-                  onChange={e => onCountChange(item.name, e.target.value)}
-                  onBlur={e => onBlur(item.name, e.target.value)}
-                  style={{
-                    width: 72, padding: "8px 10px", fontSize: 16, fontWeight: 700,
-                    textAlign: "right", border: "1.5px solid",
-                    borderColor: val !== "" ? "#1A1A1A" : "var(--border)",
-                    borderRadius: 10, outline: "none", background: "var(--bg)", color: "var(--text)",
-                  }}
-                />
-                {isSaved && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 600 }}>Saved ✓</div>}
-              </div>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={val}
+                placeholder="—"
+                onChange={e => onCountChange(item.name, e.target.value)}
+                style={{
+                  width: 72, padding: "8px 10px", fontSize: 16, fontWeight: 700,
+                  textAlign: "right", border: "1.5px solid",
+                  borderColor: val !== "" ? "#1A1A1A" : "var(--border)",
+                  borderRadius: 10, outline: "none", background: "var(--bg)", color: "var(--text)",
+                }}
+              />
             </div>
           );
         })}
@@ -1020,6 +1025,44 @@ function ResetModal({ branch, onClose }: { branch: Branch; onClose: () => void }
         )}
       </div>
     </>
+  );
+}
+
+// ── End Count Completed (locked) ──────────────────────────────────────────────
+
+function EndCountCompleted({ dayClose }: { dayClose: DailyClose }) {
+  const rows = Object.entries(dayClose.items).sort(([a], [b]) => a.localeCompare(b));
+  const closedTime = new Date(dayClose.closedAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+  return (
+    <div style={{ paddingBottom: 24 }}>
+      <div style={{ margin: "12px 16px", background: "#F0FDF4", borderRadius: 12, padding: "14px 16px" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#15803D" }}>End Count Confirmed ✓</div>
+        <div style={{ fontSize: 12, color: "#16A34A", marginTop: 2 }}>
+          {dayClose.countType === "manual" ? `${dayClose.closedBy} · ${closedTime}` : "Auto-closed by system"}
+        </div>
+      </div>
+
+      <div>
+        {rows.map(([item, data]) => {
+          const varColor = data.variance === 0 ? "#16A34A" : data.variance > 0 ? "#D97706" : "#DC2626";
+          return (
+            <div key={item} style={{ background: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>Expected: {data.expected} · BEG: {data.beginning}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{data.endCount}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: varColor }}>
+                  {data.variance > 0 ? `+${data.variance}` : data.variance === 0 ? "✓" : String(data.variance)}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
   );
 }
 

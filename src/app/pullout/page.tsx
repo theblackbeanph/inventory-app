@@ -517,8 +517,8 @@ function NewManualPullOut({ branch, onBack }: { branch: Branch; onBack: () => vo
               </button>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-                  {item.category} · Class {item.itemClass}
+                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+                  {CATALOG_MAP.get(item.name)?.packSize ?? "1 pc"}
                 </div>
               </div>
               {isSelected && (

@@ -30,6 +30,7 @@ export const COLS = {
   adjustments:     "branch_adjustments",
   pulloutReqs:     "pullout_requests",   // legacy
   dailyBeginning:  "daily_beginning",
+  dailyClose:      "daily_close",
   pullOuts:        "pull_outs",
   deliveryNotes:   "delivery_notes",
   invEntries:      "invEntries",          // commissary stock movements

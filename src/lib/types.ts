@@ -150,3 +150,24 @@ export interface DailyBeginning {
   setBy: string;
   updatedAt: string;
 }
+
+export interface DailyCloseItem {
+  beginning: number;
+  inQty: number;
+  outQty: number;
+  expected: number;
+  endCount: number;
+  variance: number;
+}
+
+export interface DailyClose {
+  id: string;                         // `${branch}__${department}__${date}`
+  branch: Branch;
+  department: Department;
+  date: string;                       // YYYY-MM-DD
+  countType: "manual" | "system";
+  closedAt: string;                   // ISO timestamp
+  closedBy: string;                   // branch label or "system"
+  isLocked: boolean;
+  items: Record<string, DailyCloseItem>;
+}
