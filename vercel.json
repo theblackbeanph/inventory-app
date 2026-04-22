@@ -1,0 +1,11 @@
+{
+  "framework": "nextjs",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "crons": [
+    {
+      "path": "/api/cron/generate-pullouts",
+      "schedule": "0 12 * * 6"
+    }
+  ]
+}
