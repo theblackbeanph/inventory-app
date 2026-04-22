@@ -8,6 +8,7 @@ export interface CatalogItem {
   category: ItemCategory;
   unit: "pc" | "g" | "pack";
   reorderAt: number;
+  packSize: string;
 }
 
 export interface BranchStock {
