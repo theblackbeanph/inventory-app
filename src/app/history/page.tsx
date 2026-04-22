@@ -1,9 +1,9 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getSession, BRANCH_LABELS } from "@/lib/auth";
-import { db, COLS, collection, onSnapshot } from "@/lib/firebase";
-import type { Branch, StockAdjustment, AdjustmentType } from "@/lib/types";
+import { getSession, BRANCH_LABELS, DEPARTMENT_LABELS } from "@/lib/auth";
+import { db, COLS, collection, onSnapshot, query, where } from "@/lib/firebase";
+import type { Branch, Department, StockAdjustment, AdjustmentType } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 
 const TYPE_STYLES: Record<AdjustmentType, { label: string; bg: string; text: string }> = {
@@ -17,6 +17,7 @@ const TYPE_STYLES: Record<AdjustmentType, { label: string; bg: string; text: str
 export default function HistoryPage() {
   const router = useRouter();
   const [branch, setBranch] = useState<Branch | null>(null);
+  const [department, setDept] = useState<Department | null>(null);
   const [adjs, setAdjs] = useState<StockAdjustment[]>([]);
   const [search, setSearch] = useState("");
 
@@ -24,10 +25,11 @@ export default function HistoryPage() {
     const session = getSession();
     if (!session) { router.replace("/login"); return; }
     setBranch(session.branch);
+    setDept(session.department);
 
-    const unsub = onSnapshot(collection(db, COLS.adjustments), snap => {
+    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", session.branch), where("department", "==", session.department));
+    const unsub = onSnapshot(adjQ, snap => {
       const items = snap.docs.map(d => d.data() as StockAdjustment)
-        .filter(a => a.branch === session.branch)
         .sort((a, b) => b.id - a.id);
       setAdjs(items);
     });
@@ -50,7 +52,7 @@ export default function HistoryPage() {
     return map;
   }, [filtered]);
 
-  if (!branch) return null;
+  if (!branch || !department) return null;
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 16px)" }}>
@@ -59,7 +61,7 @@ export default function HistoryPage() {
         padding: "16px 16px 12px", position: "sticky", top: 0, zIndex: 40,
       }}>
         <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase" }}>
-          {BRANCH_LABELS[branch]}
+          {BRANCH_LABELS[branch]} · {DEPARTMENT_LABELS[department]}
         </div>
         <div style={{ fontSize: 20, fontWeight: 700, marginBottom: 12 }}>Adjustment History</div>
         <div style={{

@@ -28,7 +28,7 @@ export default function LoginPage() {
 
   function attemptLogin(b: Branch, p: string) {
     if (login(b, p)) {
-      router.replace("/stock");
+      router.replace("/department");
     } else if (p.length >= 4) {
       setError(true);
       setShake(true);

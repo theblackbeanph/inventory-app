@@ -1,16 +1,28 @@
 "use client";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { getSession } from "@/lib/auth";
+import type { Department } from "@/lib/types";
 
-const TABS = [
-  { href: "/stock",    icon: StockIcon,    label: "Stock"    },
-  { href: "/pullout",  icon: PullOutIcon,  label: "Pull Out" },
-  { href: "/delivery", icon: DeliveryIcon, label: "Delivery" },
-  { href: "/history",  icon: HistoryIcon,  label: "History"  },
+const ALL_TABS = [
+  { href: "/stock",    icon: StockIcon,    label: "Stock",    kitchenOnly: false },
+  { href: "/pullout",  icon: PullOutIcon,  label: "Pull Out", kitchenOnly: true  },
+  { href: "/delivery", icon: DeliveryIcon, label: "Delivery", kitchenOnly: true  },
+  { href: "/history",  icon: HistoryIcon,  label: "History",  kitchenOnly: false },
 ];
 
 export default function BottomNav() {
   const path = usePathname();
+  const [department, setDepartment] = useState<Department | null>(null);
+
+  useEffect(() => {
+    const session = getSession();
+    if (session) setDepartment(session.department);
+  }, []);
+
+  const tabs = ALL_TABS.filter(t => !t.kitchenOnly || department === "kitchen");
+
   return (
     <nav style={{
       position: "fixed", bottom: 0, left: 0, right: 0,
@@ -20,7 +32,7 @@ export default function BottomNav() {
       paddingBottom: "env(safe-area-inset-bottom)",
       zIndex: 50,
     }}>
-      {TABS.map(({ href, icon: Icon, label }) => {
+      {tabs.map(({ href, icon: Icon, label }) => {
         const active = path.startsWith(href);
         return (
           <Link key={href} href={href} style={{

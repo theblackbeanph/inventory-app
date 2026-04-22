@@ -1,11 +1,11 @@
 "use client";
 import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { getSession, logout, BRANCH_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
+import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
 import { db, COLS, saveDocById, saveDoc } from "@/lib/firebase";
-import { CATALOG, CATALOG_MAP, stockDocId } from "@/lib/items";
+import { CATALOG, CATALOG_MAP, stockDocId, beginningDocId } from "@/lib/items";
 import { collection, onSnapshot, query, where, getDocs, writeBatch, doc } from "@/lib/firebase";
-import type { Branch, BranchStock, StockAdjustment, DailyBeginning, ItemCategory } from "@/lib/types";
+import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, ItemCategory } from "@/lib/types";
 import { parseSalesCSV, applyCsvMapping, allMappedPosNames } from "@/lib/csv-mapping";
 import BottomNav from "@/components/BottomNav";
 
@@ -30,9 +30,9 @@ interface DailyMetrics {
   endCount: number | null;
 }
 
-function computeMetrics(adjustments: StockAdjustment[], beginnings: Record<string, number>): Record<string, DailyMetrics> {
+function computeMetrics(catalog: typeof CATALOG, adjustments: StockAdjustment[], beginnings: Record<string, number>): Record<string, DailyMetrics> {
   const metrics: Record<string, DailyMetrics> = {};
-  for (const item of CATALOG) {
+  for (const item of catalog) {
     metrics[item.name] = { beginning: beginnings[item.name] ?? null, inQty: 0, outQty: 0, endCount: null };
   }
   const latestCount: Record<string, { qty: number; id: number }> = {};
@@ -59,6 +59,7 @@ export default function StockPage() {
   const router = useRouter();
   const [today] = useState(todayPHT);
   const [branch, setBranch] = useState<Branch | null>(null);
+  const [department, setDept] = useState<Department | null>(null);
   const [stocks, setStocks] = useState<Record<string, BranchStock>>({});
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
   const [beginnings, setBeginnings] = useState<Record<string, number>>({});
@@ -88,18 +89,21 @@ export default function StockPage() {
     const session = getSession();
     if (!session) { router.replace("/login"); return; }
     setBranch(session.branch);
+    setDept(session.department);
     const b = session.branch;
+    const dept = session.department;
 
-    const unsubStock = onSnapshot(collection(db, COLS.branchStock), snap => {
+    const stockQ = query(collection(db, COLS.branchStock), where("branch", "==", b), where("department", "==", dept));
+    const unsubStock = onSnapshot(stockQ, snap => {
       const map: Record<string, BranchStock> = {};
-      snap.docs.forEach(d => { const s = d.data() as BranchStock; if (s.branch === b) map[s.item] = s; });
+      snap.docs.forEach(d => { const s = d.data() as BranchStock; map[s.item] = s; });
       setStocks(map);
     });
 
-    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", b), where("date", "==", today));
+    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", b), where("department", "==", dept), where("date", "==", today));
     const unsubAdj = onSnapshot(adjQ, snap => setAdjustments(snap.docs.map(d => d.data() as StockAdjustment)));
 
-    const begQ = query(collection(db, COLS.dailyBeginning), where("branch", "==", b), where("date", "==", today));
+    const begQ = query(collection(db, COLS.dailyBeginning), where("branch", "==", b), where("department", "==", dept), where("date", "==", today));
     const unsubBeg = onSnapshot(begQ, snap => {
       const map: Record<string, number> = {};
       snap.docs.forEach(d => { const beg = d.data() as DailyBeginning; map[beg.item] = beg.qty; });
@@ -120,8 +124,8 @@ export default function StockPage() {
     let cancelled = false;
     (async () => {
       const [adjSnap, begSnap] = await Promise.all([
-        getDocs(query(collection(db, COLS.adjustments), where("branch", "==", branch), where("date", "==", summaryDate))),
-        getDocs(query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("date", "==", summaryDate))),
+        getDocs(query(collection(db, COLS.adjustments), where("branch", "==", branch), where("department", "==", department), where("date", "==", summaryDate))),
+        getDocs(query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("department", "==", department), where("date", "==", summaryDate))),
       ]);
       if (cancelled) return;
       setSummaryAdj(adjSnap.docs.map(d => d.data() as StockAdjustment));
@@ -130,10 +134,12 @@ export default function StockPage() {
       setSummaryBeg(map);
     })();
     return () => { cancelled = true; };
-  }, [branch, summaryDate, today, adjustments, beginnings]);
+  }, [branch, department, summaryDate, today, adjustments, beginnings]);
 
-  const dailyMetrics = useMemo(() => computeMetrics(adjustments, beginnings), [adjustments, beginnings]);
-  const summaryMetrics = useMemo(() => computeMetrics(summaryAdj, summaryBeg), [summaryAdj, summaryBeg]);
+  const deptCatalog = useMemo(() => department ? CATALOG.filter(i => i.department === department) : [], [department]);
+
+  const dailyMetrics = useMemo(() => computeMetrics(deptCatalog, adjustments, beginnings), [deptCatalog, adjustments, beginnings]);
+  const summaryMetrics = useMemo(() => computeMetrics(deptCatalog, summaryAdj, summaryBeg), [deptCatalog, summaryAdj, summaryBeg]);
 
   // Pre-populate end count inputs from Firestore (only fill blanks, not override in-progress)
   useEffect(() => {
@@ -146,33 +152,32 @@ export default function StockPage() {
     });
   }, [dailyMetrics]);
 
-  const filtered = useMemo(() => CATALOG.filter(item =>
+  const filtered = useMemo(() => deptCatalog.filter(item =>
     categoryFilter === "all" || item.category === categoryFilter
-  ), [categoryFilter]);
+  ), [deptCatalog, categoryFilter]);
 
-  const lowCount  = CATALOG.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).length;
-  const critCount = CATALOG.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).length;
+  const lowCount  = deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).length;
+  const critCount = deptCatalog.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).length;
 
   const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
   const saveEndCount = useCallback(async (item: string, valStr: string) => {
-    if (!branch || valStr === "") return;
+    if (!branch || !department || valStr === "") return;
     const qty = Number(valStr);
     if (isNaN(qty) || qty < 0) return;
     const now = Date.now();
     const adj: StockAdjustment = {
-      id: now, branch, date: today, item,
+      id: now, branch, department, date: today, item,
       type: "count", qty,
       loggedBy: BRANCH_LABELS[branch],
     };
     const catalogItem = CATALOG_MAP.get(item)!;
-    const newQty = qty;
-    const stockId = stockDocId(branch, item);
+    const stockId = stockDocId(branch, department, item);
     const stockDoc: BranchStock = {
-      id: stockId, branch, item,
+      id: stockId, branch, department, item,
       category: catalogItem.category,
       unit: catalogItem.unit,
-      qty: newQty,
+      qty,
       reorderAt: catalogItem.reorderAt,
       lastUpdated: today,
       lastUpdatedBy: BRANCH_LABELS[branch],
@@ -183,9 +188,9 @@ export default function StockPage() {
     ]);
     setSavedItems(prev => new Set([...prev, item]));
     setTimeout(() => setSavedItems(prev => { const s = new Set(prev); s.delete(item); return s; }), 2000);
-  }, [branch, today]);
+  }, [branch, department, today]);
 
-  if (!branch) return null;
+  if (!branch || !department) return null;
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 16px)" }}>
@@ -193,7 +198,7 @@ export default function StockPage() {
       <div style={{ background: "#fff", borderBottom: "1px solid var(--border)", padding: "16px 16px 0", position: "sticky", top: 0, zIndex: 40 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase" }}>{BRANCH_LABELS[branch]}</div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase" }}>{BRANCH_LABELS[branch]} · {DEPARTMENT_LABELS[department]}</div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>Daily Inventory</div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 1 }}>{today}</div>
           </div>
@@ -281,7 +286,7 @@ export default function StockPage() {
           recountItems={recountItems}
           onRecount={item => setRecountItems(prev => new Set([...prev, item]))}
           onConfirm={async () => {
-            if (!branch) return;
+            if (!branch || !department) return;
             const batch = writeBatch(db);
             const now = Date.now();
             for (const item of filtered) {
@@ -291,10 +296,10 @@ export default function StockPage() {
               const qty = Number(val);
               if (isNaN(qty) || qty < 0) continue;
               const adjRef = doc(collection(db, COLS.adjustments));
-              batch.set(adjRef, { id: now + Math.random(), branch, date: today, item: item.name, type: "count", qty, loggedBy: BRANCH_LABELS[branch] });
-              const stockId = stockDocId(branch, item.name);
+              batch.set(adjRef, { id: now + Math.random(), branch, department, date: today, item: item.name, type: "count", qty, loggedBy: BRANCH_LABELS[branch] });
+              const stockId = stockDocId(branch, department, item.name);
               batch.set(doc(db, COLS.branchStock, stockId), {
-                id: stockId, branch, item: item.name, category: item.category,
+                id: stockId, branch, department, item: item.name, category: item.category,
                 unit: item.unit, qty, reorderAt: item.reorderAt,
                 lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
               });
@@ -315,10 +320,11 @@ export default function StockPage() {
 
       {showReset && branch && <ResetModal branch={branch} onClose={() => setShowReset(false)} />}
 
-      {adjustItem && branch && (
+      {adjustItem && branch && department && (
         <AdjustModal
           item={adjustItem}
           branch={branch}
+          department={department}
           stock={stocks[adjustItem] ?? null}
           beginningQty={beginnings[adjustItem] ?? null}
           today={today}
@@ -326,9 +332,10 @@ export default function StockPage() {
         />
       )}
 
-      {showCSVImport && branch && (
+      {showCSVImport && branch && department && (
         <CSVImportModal
           branch={branch}
+          department={department}
           today={today}
           onClose={() => setShowCSVImport(false)}
         />
@@ -675,7 +682,7 @@ function ReviewModal({ items, metrics, endCounts, recountItems, onRecount, onCon
 
 // ── CSV Import Modal (BF only) ─────────────────────────────────────────────────
 
-function CSVImportModal({ branch, today, onClose }: { branch: Branch; today: string; onClose: () => void }) {
+function CSVImportModal({ branch, department, today, onClose }: { branch: Branch; department: Department; today: string; onClose: () => void }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<"pick" | "preview" | "saving" | "done">("pick");
   const [error, setError] = useState<string | null>(null);
@@ -712,14 +719,13 @@ function CSVImportModal({ branch, today, onClose }: { branch: Branch; today: str
       if (!catalogItem) continue;
       const adjRef = doc(collection(db, COLS.adjustments));
       batch.set(adjRef, {
-        id: now + Math.random(), branch, date: today, item,
+        id: now + Math.random(), branch, department, date: today, item,
         type: "sales_import", qty, loggedBy: BRANCH_LABELS[branch], source: "csv",
       } satisfies StockAdjustment);
-      const stockId = stockDocId(branch, item);
-      const currentStock = 0; // inventory deduction handled by outQty in metrics
+      const stockId = stockDocId(branch, department, item);
       batch.set(doc(db, COLS.branchStock, stockId), {
-        id: stockId, branch, item, category: catalogItem.category,
-        unit: catalogItem.unit, qty: Math.max(0, currentStock - qty),
+        id: stockId, branch, department, item, category: catalogItem.category,
+        unit: catalogItem.unit, qty: 0,
         reorderAt: catalogItem.reorderAt,
         lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
       }, { merge: true });
@@ -831,8 +837,8 @@ function MetricCell({ label, value, color, prefix, showSign, border }: {
 
 type ModalMode = "beginning" | "adjust" | "count";
 
-function AdjustModal({ item, branch, stock, beginningQty, today, onClose }: {
-  item: string; branch: Branch; stock: BranchStock | null;
+function AdjustModal({ item, branch, department, stock, beginningQty, today, onClose }: {
+  item: string; branch: Branch; department: Department; stock: BranchStock | null;
   beginningQty: number | null; today: string; onClose: () => void;
 }) {
   const catalogItem = CATALOG_MAP.get(item)!;
@@ -849,17 +855,17 @@ function AdjustModal({ item, branch, stock, beginningQty, today, onClose }: {
     const qtyNum = Number(qty);
 
     if (mode === "beginning") {
-      const beginId = `${branch}__${item}__${today}`;
-      const begDoc: DailyBeginning = { id: beginId, branch, item, date: today, qty: qtyNum, setBy: loggedBy, updatedAt: today };
+      const beginId = beginningDocId(branch, department, item, today);
+      const begDoc: DailyBeginning = { id: beginId, branch, department, item, date: today, qty: qtyNum, setBy: loggedBy, updatedAt: today };
       await saveDocById(COLS.dailyBeginning, beginId, begDoc as unknown as Record<string, unknown>);
     } else {
       const type: StockAdjustment["type"] = mode === "count" ? "count" : qtyNum >= 0 ? "in" : "out";
-      const adj: StockAdjustment = { id: now, branch, date: today, item, type, qty: Math.abs(qtyNum), loggedBy };
+      const adj: StockAdjustment = { id: now, branch, department, date: today, item, type, qty: Math.abs(qtyNum), loggedBy };
       if (note) adj.note = note;
       const newQty = mode === "count" ? qtyNum : Math.max(0, currentQty + qtyNum);
-      const stockId = stockDocId(branch, item);
+      const stockId = stockDocId(branch, department, item);
       const stockDoc: BranchStock = {
-        id: stockId, branch, item, category: catalogItem.category, unit: catalogItem.unit,
+        id: stockId, branch, department, item, category: catalogItem.category, unit: catalogItem.unit,
         qty: newQty, reorderAt: catalogItem.reorderAt, lastUpdated: today, lastUpdatedBy: loggedBy,
       };
       await Promise.all([

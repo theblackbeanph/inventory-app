@@ -1,4 +1,5 @@
 export type Branch = "MKT" | "BF";
+export type Department = "kitchen" | "bar" | "cafe";
 export type ItemCategory = "portion" | "packed" | "loose";
 export type AdjustmentType = "in" | "out" | "waste" | "count" | "sales_import";
 export type PosType = "csv" | "storehub";
@@ -10,11 +11,13 @@ export interface CatalogItem {
   unit: "pc" | "g" | "pack";
   reorderAt: number;
   packSize: string;
+  department: Department;
 }
 
 export interface BranchStock {
-  id: string;            // `${branch}__${item}`
+  id: string;            // `${branch}__${department}__${itemSlug(item)}`
   branch: Branch;
+  department: Department;
   item: string;
   category: ItemCategory;
   unit: "pc" | "g" | "pack";
@@ -27,6 +30,7 @@ export interface BranchStock {
 export interface StockAdjustment {
   id: number;
   branch: Branch;
+  department: Department;
   date: string;
   item: string;
   type: AdjustmentType;
@@ -64,6 +68,7 @@ export interface PulloutItem {
 
 export interface AuthState {
   branch: Branch;
+  department: Department;
   authedAt: number;
 }
 
@@ -136,8 +141,9 @@ export interface DeliveryNote {
 }
 
 export interface DailyBeginning {
-  id: string;        // `${branch}__${item}__${date}`
+  id: string;        // `${branch}__${department}__${item}__${date}`
   branch: Branch;
+  department: Department;
   item: string;
   date: string;      // YYYY-MM-DD
   qty: number;
