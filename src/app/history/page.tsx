@@ -7,10 +7,11 @@ import type { Branch, StockAdjustment, AdjustmentType } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 
 const TYPE_STYLES: Record<AdjustmentType, { label: string; bg: string; text: string }> = {
-  in:    { label: "IN",    bg: "#D1FAE5", text: "#059669" },
-  out:   { label: "OUT",   bg: "#FEE2E2", text: "#DC2626" },
-  waste: { label: "WASTE", bg: "#FEF3C7", text: "#D97706" },
-  count: { label: "COUNT", bg: "#EDE9FE", text: "#7C3AED" },
+  in:           { label: "IN",     bg: "#D1FAE5", text: "#059669" },
+  out:          { label: "OUT",    bg: "#FEE2E2", text: "#DC2626" },
+  waste:        { label: "WASTE",  bg: "#FEF3C7", text: "#D97706" },
+  count:        { label: "COUNT",  bg: "#EDE9FE", text: "#7C3AED" },
+  sales_import: { label: "SALES",  bg: "#DBEAFE", text: "#2563EB" },
 };
 
 export default function HistoryPage() {

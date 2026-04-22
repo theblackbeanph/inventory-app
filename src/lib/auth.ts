@@ -1,4 +1,4 @@
-import type { Branch, AuthState } from "./types";
+import type { Branch, AuthState, PosType } from "./types";
 
 // Branch PINs — change these per deployment
 export const BRANCH_PINS: Record<Branch, string> = {
@@ -9,6 +9,11 @@ export const BRANCH_PINS: Record<Branch, string> = {
 export const BRANCH_LABELS: Record<Branch, string> = {
   MKT: "Makati",
   BF:  "BF Homes",
+};
+
+export const BRANCH_POS_TYPE: Record<Branch, PosType> = {
+  MKT: "storehub",
+  BF:  "csv",
 };
 
 const AUTH_KEY = "branch_auth";

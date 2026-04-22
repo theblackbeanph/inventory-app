@@ -26,7 +26,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Bacon Jam",               category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc" },
   { name: "Caramelized Onion",       category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc" },
   { name: "Vodka Sauce",             category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc" },
-  { name: "Squid Ink",               category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc" },
+  { name: "Squid Ink Sauce",          category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc" },
   { name: "Truffle Pasta Sauce",     category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc" },
   { name: "Truffle Mushroom Paste",  category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc" },
   { name: "Loco Moco Gravy",         category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc" },

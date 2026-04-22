@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, BRANCH_LABELS } from "@/lib/auth";
+import { CATALOG_MAP } from "@/lib/items";
 import { db, COLS, saveDocById } from "@/lib/firebase";
 import { collection, onSnapshot, query, where } from "@/lib/firebase";
 import type { Branch, DeliveryNote, DeliveryNoteItem, DeliveryStatus } from "@/lib/types";
@@ -288,7 +289,7 @@ function DeliveryDetail({ note, branch, onBack, onUpdated }: {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item_name}</div>
                   <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-                    Dispatched: <strong>{item.dispatched_qty} pc</strong>
+                    {CATALOG_MAP.get(item.item_name)?.packSize ?? "1 pc"} · Dispatched: <strong>{item.dispatched_qty}</strong>
                     {!canConfirm && item.received_qty !== undefined && (
                       <span> · Received: <strong style={{ color: isDiff ? "#DC2626" : "#059669" }}>{item.received_qty} pc</strong></span>
                     )}

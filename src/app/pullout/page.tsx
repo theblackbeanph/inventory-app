@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, BRANCH_LABELS } from "@/lib/auth";
+import { CATALOG_MAP } from "@/lib/items";
 import { db, COLS, saveDocById } from "@/lib/firebase";
 import { collection, onSnapshot, query, where, getDocs } from "@/lib/firebase";
 import {
@@ -308,7 +309,7 @@ function PullOutDetail({ po, branch, onBack, onUpdated }: {
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item_name}</div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-                  Class {item.item_class} · System: {item.calculated_qty} pc
+                  {CATALOG_MAP.get(item.item_name)?.packSize ?? "1 pc"} · System: {item.calculated_qty}
                 </div>
               </div>
               {isReview ? (

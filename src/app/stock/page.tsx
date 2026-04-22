@@ -1,26 +1,26 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import { useRouter } from "next/navigation";
-import { getSession, logout, BRANCH_LABELS } from "@/lib/auth";
+import { getSession, logout, BRANCH_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
 import { db, COLS, saveDocById, saveDoc } from "@/lib/firebase";
-import { CATALOG, stockDocId } from "@/lib/items";
-import { collection, onSnapshot, query, where, getDocs, writeBatch } from "@/lib/firebase";
+import { CATALOG, CATALOG_MAP, stockDocId } from "@/lib/items";
+import { collection, onSnapshot, query, where, getDocs, writeBatch, doc } from "@/lib/firebase";
 import type { Branch, BranchStock, StockAdjustment, DailyBeginning, ItemCategory } from "@/lib/types";
+import { parseSalesCSV, applyCsvMapping, allMappedPosNames } from "@/lib/csv-mapping";
 import BottomNav from "@/components/BottomNav";
 
+type SubTab = "summary" | "endcount" | "adjust";
 type FilterTab = "all" | ItemCategory;
-type ModalMode = "beginning" | "adjust" | "count";
 
-const TABS: { id: FilterTab; label: string }[] = [
-  { id: "all",     label: "All"      },
+const CATEGORY_FILTERS: { id: FilterTab; label: string }[] = [
+  { id: "all",     label: "All" },
   { id: "portion", label: "Portions" },
-  { id: "packed",  label: "Packed"   },
-  { id: "loose",   label: "Loose"    },
+  { id: "packed",  label: "Packed" },
+  { id: "loose",   label: "Loose" },
 ];
 
 function todayPHT(): string {
-  const d = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  return d.toISOString().slice(0, 10);
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 interface DailyMetrics {
@@ -30,6 +30,31 @@ interface DailyMetrics {
   endCount: number | null;
 }
 
+function computeMetrics(adjustments: StockAdjustment[], beginnings: Record<string, number>): Record<string, DailyMetrics> {
+  const metrics: Record<string, DailyMetrics> = {};
+  for (const item of CATALOG) {
+    metrics[item.name] = { beginning: beginnings[item.name] ?? null, inQty: 0, outQty: 0, endCount: null };
+  }
+  const latestCount: Record<string, { qty: number; id: number }> = {};
+  for (const adj of adjustments) {
+    if (!metrics[adj.item]) continue;
+    const m = metrics[adj.item];
+    if (adj.type === "in") {
+      m.inQty += adj.qty;
+    } else if (adj.type === "out" || adj.type === "waste" || adj.type === "sales_import") {
+      m.outQty += adj.qty;
+    } else if (adj.type === "count") {
+      if (!latestCount[adj.item] || adj.id > latestCount[adj.item].id) {
+        latestCount[adj.item] = { qty: adj.qty, id: adj.id };
+      }
+    }
+  }
+  for (const [item, { qty }] of Object.entries(latestCount)) {
+    if (metrics[item]) metrics[item].endCount = qty;
+  }
+  return metrics;
+}
+
 export default function StockPage() {
   const router = useRouter();
   const [today] = useState(todayPHT);
@@ -37,251 +62,260 @@ export default function StockPage() {
   const [stocks, setStocks] = useState<Record<string, BranchStock>>({});
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
   const [beginnings, setBeginnings] = useState<Record<string, number>>({});
-  const [search, setSearch] = useState("");
-  const [filter, setFilter] = useState<FilterTab>("all");
-  const [adjustItem, setAdjustItem] = useState<string | null>(null);
+
+  // Navigation
+  const [subTab, setSubTab] = useState<SubTab>("summary");
+  const [categoryFilter, setCategoryFilter] = useState<FilterTab>("all");
+
+  // Summary tab
+  const [summaryDate, setSummaryDate] = useState(todayPHT);
+  const [summaryAdj, setSummaryAdj] = useState<StockAdjustment[]>([]);
+  const [summaryBeg, setSummaryBeg] = useState<Record<string, number>>({});
+  const [varOnly, setVarOnly] = useState(false);
+
+  // End count tab
+  const [endCounts, setEndCounts] = useState<Record<string, string>>({});
+  const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
+  const [showReview, setShowReview] = useState(false);
+  const [recountItems, setRecountItems] = useState<Set<string>>(new Set());
+
+  // Modals
   const [showReset, setShowReset] = useState(false);
+  const [adjustItem, setAdjustItem] = useState<string | null>(null);
+  const [showCSVImport, setShowCSVImport] = useState(false);
 
   useEffect(() => {
     const session = getSession();
     if (!session) { router.replace("/login"); return; }
     setBranch(session.branch);
-
     const b = session.branch;
 
     const unsubStock = onSnapshot(collection(db, COLS.branchStock), snap => {
       const map: Record<string, BranchStock> = {};
-      snap.docs.forEach(d => {
-        const s = d.data() as BranchStock;
-        if (s.branch === b) map[s.item] = s;
-      });
+      snap.docs.forEach(d => { const s = d.data() as BranchStock; if (s.branch === b) map[s.item] = s; });
       setStocks(map);
     });
 
-    const adjQuery = query(
-      collection(db, COLS.adjustments),
-      where("branch", "==", b),
-      where("date", "==", today)
-    );
-    const unsubAdj = onSnapshot(adjQuery, snap => {
-      setAdjustments(snap.docs.map(d => d.data() as StockAdjustment));
-    });
+    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", b), where("date", "==", today));
+    const unsubAdj = onSnapshot(adjQ, snap => setAdjustments(snap.docs.map(d => d.data() as StockAdjustment)));
 
-    const begQuery = query(
-      collection(db, COLS.dailyBeginning),
-      where("branch", "==", b),
-      where("date", "==", today)
-    );
-    const unsubBeg = onSnapshot(begQuery, snap => {
+    const begQ = query(collection(db, COLS.dailyBeginning), where("branch", "==", b), where("date", "==", today));
+    const unsubBeg = onSnapshot(begQ, snap => {
       const map: Record<string, number> = {};
-      snap.docs.forEach(d => {
-        const beg = d.data() as DailyBeginning;
-        map[beg.item] = beg.qty;
-      });
+      snap.docs.forEach(d => { const beg = d.data() as DailyBeginning; map[beg.item] = beg.qty; });
       setBeginnings(map);
     });
 
     return () => { unsubStock(); unsubAdj(); unsubBeg(); };
   }, [router, today]);
 
-  const dailyMetrics = useMemo((): Record<string, DailyMetrics> => {
-    const metrics: Record<string, DailyMetrics> = {};
-    for (const item of CATALOG) {
-      metrics[item.name] = { beginning: beginnings[item.name] ?? null, inQty: 0, outQty: 0, endCount: null };
+  // Fetch summary data when summaryDate changes
+  useEffect(() => {
+    if (!branch) return;
+    if (summaryDate === today) {
+      setSummaryAdj(adjustments);
+      setSummaryBeg(beginnings);
+      return;
     }
+    let cancelled = false;
+    (async () => {
+      const [adjSnap, begSnap] = await Promise.all([
+        getDocs(query(collection(db, COLS.adjustments), where("branch", "==", branch), where("date", "==", summaryDate))),
+        getDocs(query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("date", "==", summaryDate))),
+      ]);
+      if (cancelled) return;
+      setSummaryAdj(adjSnap.docs.map(d => d.data() as StockAdjustment));
+      const map: Record<string, number> = {};
+      begSnap.docs.forEach(d => { const b = d.data() as DailyBeginning; map[b.item] = b.qty; });
+      setSummaryBeg(map);
+    })();
+    return () => { cancelled = true; };
+  }, [branch, summaryDate, today, adjustments, beginnings]);
 
-    const latestCount: Record<string, { qty: number; id: number }> = {};
-    for (const adj of adjustments) {
-      if (!metrics[adj.item]) continue;
-      const m = metrics[adj.item];
-      if (adj.type === "in") {
-        m.inQty += adj.qty;
-      } else if (adj.type === "out" || adj.type === "waste") {
-        m.outQty += adj.qty;
-      } else if (adj.type === "count") {
-        if (!latestCount[adj.item] || adj.id > latestCount[adj.item].id) {
-          latestCount[adj.item] = { qty: adj.qty, id: adj.id };
-        }
+  const dailyMetrics = useMemo(() => computeMetrics(adjustments, beginnings), [adjustments, beginnings]);
+  const summaryMetrics = useMemo(() => computeMetrics(summaryAdj, summaryBeg), [summaryAdj, summaryBeg]);
+
+  // Pre-populate end count inputs from Firestore (only fill blanks, not override in-progress)
+  useEffect(() => {
+    setEndCounts(prev => {
+      const next = { ...prev };
+      for (const [item, m] of Object.entries(dailyMetrics)) {
+        if (!(item in next) && m.endCount !== null) next[item] = String(m.endCount);
       }
-    }
-    for (const [item, { qty }] of Object.entries(latestCount)) {
-      if (metrics[item]) metrics[item].endCount = qty;
-    }
+      return next;
+    });
+  }, [dailyMetrics]);
 
-    return metrics;
-  }, [adjustments, beginnings]);
+  const filtered = useMemo(() => CATALOG.filter(item =>
+    categoryFilter === "all" || item.category === categoryFilter
+  ), [categoryFilter]);
 
-  const filtered = useMemo(() => CATALOG.filter(item => {
-    if (filter !== "all" && item.category !== filter) return false;
-    if (search && !item.name.toLowerCase().includes(search.toLowerCase())) return false;
-    return true;
-  }), [filter, search]);
+  const lowCount  = CATALOG.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).length;
+  const critCount = CATALOG.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).length;
 
-  const lowCount = CATALOG.filter(item => {
-    const s = stocks[item.name];
-    return s && s.qty <= item.reorderAt && s.qty > 0;
-  }).length;
+  const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
-  const critCount = CATALOG.filter(item => {
-    const s = stocks[item.name];
-    return !s || s.qty <= 0;
-  }).length;
+  const saveEndCount = useCallback(async (item: string, valStr: string) => {
+    if (!branch || valStr === "") return;
+    const qty = Number(valStr);
+    if (isNaN(qty) || qty < 0) return;
+    const now = Date.now();
+    const adj: StockAdjustment = {
+      id: now, branch, date: today, item,
+      type: "count", qty,
+      loggedBy: BRANCH_LABELS[branch],
+    };
+    const catalogItem = CATALOG_MAP.get(item)!;
+    const newQty = qty;
+    const stockId = stockDocId(branch, item);
+    const stockDoc: BranchStock = {
+      id: stockId, branch, item,
+      category: catalogItem.category,
+      unit: catalogItem.unit,
+      qty: newQty,
+      reorderAt: catalogItem.reorderAt,
+      lastUpdated: today,
+      lastUpdatedBy: BRANCH_LABELS[branch],
+    };
+    await Promise.all([
+      saveDocById(COLS.branchStock, stockId, stockDoc as unknown as Record<string, unknown>),
+      saveDoc(COLS.adjustments, adj as unknown as Record<string, unknown>),
+    ]);
+    setSavedItems(prev => new Set([...prev, item]));
+    setTimeout(() => setSavedItems(prev => { const s = new Set(prev); s.delete(item); return s; }), 2000);
+  }, [branch, today]);
 
   if (!branch) return null;
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 16px)" }}>
-      <div style={{
-        background: "#FFFFFF", borderBottom: "1px solid var(--border)",
-        padding: "16px 16px 0",
-        position: "sticky", top: 0, zIndex: 40,
-      }}>
+      {/* ── Header ── */}
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--border)", padding: "16px 16px 0", position: "sticky", top: 0, zIndex: 40 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase" }}>
-              {BRANCH_LABELS[branch]}
-            </div>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase" }}>{BRANCH_LABELS[branch]}</div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>Daily Inventory</div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 1 }}>{today}</div>
           </div>
-          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {lowCount > 0 && (
-              <div style={{ background: "#FEF3C7", color: "#D97706", borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
-                {lowCount} low
-              </div>
+          <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {lowCount > 0 && <div style={{ background: "#FEF3C7", color: "#D97706", borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{lowCount} low</div>}
+            {critCount > 0 && <div style={{ background: "#FEE2E2", color: "#DC2626", borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{critCount} out</div>}
+            {posType === "csv" && (
+              <button onClick={() => setShowCSVImport(true)} style={{ background: "#EFF6FF", border: "none", color: "#2563EB", cursor: "pointer", fontSize: 12, padding: "4px 10px", fontWeight: 600, borderRadius: 8 }}>
+                Import sales
+              </button>
             )}
-            {critCount > 0 && (
-              <div style={{ background: "#FEE2E2", color: "#DC2626", borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
-                {critCount} out
-              </div>
-            )}
-            <button
-              onClick={() => setShowReset(true)}
-              style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: 12, padding: "4px 8px", fontWeight: 500 }}
-            >
-              Reset
-            </button>
-            <button
-              onClick={() => { logout(); router.replace("/login"); }}
-              style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13, padding: "4px 8px" }}
-            >
-              Log out
-            </button>
+            <button onClick={() => setShowReset(true)} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: 12, padding: "4px 8px", fontWeight: 500 }}>Reset</button>
+            <button onClick={() => { logout(); router.replace("/login"); }} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13, padding: "4px 8px" }}>Log out</button>
           </div>
         </div>
 
-        <div style={{
-          display: "flex", alignItems: "center", gap: 8,
-          background: "var(--bg)", borderRadius: 10, padding: "8px 12px",
-          marginBottom: 12,
-        }}>
-          <svg width={16} height={16} fill="none" stroke="var(--text-secondary)" strokeWidth={2} viewBox="0 0 24 24">
-            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
-          </svg>
-          <input
-            value={search} onChange={e => setSearch(e.target.value)}
-            placeholder="Search items…"
-            style={{ border: "none", background: "transparent", outline: "none", fontSize: 15, width: "100%", color: "var(--text)" }}
-          />
-          {search && (
-            <button onClick={() => setSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", padding: 0, lineHeight: 1 }}>✕</button>
-          )}
-        </div>
-
-        <div style={{ display: "flex", gap: 4, overflowX: "auto", paddingBottom: 0 }}>
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setFilter(t.id)}
-              style={{
-                padding: "8px 16px", borderRadius: "8px 8px 0 0", border: "none",
-                cursor: "pointer", fontWeight: 600, fontSize: 13, whiteSpace: "nowrap",
-                background: filter === t.id ? "var(--bg)" : "transparent",
-                color: filter === t.id ? "#1A1A1A" : "var(--text-secondary)",
-                borderBottom: filter === t.id ? "2px solid #1A1A1A" : "2px solid transparent",
-              }}
-            >
-              {t.label}
-            </button>
-          ))}
+        {/* Sub-tabs */}
+        <div style={{ display: "flex", gap: 2, marginBottom: 0 }}>
+          {(["summary", "endcount", "adjust"] as SubTab[]).map(tab => {
+            const label = tab === "summary" ? "Summary" : tab === "endcount" ? "End Count" : "Adjust";
+            return (
+              <button key={tab} onClick={() => setSubTab(tab)} style={{
+                flex: 1, padding: "9px 4px", border: "none", cursor: "pointer",
+                fontWeight: 600, fontSize: 13, background: "transparent",
+                color: subTab === tab ? "#1A1A1A" : "var(--text-secondary)",
+                borderBottom: subTab === tab ? "2px solid #1A1A1A" : "2px solid transparent",
+              }}>{label}</button>
+            );
+          })}
         </div>
       </div>
 
-      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-        {filtered.map(item => {
-          const m = dailyMetrics[item.name];
-          const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : null;
-          const variance = m.endCount !== null && expected !== null ? m.endCount - expected : null;
-
-          let borderColor = "#D1D5DB";
-          if (variance !== null) {
-            borderColor = variance === 0 ? "#16A34A" : "#DC2626";
-          } else {
-            const s = stocks[item.name];
-            if (s) {
-              if (s.qty <= 0) borderColor = "#DC2626";
-              else if (s.qty <= item.reorderAt) borderColor = "#D97706";
-              else borderColor = "#16A34A";
-            }
-          }
-
-          return (
-            <div
-              key={item.name}
-              onClick={() => setAdjustItem(item.name)}
-              style={{
-                background: "#FFFFFF", borderRadius: 14,
-                boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                cursor: "pointer",
-                borderLeft: `4px solid ${borderColor}`,
-                overflow: "hidden",
-              }}
-            >
-              <div style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "11px 14px 9px",
-              }}>
-                <div style={{ fontWeight: 600, fontSize: 15 }}>{item.name}</div>
-                <div style={{
-                  fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
-                  textTransform: "uppercase", color: "var(--text-secondary)",
-                  background: "var(--bg)", padding: "3px 8px", borderRadius: 20,
-                }}>
-                  {item.category} · {item.unit}
-                </div>
-              </div>
-
-              <div style={{ borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
-                <MetricCell label="BEG" value={m.beginning} color="var(--text)" />
-                <MetricCell label="IN" value={m.inQty} color="#16A34A" prefix="+" border />
-                <MetricCell label="OUT" value={m.outQty} color="#DC2626" prefix="−" border />
-              </div>
-              <div style={{ borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
-                <MetricCell label="EXPECTED" value={expected} color="#2563EB" />
-                <MetricCell label="END COUNT" value={m.endCount} color="var(--text)" border />
-                <MetricCell
-                  label="VARIANCE"
-                  value={variance}
-                  color={variance === null ? "var(--text-secondary)" : variance === 0 ? "#16A34A" : "#DC2626"}
-                  showSign
-                  border
-                />
-              </div>
-            </div>
-          );
-        })}
-        {filtered.length === 0 && (
-          <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: "48px 0", fontSize: 15 }}>
-            No items match &ldquo;{search}&rdquo;
-          </div>
-        )}
+      {/* ── Category filter pills ── */}
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--border)", padding: "8px 16px", display: "flex", gap: 6, overflowX: "auto", position: "sticky", top: 113, zIndex: 39 }}>
+        {CATEGORY_FILTERS.map(f => (
+          <button key={f.id} onClick={() => setCategoryFilter(f.id)} style={{
+            padding: "5px 14px", borderRadius: 20, border: "1.5px solid",
+            borderColor: categoryFilter === f.id ? "#1A1A1A" : "var(--border)",
+            background: categoryFilter === f.id ? "#1A1A1A" : "#fff",
+            color: categoryFilter === f.id ? "#fff" : "var(--text-secondary)",
+            fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
+          }}>{f.label}</button>
+        ))}
       </div>
 
-      {showReset && branch && (
-        <ResetModal branch={branch} onClose={() => setShowReset(false)} />
+      {/* ── Content ── */}
+      {subTab === "summary" && (
+        <SummaryContent
+          items={filtered}
+          metrics={summaryMetrics}
+          summaryDate={summaryDate}
+          today={today}
+          varOnly={varOnly}
+          onDateChange={setSummaryDate}
+          onVarOnlyChange={setVarOnly}
+          branch={branch}
+        />
+      )}
+      {subTab === "endcount" && (
+        <EndCountContent
+          items={filtered}
+          metrics={dailyMetrics}
+          endCounts={endCounts}
+          savedItems={savedItems}
+          onCountChange={(item, val) => setEndCounts(prev => ({ ...prev, [item]: val }))}
+          onBlur={saveEndCount}
+          onReview={() => setShowReview(true)}
+        />
+      )}
+      {subTab === "adjust" && (
+        <AdjustContent
+          items={filtered}
+          metrics={dailyMetrics}
+          stocks={stocks}
+          onTap={item => setAdjustItem(item)}
+        />
       )}
 
-      {adjustItem && (
+      {/* ── Modals ── */}
+      {showReview && (
+        <ReviewModal
+          items={filtered}
+          metrics={dailyMetrics}
+          endCounts={endCounts}
+          recountItems={recountItems}
+          onRecount={item => setRecountItems(prev => new Set([...prev, item]))}
+          onConfirm={async () => {
+            if (!branch) return;
+            const batch = writeBatch(db);
+            const now = Date.now();
+            for (const item of filtered) {
+              if (recountItems.has(item.name)) continue;
+              const val = endCounts[item.name];
+              if (val === undefined || val === "") continue;
+              const qty = Number(val);
+              if (isNaN(qty) || qty < 0) continue;
+              const adjRef = doc(collection(db, COLS.adjustments));
+              batch.set(adjRef, { id: now + Math.random(), branch, date: today, item: item.name, type: "count", qty, loggedBy: BRANCH_LABELS[branch] });
+              const stockId = stockDocId(branch, item.name);
+              batch.set(doc(db, COLS.branchStock, stockId), {
+                id: stockId, branch, item: item.name, category: item.category,
+                unit: item.unit, qty, reorderAt: item.reorderAt,
+                lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
+              });
+            }
+            await batch.commit();
+            // clear recount items' local state
+            setEndCounts(prev => {
+              const next = { ...prev };
+              recountItems.forEach(item => { delete next[item]; });
+              return next;
+            });
+            setRecountItems(new Set());
+            setShowReview(false);
+          }}
+          onClose={() => { setRecountItems(new Set()); setShowReview(false); }}
+        />
+      )}
+
+      {showReset && branch && <ResetModal branch={branch} onClose={() => setShowReset(false)} />}
+
+      {adjustItem && branch && (
         <AdjustModal
           item={adjustItem}
           branch={branch}
@@ -292,55 +326,516 @@ export default function StockPage() {
         />
       )}
 
+      {showCSVImport && branch && (
+        <CSVImportModal
+          branch={branch}
+          today={today}
+          onClose={() => setShowCSVImport(false)}
+        />
+      )}
+
       <BottomNav />
     </div>
   );
 }
 
-function MetricCell({ label, value, color, prefix, showSign, border }: {
-  label: string;
-  value: number | null;
-  color: string;
-  prefix?: string;
-  showSign?: boolean;
-  border?: boolean;
+// ── Summary tab ───────────────────────────────────────────────────────────────
+
+function SummaryContent({ items, metrics, summaryDate, today, varOnly, onDateChange, onVarOnlyChange, branch }: {
+  items: typeof CATALOG;
+  metrics: Record<string, DailyMetrics>;
+  summaryDate: string;
+  today: string;
+  varOnly: boolean;
+  onDateChange: (d: string) => void;
+  onVarOnlyChange: (v: boolean) => void;
+  branch: Branch;
 }) {
-  let display: string;
-  if (value === null) {
-    display = "—";
-  } else if (showSign) {
-    display = value > 0 ? `+${value}` : value < 0 ? `${value}` : "✓";
-  } else if (prefix && value > 0) {
-    display = `${prefix}${value}`;
-  } else {
-    display = value.toLocaleString();
+  const rows = items.map(item => {
+    const m = metrics[item.name];
+    const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : null;
+    const variance = m.endCount !== null && expected !== null ? m.endCount - expected : null;
+    return { item, m, expected, variance };
+  }).filter(r => !varOnly || (r.variance !== null && r.variance !== 0));
+
+  function exportCSV() {
+    const header = ["Item", "Pack Size", "Beginning", "IN", "OUT", "Expected", "End Count", "Variance"];
+    const csvRows = [header, ...rows.map(({ item, m, expected, variance }) =>
+      [item.name, item.packSize, m.beginning ?? "", m.inQty, m.outQty, expected ?? "", m.endCount ?? "", variance ?? ""]
+    )];
+    const csv = csvRows.map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `inventory-${BRANCH_LABELS[branch]}-${summaryDate}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
+  const thStyle: React.CSSProperties = {
+    padding: "8px 10px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em",
+    color: "var(--text-secondary)", textTransform: "uppercase", textAlign: "center",
+    whiteSpace: "nowrap", background: "var(--bg)", borderBottom: "1px solid var(--border)",
+  };
+  const tdStyle: React.CSSProperties = { padding: "0 8px", textAlign: "center", fontSize: 14, fontWeight: 600 };
+
   return (
-    <div style={{
-      padding: "8px 4px 10px",
-      textAlign: "center",
-      borderLeft: border ? "1px solid var(--border)" : undefined,
-    }}>
-      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 3 }}>
-        {label}
+    <div style={{ padding: "12px 16px" }}>
+      {/* Controls */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <input
+          type="date"
+          value={summaryDate}
+          max={today}
+          onChange={e => onDateChange(e.target.value)}
+          style={{ border: "1.5px solid var(--border)", borderRadius: 8, padding: "6px 10px", fontSize: 13, background: "#fff", color: "var(--text)", outline: "none" }}
+        />
+        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)", cursor: "pointer" }}>
+          <input type="checkbox" checked={varOnly} onChange={e => onVarOnlyChange(e.target.checked)} style={{ width: 15, height: 15 }} />
+          Variances only
+        </label>
       </div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: value === null ? "var(--text-secondary)" : color }}>
-        {display}
+
+      {/* Table */}
+      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", background: "#fff" }}>
+        <table style={{ minWidth: 540, borderCollapse: "collapse", width: "100%" }}>
+          <thead>
+            <tr>
+              <th style={{ ...thStyle, textAlign: "left", position: "sticky", left: 0, background: "var(--bg)", minWidth: 140 }}>Item</th>
+              <th style={thStyle}>BEG</th>
+              <th style={thStyle}>IN</th>
+              <th style={thStyle}>OUT</th>
+              <th style={thStyle}>EXP</th>
+              <th style={thStyle}>END</th>
+              <th style={thStyle}>VAR</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map(({ item, m, expected, variance }) => {
+              const varColor = variance === null ? "var(--text-secondary)" : variance < 0 ? "#DC2626" : variance > 0 ? "#D97706" : "#16A34A";
+              return (
+                <tr key={item.name} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ ...tdStyle, textAlign: "left", padding: "10px 12px", position: "sticky", left: 0, background: "#fff" }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 1 }}>{item.packSize}</div>
+                  </td>
+                  <td style={tdStyle}>{m.beginning ?? "—"}</td>
+                  <td style={{ ...tdStyle, color: m.inQty > 0 ? "#16A34A" : undefined }}>{m.inQty > 0 ? `+${m.inQty}` : "—"}</td>
+                  <td style={{ ...tdStyle, color: m.outQty > 0 ? "#DC2626" : undefined }}>{m.outQty > 0 ? `−${m.outQty}` : "—"}</td>
+                  <td style={tdStyle}>{expected ?? "—"}</td>
+                  <td style={tdStyle}>{m.endCount ?? "—"}</td>
+                  <td style={{ ...tdStyle, color: varColor, fontWeight: 700 }}>
+                    {variance === null ? "—" : variance === 0 ? "✓" : variance > 0 ? `+${variance}` : String(variance)}
+                  </td>
+                </tr>
+              );
+            })}
+            {rows.length === 0 && (
+              <tr><td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "var(--text-secondary)", fontSize: 14 }}>No items to show</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <button
+        onClick={exportCSV}
+        style={{ marginTop: 16, width: "100%", padding: "13px 0", borderRadius: 12, border: "1.5px solid var(--border)", background: "#fff", color: "var(--text)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
+      >
+        Export CSV
+      </button>
+    </div>
+  );
+}
+
+// ── End Count tab ─────────────────────────────────────────────────────────────
+
+function EndCountContent({ items, metrics, endCounts, savedItems, onCountChange, onBlur, onReview }: {
+  items: typeof CATALOG;
+  metrics: Record<string, DailyMetrics>;
+  endCounts: Record<string, string>;
+  savedItems: Set<string>;
+  onCountChange: (item: string, val: string) => void;
+  onBlur: (item: string, val: string) => void;
+  onReview: () => void;
+}) {
+  const enteredCount = items.filter(i => endCounts[i.name] !== undefined && endCounts[i.name] !== "").length;
+
+  return (
+    <div style={{ paddingBottom: 80 }}>
+      <div style={{ padding: "10px 16px 4px", fontSize: 12, color: "var(--text-secondary)" }}>
+        {enteredCount} of {items.length} counted
+      </div>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
+        {items.map(item => {
+          const m = metrics[item.name];
+          const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : null;
+          const val = endCounts[item.name] ?? "";
+          const isSaved = savedItems.has(item.name);
+
+          return (
+            <div key={item.name} style={{ background: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--border)" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                  {item.packSize}
+                  {expected !== null && <span> · Expected: <strong>{expected}</strong></span>}
+                </div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 3 }}>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={val}
+                  placeholder="—"
+                  onChange={e => onCountChange(item.name, e.target.value)}
+                  onBlur={e => onBlur(item.name, e.target.value)}
+                  style={{
+                    width: 72, padding: "8px 10px", fontSize: 16, fontWeight: 700,
+                    textAlign: "right", border: "1.5px solid",
+                    borderColor: val !== "" ? "#1A1A1A" : "var(--border)",
+                    borderRadius: 10, outline: "none", background: "var(--bg)", color: "var(--text)",
+                  }}
+                />
+                {isSaved && <div style={{ fontSize: 10, color: "#16A34A", fontWeight: 600 }}>Saved ✓</div>}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ position: "fixed", bottom: "calc(var(--nav-h) + 12px)", left: 0, right: 0, padding: "0 16px", zIndex: 30 }}>
+        <button
+          onClick={onReview}
+          disabled={enteredCount === 0}
+          style={{
+            width: "100%", padding: "15px 0", borderRadius: 14, border: "none",
+            fontWeight: 700, fontSize: 16, cursor: enteredCount > 0 ? "pointer" : "not-allowed",
+            background: enteredCount > 0 ? "#1A1A1A" : "#E8E8E4",
+            color: enteredCount > 0 ? "#fff" : "var(--text-secondary)",
+            boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
+          }}
+        >
+          Review ({enteredCount})
+        </button>
       </div>
     </div>
   );
 }
 
-function AdjustModal({ item, branch, stock, beginningQty, today, onClose }: {
-  item: string;
-  branch: Branch;
-  stock: BranchStock | null;
-  beginningQty: number | null;
-  today: string;
+// ── Adjust tab ────────────────────────────────────────────────────────────────
+
+function AdjustContent({ items, metrics, stocks, onTap }: {
+  items: typeof CATALOG;
+  metrics: Record<string, DailyMetrics>;
+  stocks: Record<string, BranchStock>;
+  onTap: (item: string) => void;
+}) {
+  return (
+    <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+      {items.map(item => {
+        const m = metrics[item.name];
+        const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : null;
+        const variance = m.endCount !== null && expected !== null ? m.endCount - expected : null;
+
+        let borderColor = "#D1D5DB";
+        if (variance !== null) {
+          borderColor = variance === 0 ? "#16A34A" : "#DC2626";
+        } else {
+          const s = stocks[item.name];
+          if (s) borderColor = s.qty <= 0 ? "#DC2626" : s.qty <= item.reorderAt ? "#D97706" : "#16A34A";
+        }
+
+        const varColor = variance === null ? "var(--text-secondary)" : variance === 0 ? "#16A34A" : "#DC2626";
+
+        return (
+          <div key={item.name} onClick={() => onTap(item.name)} style={{ background: "#fff", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: `4px solid ${borderColor}`, overflow: "hidden" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 14px 9px" }}>
+              <div style={{ fontWeight: 600, fontSize: 15 }}>{item.name}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", background: "var(--bg)", padding: "3px 10px", borderRadius: 20 }}>
+                {item.packSize}
+              </div>
+            </div>
+            <div style={{ borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
+              <MetricCell label="BEG" value={m.beginning} color="var(--text)" />
+              <MetricCell label="IN" value={m.inQty} color="#16A34A" prefix="+" border />
+              <MetricCell label="OUT" value={m.outQty} color="#DC2626" prefix="−" border />
+            </div>
+            <div style={{ borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
+              <MetricCell label="EXPECTED" value={expected} color="#2563EB" />
+              <MetricCell label="END COUNT" value={m.endCount} color="var(--text)" border />
+              <MetricCell label="VARIANCE" value={variance} color={varColor} showSign border />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Review Modal ──────────────────────────────────────────────────────────────
+
+function ReviewModal({ items, metrics, endCounts, recountItems, onRecount, onConfirm, onClose }: {
+  items: typeof CATALOG;
+  metrics: Record<string, DailyMetrics>;
+  endCounts: Record<string, string>;
+  recountItems: Set<string>;
+  onRecount: (item: string) => void;
+  onConfirm: () => Promise<void>;
   onClose: () => void;
 }) {
-  const catalogItem = CATALOG.find(c => c.name === item)!;
+  const [saving, setSaving] = useState(false);
+
+  const rows = items
+    .filter(item => endCounts[item.name] !== undefined && endCounts[item.name] !== "")
+    .map(item => {
+      const m = metrics[item.name];
+      const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : null;
+      const count = Number(endCounts[item.name]);
+      const variance = expected !== null ? count - expected : null;
+      return { item, expected, count, variance };
+    });
+
+  const confirmable = rows.filter(r => !recountItems.has(r.item.name));
+
+  return (
+    <>
+      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60 }} />
+      <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "#fff", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "20px 16px 12px", borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>Review End Count</div>
+            <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--text-secondary)", padding: 4 }}>✕</button>
+          </div>
+          <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+            {confirmable.length} item{confirmable.length !== 1 ? "s" : ""} will be saved · {recountItems.size} flagged for recount
+          </div>
+        </div>
+
+        <div style={{ flex: 1, padding: "0 0 100px" }}>
+          {rows.map(({ item, expected, count, variance }) => {
+            const isRecount = recountItems.has(item.name);
+            const isBig = variance !== null && Math.abs(variance) > 1;
+            return (
+              <div key={item.name} style={{
+                padding: "12px 16px", borderBottom: "1px solid var(--border)",
+                background: isRecount ? "#F9FAFB" : isBig ? "#FFF7ED" : "#fff",
+                opacity: isRecount ? 0.5 : 1,
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
+                    <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+                      {item.packSize} · Expected: {expected ?? "—"}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 18, fontWeight: 700 }}>{count}</div>
+                      {variance !== null && (
+                        <div style={{ fontSize: 12, fontWeight: 600, color: variance === 0 ? "#16A34A" : variance > 0 ? "#D97706" : "#DC2626" }}>
+                          {variance > 0 ? `+${variance}` : variance === 0 ? "✓" : String(variance)}
+                        </div>
+                      )}
+                    </div>
+                    {!isRecount && (
+                      <button
+                        onClick={() => onRecount(item.name)}
+                        style={{ padding: "5px 10px", borderRadius: 8, border: "1.5px solid var(--border)", background: "#fff", color: "var(--text-secondary)", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                      >
+                        Recount
+                      </button>
+                    )}
+                    {isRecount && <div style={{ fontSize: 12, color: "var(--text-secondary)", fontStyle: "italic" }}>Recounting</div>}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+
+        <div style={{ position: "sticky", bottom: 0, padding: "12px 16px 32px", background: "#fff", borderTop: "1px solid var(--border)" }}>
+          <button
+            disabled={saving || confirmable.length === 0}
+            onClick={async () => { setSaving(true); await onConfirm(); setSaving(false); }}
+            style={{
+              width: "100%", padding: "15px 0", borderRadius: 14, border: "none",
+              fontWeight: 700, fontSize: 16, cursor: confirmable.length > 0 ? "pointer" : "not-allowed",
+              background: confirmable.length > 0 ? "#1A1A1A" : "#E8E8E4",
+              color: confirmable.length > 0 ? "#fff" : "var(--text-secondary)",
+            }}
+          >
+            {saving ? "Saving…" : `Confirm ${confirmable.length} count${confirmable.length !== 1 ? "s" : ""}`}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ── CSV Import Modal (BF only) ─────────────────────────────────────────────────
+
+function CSVImportModal({ branch, today, onClose }: { branch: Branch; today: string; onClose: () => void }) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [phase, setPhase] = useState<"pick" | "preview" | "saving" | "done">("pick");
+  const [error, setError] = useState<string | null>(null);
+  const [matched, setMatched] = useState<{ item: string; qty: number }[]>([]);
+  const [unmatched, setUnmatched] = useState<string[]>([]);
+
+  async function handleFile(file: File) {
+    setError(null);
+    try {
+      const text = await file.text();
+      const salesMap = parseSalesCSV(text);
+      const mappedPosNames = allMappedPosNames();
+      const unmatchedItems: string[] = [];
+      for (const posItem of Object.keys(salesMap)) {
+        if (!mappedPosNames.has(posItem.trim().toUpperCase())) {
+          unmatchedItems.push(posItem);
+        }
+      }
+      const results = applyCsvMapping(salesMap);
+      setMatched(results);
+      setUnmatched(unmatchedItems);
+      setPhase("preview");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to parse CSV");
+    }
+  }
+
+  async function confirm() {
+    setPhase("saving");
+    const batch = writeBatch(db);
+    const now = Date.now();
+    for (const { item, qty } of matched) {
+      const catalogItem = CATALOG_MAP.get(item);
+      if (!catalogItem) continue;
+      const adjRef = doc(collection(db, COLS.adjustments));
+      batch.set(adjRef, {
+        id: now + Math.random(), branch, date: today, item,
+        type: "sales_import", qty, loggedBy: BRANCH_LABELS[branch], source: "csv",
+      } satisfies StockAdjustment);
+      const stockId = stockDocId(branch, item);
+      const currentStock = 0; // inventory deduction handled by outQty in metrics
+      batch.set(doc(db, COLS.branchStock, stockId), {
+        id: stockId, branch, item, category: catalogItem.category,
+        unit: catalogItem.unit, qty: Math.max(0, currentStock - qty),
+        reorderAt: catalogItem.reorderAt,
+        lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
+      }, { merge: true });
+    }
+    await batch.commit();
+    setPhase("done");
+  }
+
+  return (
+    <>
+      <div onClick={phase === "pick" ? onClose : undefined} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60 }} />
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 70, background: "#fff", borderRadius: "20px 20px 0 0", padding: "24px 20px 40px", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)", maxHeight: "90dvh", overflowY: "auto" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+          <div style={{ fontSize: 18, fontWeight: 700 }}>Import Sales</div>
+          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--text-secondary)", padding: 4 }}>✕</button>
+        </div>
+
+        {phase === "pick" && (
+          <>
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 20, lineHeight: 1.5 }}>
+              Upload the daily Utak Product Mix CSV. Sales quantities will be deducted from today's inventory.
+            </div>
+            {error && <div style={{ background: "#FEF2F2", borderRadius: 10, padding: "10px 14px", color: "#DC2626", fontSize: 13, marginBottom: 16 }}>{error}</div>}
+            <input ref={fileRef} type="file" accept=".csv" style={{ display: "none" }} onChange={e => { const f = e.target.files?.[0]; if (f) handleFile(f); }} />
+            <button
+              onClick={() => fileRef.current?.click()}
+              style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: "#1A1A1A", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
+            >
+              Choose CSV file
+            </button>
+          </>
+        )}
+
+        {phase === "preview" && (
+          <>
+            <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Will deduct — {matched.length} items</div>
+              {matched.map(({ item, qty }) => (
+                <div key={item} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
+                  <span>{item}</span>
+                  <span style={{ fontWeight: 700, color: "#DC2626" }}>−{qty}</span>
+                </div>
+              ))}
+              {matched.length === 0 && <div style={{ fontSize: 13, color: "#15803D" }}>No commissary items matched.</div>}
+            </div>
+
+            {unmatched.length > 0 && (
+              <div style={{ background: "#FEF3C7", borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: "#D97706", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Not tracked — {unmatched.length} items</div>
+                {unmatched.map(item => (
+                  <div key={item} style={{ fontSize: 12, color: "#92400E", marginBottom: 2 }}>· {item}</div>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => setPhase("pick")} style={{ flex: 1, padding: "14px 0", borderRadius: 12, border: "1.5px solid var(--border)", background: "#fff", color: "var(--text)", fontWeight: 600, fontSize: 15, cursor: "pointer" }}>Back</button>
+              <button
+                onClick={confirm}
+                disabled={matched.length === 0}
+                style={{ flex: 2, padding: "14px 0", borderRadius: 12, border: "none", background: matched.length > 0 ? "#1A1A1A" : "#E8E8E4", color: matched.length > 0 ? "#fff" : "var(--text-secondary)", fontWeight: 700, fontSize: 15, cursor: matched.length > 0 ? "pointer" : "not-allowed" }}
+              >
+                Confirm import
+              </button>
+            </div>
+          </>
+        )}
+
+        {phase === "saving" && (
+          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-secondary)", fontSize: 15 }}>Saving…</div>
+        )}
+
+        {phase === "done" && (
+          <>
+            <div style={{ textAlign: "center", padding: "12px 0 20px", fontSize: 32 }}>✓</div>
+            <div style={{ textAlign: "center", fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Import complete</div>
+            <div style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: 13, marginBottom: 24 }}>
+              {matched.length} item{matched.length !== 1 ? "s" : ""} deducted from today's inventory.
+            </div>
+            <button onClick={onClose} style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: "#1A1A1A", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Done</button>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+// ── Shared components ─────────────────────────────────────────────────────────
+
+function MetricCell({ label, value, color, prefix, showSign, border }: {
+  label: string; value: number | null; color: string;
+  prefix?: string; showSign?: boolean; border?: boolean;
+}) {
+  let display: string;
+  if (value === null) display = "—";
+  else if (showSign) display = value > 0 ? `+${value}` : value < 0 ? `${value}` : "✓";
+  else if (prefix && value > 0) display = `${prefix}${value}`;
+  else display = value.toLocaleString();
+
+  return (
+    <div style={{ padding: "8px 4px 10px", textAlign: "center", borderLeft: border ? "1px solid var(--border)" : undefined }}>
+      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
+      <div style={{ fontSize: 17, fontWeight: 700, color: value === null ? "var(--text-secondary)" : color }}>{display}</div>
+    </div>
+  );
+}
+
+// ── Adjust Modal ──────────────────────────────────────────────────────────────
+
+type ModalMode = "beginning" | "adjust" | "count";
+
+function AdjustModal({ item, branch, stock, beginningQty, today, onClose }: {
+  item: string; branch: Branch; stock: BranchStock | null;
+  beginningQty: number | null; today: string; onClose: () => void;
+}) {
+  const catalogItem = CATALOG_MAP.get(item)!;
   const [mode, setMode] = useState<ModalMode>("beginning");
   const [qty, setQty] = useState("");
   const [note, setNote] = useState("");
@@ -355,88 +850,53 @@ function AdjustModal({ item, branch, stock, beginningQty, today, onClose }: {
 
     if (mode === "beginning") {
       const beginId = `${branch}__${item}__${today}`;
-      const begDoc: DailyBeginning = {
-        id: beginId, branch, item, date: today,
-        qty: qtyNum, setBy: loggedBy, updatedAt: today,
-      };
+      const begDoc: DailyBeginning = { id: beginId, branch, item, date: today, qty: qtyNum, setBy: loggedBy, updatedAt: today };
       await saveDocById(COLS.dailyBeginning, beginId, begDoc as unknown as Record<string, unknown>);
     } else {
-      const type: StockAdjustment["type"] =
-        mode === "count" ? "count" :
-        qtyNum >= 0 ? "in" : "out";
-
-      const adj: StockAdjustment = {
-        id: now, branch, date: today, item,
-        type, qty: Math.abs(qtyNum), loggedBy,
-      };
+      const type: StockAdjustment["type"] = mode === "count" ? "count" : qtyNum >= 0 ? "in" : "out";
+      const adj: StockAdjustment = { id: now, branch, date: today, item, type, qty: Math.abs(qtyNum), loggedBy };
       if (note) adj.note = note;
-
       const newQty = mode === "count" ? qtyNum : Math.max(0, currentQty + qtyNum);
       const stockId = stockDocId(branch, item);
       const stockDoc: BranchStock = {
-        id: stockId, branch, item,
-        category: catalogItem.category,
-        unit: catalogItem.unit,
-        qty: newQty,
-        reorderAt: catalogItem.reorderAt,
-        lastUpdated: today,
-        lastUpdatedBy: loggedBy,
+        id: stockId, branch, item, category: catalogItem.category, unit: catalogItem.unit,
+        qty: newQty, reorderAt: catalogItem.reorderAt, lastUpdated: today, lastUpdatedBy: loggedBy,
       };
-
       await Promise.all([
         saveDocById(COLS.branchStock, stockId, stockDoc as unknown as Record<string, unknown>),
         saveDoc(COLS.adjustments, adj as unknown as Record<string, unknown>),
       ]);
     }
-
     setLoading(false);
     onClose();
   }
 
   const qtyNum = Number(qty);
-  const canSave = qty !== "" && !isNaN(qtyNum) &&
-    (mode === "adjust" ? qtyNum !== 0 : qtyNum >= 0);
+  const canSave = qty !== "" && !isNaN(qtyNum) && (mode === "adjust" ? qtyNum !== 0 : qtyNum >= 0);
 
   return (
     <>
       <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60 }} />
-      <div style={{
-        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 70,
-        background: "#FFFFFF", borderRadius: "20px 20px 0 0",
-        padding: "20px 20px 40px",
-        boxShadow: "0 -4px 24px rgba(0,0,0,0.12)",
-      }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 70, background: "#fff", borderRadius: "20px 20px 0 0", padding: "20px 20px 40px", boxShadow: "0 -4px 24px rgba(0,0,0,0.12)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
           <div>
             <div style={{ fontWeight: 700, fontSize: 18 }}>{item}</div>
             <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
-              Stock: <strong>{currentQty.toLocaleString()} {catalogItem.unit}</strong>
-              {beginningQty !== null && (
-                <span> · BEG: <strong>{beginningQty} {catalogItem.unit}</strong></span>
-              )}
+              {catalogItem.packSize} · Stock: <strong>{currentQty}</strong>
+              {beginningQty !== null && <span> · BEG: <strong>{beginningQty}</strong></span>}
             </div>
           </div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
         </div>
 
         <div style={{ display: "flex", gap: 6, margin: "16px 0" }}>
-          {([
-            { id: "beginning", label: "Beginning" },
-            { id: "adjust",    label: "Adjust" },
-            { id: "count",     label: "End Count" },
-          ] as { id: ModalMode; label: string }[]).map(m => (
-            <button
-              key={m.id}
-              onClick={() => { setMode(m.id); setQty(""); }}
-              style={{
-                flex: 1, padding: "10px 0", borderRadius: 10, border: "none", cursor: "pointer",
-                fontWeight: 600, fontSize: 13,
-                background: mode === m.id ? "#1A1A1A" : "var(--bg)",
-                color: mode === m.id ? "#FFFFFF" : "var(--text-secondary)",
-              }}
-            >
-              {m.label}
-            </button>
+          {([{ id: "beginning", label: "Beginning" }, { id: "adjust", label: "Adjust" }, { id: "count", label: "End Count" }] as { id: ModalMode; label: string }[]).map(m => (
+            <button key={m.id} onClick={() => { setMode(m.id); setQty(""); }} style={{
+              flex: 1, padding: "10px 0", borderRadius: 10, border: "none", cursor: "pointer",
+              fontWeight: 600, fontSize: 13,
+              background: mode === m.id ? "#1A1A1A" : "var(--bg)",
+              color: mode === m.id ? "#fff" : "var(--text-secondary)",
+            }}>{m.label}</button>
           ))}
         </div>
 
@@ -449,21 +909,11 @@ function AdjustModal({ item, branch, stock, beginningQty, today, onClose }: {
         {mode === "adjust" ? (
           <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
             <button onClick={() => setQty(q => String((Number(q) || 0) - 1))} style={quickBtnStyle}>−</button>
-            <input
-              type="number" value={qty}
-              onChange={e => setQty(e.target.value)}
-              placeholder="0"
-              style={inputStyle}
-            />
+            <input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="0" style={inputStyle} />
             <button onClick={() => setQty(q => String((Number(q) || 0) + 1))} style={quickBtnStyle}>+</button>
           </div>
         ) : (
-          <input
-            type="number" value={qty}
-            onChange={e => setQty(e.target.value)}
-            placeholder={`Count in ${catalogItem.unit}`}
-            style={{ ...inputStyle, width: "100%" }}
-          />
+          <input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder={`Count in ${catalogItem.unit}`} style={{ ...inputStyle, width: "100%" }} />
         )}
 
         {mode === "adjust" && qty && !isNaN(Number(qty)) && (
@@ -473,34 +923,22 @@ function AdjustModal({ item, branch, stock, beginningQty, today, onClose }: {
         )}
 
         {mode !== "beginning" && (
-          <input
-            value={note} onChange={e => setNote(e.target.value)}
-            placeholder="Note (optional)"
-            style={{ ...inputStyle, width: "100%", marginTop: 10 }}
-          />
+          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" style={{ ...inputStyle, width: "100%", marginTop: 10 }} />
         )}
 
-        <button
-          onClick={save} disabled={!canSave || loading}
-          style={{
-            marginTop: 16, width: "100%", padding: "15px 0",
-            borderRadius: 14, border: "none", cursor: canSave ? "pointer" : "not-allowed",
-            fontWeight: 700, fontSize: 16,
-            background: canSave ? "#1A1A1A" : "#E8E8E4",
-            color: canSave ? "#FFFFFF" : "var(--text-secondary)",
-          }}
-        >
-          {loading ? "Saving…" :
-            mode === "beginning" ? "Set Beginning" :
-            mode === "count" ? "Save End Count" :
-            "Save Adjustment"}
+        <button onClick={save} disabled={!canSave || loading} style={{
+          marginTop: 16, width: "100%", padding: "15px 0", borderRadius: 14, border: "none",
+          cursor: canSave ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 16,
+          background: canSave ? "#1A1A1A" : "#E8E8E4", color: canSave ? "#fff" : "var(--text-secondary)",
+        }}>
+          {loading ? "Saving…" : mode === "beginning" ? "Set Beginning" : mode === "count" ? "Save End Count" : "Save Adjustment"}
         </button>
       </div>
     </>
   );
 }
 
-// ── Reset Demo Data Modal ─────────────────────────────────────────────────────
+// ── Reset Modal ───────────────────────────────────────────────────────────────
 
 function ResetModal({ branch, onClose }: { branch: Branch; onClose: () => void }) {
   const [scope, setScope] = useState<"branch" | "all">("branch");
@@ -510,23 +948,11 @@ function ResetModal({ branch, onClose }: { branch: Branch; onClose: () => void }
   async function runReset() {
     setPhase("running");
     const lines: string[] = [];
-
-    const branchCols = [
-      COLS.branchStock,
-      COLS.adjustments,
-      COLS.dailyBeginning,
-      COLS.pullOuts,
-      COLS.deliveryNotes,
-    ];
-
+    const branchCols = [COLS.branchStock, COLS.adjustments, COLS.dailyBeginning, COLS.pullOuts, COLS.deliveryNotes];
     for (const col of branchCols) {
-      const q = scope === "branch"
-        ? query(collection(db, col), where("branch", "==", branch))
-        : query(collection(db, col));
+      const q = scope === "branch" ? query(collection(db, col), where("branch", "==", branch)) : query(collection(db, col));
       const snap = await getDocs(q);
       if (snap.empty) { lines.push(`${col}: nothing to delete`); setLog([...lines]); continue; }
-
-      // Delete in batches of 400
       const chunks: typeof snap.docs[] = [];
       for (let i = 0; i < snap.docs.length; i += 400) chunks.push(snap.docs.slice(i, i + 400));
       for (const chunk of chunks) {
@@ -537,91 +963,53 @@ function ResetModal({ branch, onClose }: { branch: Branch; onClose: () => void }
       lines.push(`✓ ${col}: deleted ${snap.size} docs`);
       setLog([...lines]);
     }
-
     setPhase("done");
   }
 
   return (
     <>
-      <div onClick={phase === "confirm" ? onClose : undefined}
-        style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60 }} />
-      <div style={{
-        position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 70,
-        background: "#FFF", borderRadius: "20px 20px 0 0",
-        padding: "24px 20px 40px",
-        boxShadow: "0 -4px 24px rgba(0,0,0,0.15)",
-      }}>
+      <div onClick={phase === "confirm" ? onClose : undefined} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60 }} />
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 70, background: "#fff", borderRadius: "20px 20px 0 0", padding: "24px 20px 40px", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" }}>
         {phase === "confirm" && (
           <>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 6 }}>Reset Demo Data</div>
-            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>
-              Only clears branch app data. Cannot be undone.
-            </div>
-
-            {/* What gets cleared */}
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 12 }}>Only clears branch app data. Cannot be undone.</div>
             <div style={{ background: "#FEF2F2", borderRadius: 10, padding: "10px 12px", marginBottom: 10 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#DC2626", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Will be cleared</div>
               {["branch_stock", "branch_adjustments", "daily_beginning", "pull_outs", "delivery_notes"].map(c => (
                 <div key={c} style={{ fontSize: 12, color: "#7F1D1D", marginBottom: 2 }}>· {c}</div>
               ))}
             </div>
-
-            {/* What is NOT touched */}
             <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "10px 12px", marginBottom: 20 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Commissary data — untouched</div>
               {["invEntries", "pullout_requests", "all other commissary collections"].map(c => (
                 <div key={c} style={{ fontSize: 12, color: "#14532D", marginBottom: 2 }}>· {c}</div>
               ))}
             </div>
-
             <div style={{ display: "flex", gap: 8, marginBottom: 20 }}>
               {(["branch", "all"] as const).map(s => (
-                <button key={s} onClick={() => setScope(s)} style={{
-                  flex: 1, padding: "10px 0", borderRadius: 10, border: "none",
-                  cursor: "pointer", fontWeight: 600, fontSize: 13,
-                  background: scope === s ? "#1A1A1A" : "var(--bg)",
-                  color: scope === s ? "#FFF" : "var(--text-secondary)",
-                }}>
-                  {s === "branch" ? `This branch only` : "All branches"}
+                <button key={s} onClick={() => setScope(s)} style={{ flex: 1, padding: "10px 0", borderRadius: 10, border: "none", cursor: "pointer", fontWeight: 600, fontSize: 13, background: scope === s ? "#1A1A1A" : "var(--bg)", color: scope === s ? "#fff" : "var(--text-secondary)" }}>
+                  {s === "branch" ? "This branch only" : "All branches"}
                 </button>
               ))}
             </div>
-
             <div style={{ display: "flex", gap: 8 }}>
-              <button onClick={onClose} style={{
-                flex: 1, padding: "14px 0", borderRadius: 12,
-                border: "1.5px solid var(--border)", background: "#FFF",
-                color: "var(--text-secondary)", fontWeight: 600, fontSize: 15, cursor: "pointer",
-              }}>Cancel</button>
-              <button onClick={runReset} style={{
-                flex: 1, padding: "14px 0", borderRadius: 12,
-                border: "none", background: "#DC2626",
-                color: "#FFF", fontWeight: 700, fontSize: 15, cursor: "pointer",
-              }}>Wipe Data</button>
+              <button onClick={onClose} style={{ flex: 1, padding: "14px 0", borderRadius: 12, border: "1.5px solid var(--border)", background: "#fff", color: "var(--text-secondary)", fontWeight: 600, fontSize: 15, cursor: "pointer" }}>Cancel</button>
+              <button onClick={runReset} style={{ flex: 1, padding: "14px 0", borderRadius: 12, border: "none", background: "#DC2626", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Wipe Data</button>
             </div>
           </>
         )}
-
         {phase === "running" && (
           <>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>Resetting…</div>
-            {log.map((l, i) => (
-              <div key={i} style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 4 }}>{l}</div>
-            ))}
+            {log.map((l, i) => <div key={i} style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 4 }}>{l}</div>)}
           </>
         )}
-
         {phase === "done" && (
           <>
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Done ✓</div>
-            {log.map((l, i) => (
-              <div key={i} style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 4 }}>{l}</div>
-            ))}
-            <button onClick={onClose} style={{
-              marginTop: 20, width: "100%", padding: "14px 0", borderRadius: 12,
-              border: "none", background: "#1A1A1A", color: "#FFF",
-              fontWeight: 700, fontSize: 15, cursor: "pointer",
-            }}>Close</button>
+            {log.map((l, i) => <div key={i} style={{ fontSize: 13, color: "var(--text-secondary)", marginBottom: 4 }}>{l}</div>)}
+            <button onClick={onClose} style={{ marginTop: 20, width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: "#1A1A1A", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Close</button>
           </>
         )}
       </div>

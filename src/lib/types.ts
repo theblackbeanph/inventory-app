@@ -1,6 +1,7 @@
 export type Branch = "MKT" | "BF";
 export type ItemCategory = "portion" | "packed" | "loose";
-export type AdjustmentType = "in" | "out" | "waste" | "count";
+export type AdjustmentType = "in" | "out" | "waste" | "count" | "sales_import";
+export type PosType = "csv" | "storehub";
 export type RequestStatus = "pending" | "approved" | "in_transit" | "received";
 
 export interface CatalogItem {
@@ -32,6 +33,7 @@ export interface StockAdjustment {
   qty: number;
   note?: string;
   loggedBy: string;
+  source?: "csv" | "storehub";
 }
 
 export interface PulloutRequest {
@@ -63,16 +65,6 @@ export interface PulloutItem {
 export interface AuthState {
   branch: Branch;
   authedAt: number;
-}
-
-export interface DailyBeginning {
-  id: string;        // `${branch}__${item}__${date}`
-  branch: Branch;
-  item: string;
-  date: string;      // YYYY-MM-DD
-  qty: number;
-  setBy: string;
-  updatedAt: string;
 }
 
 // ── Pull-Out module ───────────────────────────────────────────────────────────
