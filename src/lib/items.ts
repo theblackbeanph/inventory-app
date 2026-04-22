@@ -35,9 +35,6 @@ export const CATALOG: CatalogItem[] = [
   { name: "Grilled Cheese",          category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen" },
   { name: "Tuna Spread",             category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen" },
   { name: "Flatbread",               category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen" },
-  { name: "Classic Tiramisu",        category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen" },
-  { name: "Hojicha Tiramisu",        category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen" },
-  { name: "Tres Leches",             category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen" },
   // ── LOOSE (sealed pack — count packs only, never weigh) ───────────────
   { name: "Marinara Sauce",          category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen" },
   { name: "Marinara Sauce (Blend)",  category: "loose",   unit: "pack", reorderAt: 2, packSize: "300g",    department: "kitchen" },
