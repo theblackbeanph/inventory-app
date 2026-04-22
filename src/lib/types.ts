@@ -6,7 +6,7 @@ export type RequestStatus = "pending" | "approved" | "in_transit" | "received";
 export interface CatalogItem {
   name: string;
   category: ItemCategory;
-  unit: "pc" | "g";
+  unit: "pc" | "g" | "pack";
   reorderAt: number;
 }
 
@@ -15,7 +15,7 @@ export interface BranchStock {
   branch: Branch;
   item: string;
   category: ItemCategory;
-  unit: "pc" | "g";
+  unit: "pc" | "g" | "pack";
   qty: number;
   reorderAt: number;
   lastUpdated: string;
@@ -55,7 +55,7 @@ export interface PulloutItem {
   item: string;
   category: ItemCategory;
   qty: number;
-  unit: "pc" | "g";
+  unit: "pc" | "g" | "pack";
   currentStock?: number;
 }
 
@@ -91,7 +91,7 @@ export interface PullOutItem {
   item_class: "A" | "B" | "C";
   calculated_qty: number;   // system forecast (packs)
   confirmed_qty: number;    // supervisor-adjusted (packs)
-  unit: "pc" | "g";
+  unit: "pc" | "g" | "pack";
 }
 
 export interface PullOut {
@@ -120,7 +120,7 @@ export type DeliveryStatus =
 
 export interface DeliveryNoteItem {
   item_name: string;
-  unit: "pc" | "g";
+  unit: "pc" | "g" | "pack";
   dispatched_qty: number;
   received_qty?: number;
   discrepancy?: number;      // received_qty − dispatched_qty
