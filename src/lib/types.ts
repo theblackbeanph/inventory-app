@@ -143,6 +143,35 @@ export interface DeliveryNote {
   commissary_notified: boolean;
 }
 
+// ── Production module ─────────────────────────────────────────────────────────
+
+export interface SupplierDelivery {
+  id: string;
+  branch: Branch;
+  date: string;
+  loggedBy: string;
+  supplier?: string;
+  items: SupplierDeliveryItem[];
+  notes?: string;
+}
+
+export interface SupplierDeliveryItem {
+  rawItem: string;
+  packsReceived: number;
+}
+
+export interface PortioningRun {
+  id: string;
+  branch: Branch;
+  date: string;
+  loggedBy: string;
+  rawItem: string;
+  packsUsed: number;
+  portionedItem: string;
+  portionsProduced: number;
+  notes?: string;
+}
+
 export interface DailyBeginning {
   id: string;        // `${branch}__${department}__${item}__${date}`
   branch: Branch;

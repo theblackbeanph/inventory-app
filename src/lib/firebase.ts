@@ -33,7 +33,9 @@ export const COLS = {
   dailyClose:      "daily_close",
   pullOuts:        "pull_outs",
   deliveryNotes:   "delivery_notes",
-  invEntries:      "invEntries",          // commissary stock movements
+  invEntries:        "invEntries",          // commissary stock movements
+  supplierDeliveries: "supplier_deliveries",
+  portioningRuns:    "portioning_runs",
 } as const;
 
 export async function saveDoc(col: string, item: Record<string, unknown>) {

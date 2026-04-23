@@ -16,7 +16,6 @@ import {
 import { DailyContent, type ImportWarning } from "./_components/DailyContent";
 import { ManualCountContent } from "./_components/ManualCountContent";
 import { ManualCountCompleted } from "./_components/ManualCountCompleted";
-import { ReportsContent } from "./_components/ReportsContent";
 import { ReviewModal } from "./_components/ReviewModal";
 import { StoreHubSyncModal } from "./_components/StoreHubSyncModal";
 import { CSVImportModal } from "./_components/CSVImportModal";
@@ -188,7 +187,6 @@ export default function StockPage() {
           {([
             { id: "daily",       label: "Daily" },
             { id: "manualcount", label: "Manual count" },
-            { id: "reports",     label: "Reports" },
           ] as { id: SubTab; label: string }[]).map(tab => (
             <button key={tab.id} onClick={() => setSubTab(tab.id)} style={{
               flex: 1, padding: "9px 4px", border: "none", cursor: "pointer",
@@ -241,10 +239,6 @@ export default function StockPage() {
               onReview={() => setShowReview(true)}
             />
       )}
-      {subTab === "reports" && (
-        <ReportsContent branch={branch} department={department} items={filtered} />
-      )}
-
       {/* ── Modals ── */}
       {showReview && (
         <ReviewModal

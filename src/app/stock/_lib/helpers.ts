@@ -1,7 +1,7 @@
 import type { StockAdjustment } from "@/lib/types";
 import { CATALOG } from "@/lib/items";
 
-export type SubTab = "daily" | "manualcount" | "reports";
+export type SubTab = "daily" | "manualcount";
 export type FilterTab = "all" | "commissary_pc" | "commissary_loose" | "supplier";
 
 export interface DailyMetrics {
