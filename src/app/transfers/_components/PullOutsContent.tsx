@@ -81,18 +81,12 @@ export function PullOutsContent({ branch }: { branch: Branch }) {
     <div>
       {/* Sub-header */}
       <div style={{ background: "#FFFFFF", borderBottom: "1px solid var(--border)", padding: "10px 16px 0" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            {pendingCount > 0 && (
-              <div style={{ background: "#FEF3C7", color: "#D97706", borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
-                {pendingCount} pending
-              </div>
-            )}
-          </div>
-          <button
-            onClick={() => setView("new")}
-            style={{ background: "#1A1A1A", color: "#FFF", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}
-          >+ Manual</button>
+        <div style={{ marginBottom: 10, minHeight: 32, display: "flex", alignItems: "center" }}>
+          {pendingCount > 0 && (
+            <div style={{ background: "#FEF3C7", color: "#D97706", borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+              {pendingCount} pending
+            </div>
+          )}
         </div>
         <div style={{ display: "flex", gap: 4, overflowX: "auto" }}>
           {(["all", "pending", "active", "done"] as FilterTab[]).map(f => (
@@ -135,6 +129,19 @@ export function PullOutsContent({ branch }: { branch: Branch }) {
           );
         })}
       </div>
+
+      {/* FAB */}
+      <button
+        onClick={() => setView("new")}
+        style={{
+          position: "fixed", bottom: "calc(var(--nav-h) + 20px)", right: 20,
+          width: 56, height: 56, borderRadius: "50%", border: "none",
+          background: "#1A1A1A", color: "#FFF", fontSize: 28, fontWeight: 300,
+          cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30,
+        }}
+        aria-label="New manual pull-out"
+      >+</button>
     </div>
   );
 }

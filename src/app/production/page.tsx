@@ -148,12 +148,7 @@ export default function ProductionPage() {
 function DeliveryList({ deliveries, onNew, noItems }: { deliveries: SupplierDelivery[]; onNew: () => void; noItems: boolean }) {
   return (
     <div>
-      <div style={{ padding: "12px 16px 6px", display: "flex", justifyContent: "flex-end" }}>
-        <button onClick={onNew} disabled={noItems} style={{ background: noItems ? "#E8E8E4" : "#1A1A1A", color: noItems ? "var(--text-secondary)" : "#FFF", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: noItems ? "not-allowed" : "pointer" }}>
-          + Log Delivery
-        </button>
-      </div>
-      <div style={{ padding: "6px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {deliveries.length === 0 && !noItems && (
           <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: "60px 0", fontSize: 15 }}>No supplier deliveries yet.</div>
         )}
@@ -172,6 +167,21 @@ function DeliveryList({ deliveries, onNew, noItems }: { deliveries: SupplierDeli
           </div>
         ))}
       </div>
+
+      {/* FAB */}
+      {!noItems && (
+        <button
+          onClick={onNew}
+          style={{
+            position: "fixed", bottom: "calc(var(--nav-h) + 20px)", right: 20,
+            width: 56, height: 56, borderRadius: "50%", border: "none",
+            background: "#059669", color: "#FFF", fontSize: 28, fontWeight: 300,
+            cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30,
+          }}
+          aria-label="Log supplier delivery"
+        >+</button>
+      )}
     </div>
   );
 }
@@ -256,12 +266,7 @@ function NewDeliveryForm({ branch, loggedBy, onBack }: { branch: Branch; loggedB
 function PortioningList({ runs, onNew, noItems }: { runs: PortioningRun[]; onNew: () => void; noItems: boolean }) {
   return (
     <div>
-      <div style={{ padding: "12px 16px 6px", display: "flex", justifyContent: "flex-end" }}>
-        <button onClick={onNew} disabled={noItems} style={{ background: noItems ? "#E8E8E4" : "#1A1A1A", color: noItems ? "var(--text-secondary)" : "#FFF", border: "none", borderRadius: 10, padding: "8px 14px", fontSize: 13, fontWeight: 600, cursor: noItems ? "not-allowed" : "pointer" }}>
-          + Log Portioning
-        </button>
-      </div>
-      <div style={{ padding: "6px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
         {runs.length === 0 && !noItems && (
           <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: "60px 0", fontSize: 15 }}>No portioning runs yet.</div>
         )}
@@ -284,6 +289,21 @@ function PortioningList({ runs, onNew, noItems }: { runs: PortioningRun[]; onNew
           </div>
         ))}
       </div>
+
+      {/* FAB */}
+      {!noItems && (
+        <button
+          onClick={onNew}
+          style={{
+            position: "fixed", bottom: "calc(var(--nav-h) + 20px)", right: 20,
+            width: 56, height: 56, borderRadius: "50%", border: "none",
+            background: "#7C3AED", color: "#FFF", fontSize: 28, fontWeight: 300,
+            cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30,
+          }}
+          aria-label="Log portioning run"
+        >+</button>
+      )}
     </div>
   );
 }
