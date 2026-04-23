@@ -9,7 +9,7 @@ import {
   PULLOUT_ITEMS, generatePoNumber, generateDnNumber, getItemsForSlot,
   type DeliverySlot,
 } from "@/lib/pullout-config";
-import type { Branch, PullOut, PullOutItem, PullOutStatus, DeliveryNote, DeliveryNoteItem } from "@/lib/types";
+import type { Branch, PullOut, PullOutItem, PullOutStatus, DeliveryNote, StockAdjustment } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 
 type View = "list" | "detail" | "new";
@@ -34,6 +34,12 @@ const STATUS_COLOR: Record<PullOutStatus, { bg: string; text: string }> = {
 
 function todayPHT(): string {
   const d = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  return d.toISOString().slice(0, 10);
+}
+
+function addDays(date: string, days: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
 }
 
@@ -201,9 +207,32 @@ function PullOutDetail({ po, branch, onBack, onUpdated }: {
   const [items, setItems] = useState<PullOutItem[]>(po.items.map(i => ({ ...i })));
   const [notes, setNotes] = useState(po.notes ?? "");
   const [loading, setLoading] = useState(false);
+  const [usageData, setUsageData] = useState<Record<string, { total: number; avg: number }>>({});
   const loggedBy = BRANCH_LABELS[branch];
   const isReview = po.status === "PENDING_REVIEW";
   const sc = STATUS_COLOR[po.status];
+
+  useEffect(() => {
+    const sevenDaysAgo = addDays(todayPHT(), -6);
+    getDocs(query(
+      collection(db, COLS.adjustments),
+      where("branch", "==", branch),
+      where("department", "==", "kitchen"),
+      where("type", "==", "sales_import"),
+    )).then(snap => {
+      const map: Record<string, number> = {};
+      snap.docs.forEach(d => {
+        const adj = d.data() as StockAdjustment;
+        if (adj.date < sevenDaysAgo) return;
+        map[adj.item] = (map[adj.item] ?? 0) + adj.qty;
+      });
+      const result: Record<string, { total: number; avg: number }> = {};
+      for (const [item, total] of Object.entries(map)) {
+        result[item] = { total, avg: Math.round((total / 7) * 10) / 10 };
+      }
+      setUsageData(result);
+    });
+  }, [branch]);
 
   async function confirm() {
     setLoading(true);
@@ -309,8 +338,13 @@ function PullOutDetail({ po, branch, onBack, onUpdated }: {
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item_name}</div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-                  {CATALOG_MAP.get(item.item_name)?.packSize ?? "1 pc"} · System: {item.calculated_qty}
+                  {CATALOG_MAP.get(item.item_name)?.packSize ?? "1 pc"} · Baseline: {item.calculated_qty}
                 </div>
+                {usageData[item.item_name] && (
+                  <div style={{ fontSize: 11, color: "#2563EB", marginTop: 2 }}>
+                    Avg {usageData[item.item_name].avg}/day · {usageData[item.item_name].total} sold last 7 days
+                  </div>
+                )}
               </div>
               {isReview ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>

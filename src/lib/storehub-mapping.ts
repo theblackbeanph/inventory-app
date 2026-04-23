@@ -1,12 +1,14 @@
 // MKT StoreHub SKU → commissary item mapping
 // Each LinkedSku maps one StoreHub SKU to a deduction quantity.
 // Multiple commissary items can reference the same SKU (e.g. Fish & Chips → Cobbler + Tartar).
+// For loose items, ordersPerPack converts raw order count → packs consumed (floor division).
 
 type LinkedSku = string | { sku: string; qty: number };
 
 interface StoreHubMappingEntry {
   item: string; // must match CATALOG exactly
   linkedSkus: LinkedSku[];
+  ordersPerPack?: number; // loose items only — from Portion Guide (April 2026)
 }
 
 const STOREHUB_MAPPING: StoreHubMappingEntry[] = [
@@ -43,18 +45,25 @@ const STOREHUB_MAPPING: StoreHubMappingEntry[] = [
   { item: "Grilled Cheese",          linkedSkus: ["83", "B8"] },
   { item: "Tuna Spread",             linkedSkus: ["86", "B6"] },
   { item: "Flatbread",               linkedSkus: ["79", "B12", "P4"] },
-  // ── LOOSE ────────────────────────────────────────────────────────────────
-  { item: "Gyudon Sauce",            linkedSkus: ["52", { sku: "171", qty: 3 }] },
-  { item: "Tartar",                  linkedSkus: ["66", { sku: "156", qty: 3 }, "80", "B5", "B13"] },
-  { item: "Caesar Dressing",         linkedSkus: ["50", { sku: "154", qty: 3 }] },
-  { item: "Raspberry Dressing",      linkedSkus: ["161", { sku: "162", qty: 3 }] },
-  { item: "Candied Walnut",          linkedSkus: ["161", { sku: "162", qty: 3 }] },
-  { item: "Burger Dressing",         linkedSkus: ["67"] },
-  { item: "Maple Syrup",             linkedSkus: ["61", "68"] },
-  { item: "Pesto",                   linkedSkus: ["84", "116", "B7"] },
-  { item: "Beef Pares Sauce",        linkedSkus: ["54", "72", { sku: "172", qty: 3 }] },
-  { item: "Adobo Flakes Sauce",      linkedSkus: ["55"] },
-  { item: "Kimchi",                  linkedSkus: ["58", { sku: "151", qty: 3 }, { sku: "171", qty: 3 }] },
+  // ── LOOSE — ordersPerPack from Portion Guide (April 2026) ────────────────
+  // ⚠️ TODO: fill in linkedSkus for items marked [] below
+  { item: "Gyudon Sauce",            linkedSkus: ["52", { sku: "171", qty: 3 }],                      ordersPerPack: 18 },
+  { item: "Tartar",                  linkedSkus: ["66", { sku: "156", qty: 3 }, "80", "B5", "B13"],   ordersPerPack: 33 },
+  { item: "Caesar Dressing",         linkedSkus: ["50", { sku: "154", qty: 3 }],                      ordersPerPack: 16 },
+  { item: "Raspberry Dressing",      linkedSkus: ["161", { sku: "162", qty: 3 }],                     ordersPerPack: 10 },
+  { item: "Candied Walnut",          linkedSkus: ["161", { sku: "162", qty: 3 }],                     ordersPerPack: 5  },
+  { item: "Burger Dressing",         linkedSkus: ["67"],                                              ordersPerPack: 16 },
+  { item: "Maple Syrup",             linkedSkus: ["61", "68"],                                        ordersPerPack: 10 },
+  { item: "Pesto",                   linkedSkus: ["84", "116", "B7"],                                 ordersPerPack: 10 },
+  { item: "Beef Pares Sauce",        linkedSkus: ["54", "72", { sku: "172", qty: 3 }],                ordersPerPack: 16 },
+  { item: "Adobo Flakes Sauce",      linkedSkus: ["55"],                                              ordersPerPack: 16 },
+  { item: "Kimchi",                  linkedSkus: ["58", { sku: "151", qty: 3 }, { sku: "171", qty: 3 }], ordersPerPack: 16 },
+  // ⚠️ TODO: provide StoreHub SKUs for these loose items
+  { item: "Aioli",                   linkedSkus: [],                                                   ordersPerPack: 33 },
+  { item: "Nigiri",                  linkedSkus: [],                                                   ordersPerPack: 25 },
+  { item: "Marinara Sauce",          linkedSkus: [],                                                   ordersPerPack: 10 },
+  { item: "Marinara Sauce (Blend)",  linkedSkus: [],                                                   ordersPerPack: 10 },
+  { item: "House Vinaigrette",       linkedSkus: [],                                                   ordersPerPack: 25 },
 ];
 
 // All SKUs referenced in the mapping (for identifying unmatched sold items)
@@ -74,14 +83,19 @@ export function applyStoreHubMapping(
 ): { item: string; qty: number }[] {
   const results: { item: string; qty: number }[] = [];
   for (const entry of STOREHUB_MAPPING) {
-    let qty = 0;
+    let rawOrders = 0;
     for (const link of entry.linkedSkus) {
       const sku    = typeof link === "string" ? link : link.sku;
       const perQty = typeof link === "string" ? 1 : link.qty;
       const count  = soldBySkuMap[sku] ?? 0;
       if (!count) continue;
-      qty += count * perQty;
+      rawOrders += count * perQty;
     }
+    if (rawOrders <= 0) continue;
+    // Loose items: convert raw order count to packs consumed via SPP
+    const qty = entry.ordersPerPack
+      ? Math.floor(rawOrders / entry.ordersPerPack)
+      : rawOrders;
     if (qty > 0) results.push({ item: entry.item, qty });
   }
   return results;

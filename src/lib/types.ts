@@ -12,6 +12,8 @@ export interface CatalogItem {
   reorderAt: number;
   packSize: string;
   department: Department;
+  ordersPerPack?: number; // loose items only — orders needed to consume 1 pack
+  branches?: Branch[];    // if set, only these branches carry this item
 }
 
 export interface BranchStock {
@@ -69,6 +71,7 @@ export interface PulloutItem {
 export interface AuthState {
   branch: Branch;
   department: Department;
+  staffName: string;
   authedAt: number;
 }
 

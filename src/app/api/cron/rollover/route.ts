@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
     for (const dept of DEPARTMENTS) {
       const deptAdj = allAdj.filter(a => a.department === dept);
       const deptBeg = allBeg.filter(b => b.department === dept);
-      const deptCatalog = CATALOG.filter(i => i.department === dept);
+      const deptCatalog = CATALOG.filter(i => i.department === dept && (!i.branches || i.branches.includes(branch)));
       const todayBegItems = todayBegByDept[dept] ?? new Set<string>();
 
       let endCounts: Record<string, number> = {};

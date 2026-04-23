@@ -1,5 +1,12 @@
 import type { Branch, Department, AuthState, PosType } from "./types";
 
+// Staff names per department — update these to match your actual team per dept
+export const STAFF_NAMES: Record<Department, string[]> = {
+  kitchen: ["Jacq", "Minh", "Brian", "Joshua", "Wilfred", "MJ", "Roji", "Lady", "Mike", "John", "Dexter", "Jesryl", "Rafael"],
+  bar:     ["Homer", "Eric", "Jess", "RJ", "Ivan", "Josh"],
+  cafe:    ["Je", "Raniel"],
+};
+
 // Branch PINs — change these per deployment
 export const BRANCH_PINS: Record<Branch, string> = {
   MKT: "0317",
@@ -28,6 +35,7 @@ const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
 interface StoredState {
   branch: Branch;
   department?: Department;
+  staffName?: string;
   authedAt: number;
 }
 
@@ -54,11 +62,11 @@ export function getBranchSession(): { branch: Branch; authedAt: number } | null 
   return { branch: state.branch, authedAt: state.authedAt };
 }
 
-// Returns full session only when department is also set
+// Returns full session only when department and staffName are both set
 export function getSession(): AuthState | null {
   const state = readStored();
-  if (!state || !state.department) return null;
-  return { branch: state.branch, department: state.department, authedAt: state.authedAt };
+  if (!state || !state.department || !state.staffName) return null;
+  return { branch: state.branch, department: state.department, staffName: state.staffName, authedAt: state.authedAt };
 }
 
 export function login(branch: Branch, pin: string): boolean {
@@ -74,6 +82,16 @@ export function setDepartment(department: Department) {
   if (!raw) return;
   const state: StoredState = JSON.parse(raw);
   state.department = department;
+  state.staffName = undefined; // reset name when dept changes
+  localStorage.setItem(AUTH_KEY, JSON.stringify(state));
+}
+
+export function setStaffName(name: string) {
+  if (typeof window === "undefined") return;
+  const raw = localStorage.getItem(AUTH_KEY);
+  if (!raw) return;
+  const state: StoredState = JSON.parse(raw);
+  state.staffName = name;
   localStorage.setItem(AUTH_KEY, JSON.stringify(state));
 }
 
