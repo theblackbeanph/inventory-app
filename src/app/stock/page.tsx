@@ -2,22 +2,32 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
-import { db, COLS, saveDocById, saveDoc } from "@/lib/firebase";
+import { db, COLS, saveDocById } from "@/lib/firebase";
 import { CATALOG, CATALOG_MAP, stockDocId, beginningDocId } from "@/lib/items";
 import { collection, onSnapshot, query, where, getDocs, writeBatch, doc } from "@/lib/firebase";
-import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, ItemCategory, DailyClose } from "@/lib/types";
+import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, DailyClose } from "@/lib/types";
 import { parseSalesCSV, applyCsvMapping, allMappedPosNames } from "@/lib/csv-mapping";
 import BottomNav from "@/components/BottomNav";
 
-type SubTab = "summary" | "endcount" | "adjust";
-type FilterTab = "all" | ItemCategory;
+type SubTab = "daily" | "manualcount" | "reports";
+type FilterTab = "all" | "commissary_pc" | "commissary_loose" | "supplier";
+
+const COUNTED_BY_NAMES = ["Jacq", "Minh", "Brian", "Joshua", "Wilfred", "MJ", "Roji", "Lady", "Mike", "John", "Dexter", "Jesryl", "Rafael"];
 
 const CATEGORY_FILTERS: { id: FilterTab; label: string }[] = [
-  { id: "all",     label: "All" },
-  { id: "portion", label: "Portions" },
-  { id: "packed",  label: "Packed" },
-  { id: "loose",   label: "Loose" },
+  { id: "all",            label: "All" },
+  { id: "commissary_pc",  label: "Commissary (pc)" },
+  { id: "commissary_loose", label: "Commissary (loose)" },
+  { id: "supplier",       label: "Supplier" },
 ];
+
+function matchesFilter(item: typeof CATALOG[number], filter: FilterTab): boolean {
+  if (filter === "all") return true;
+  if (filter === "commissary_pc") return item.category === "portion" || item.category === "packed";
+  if (filter === "commissary_loose") return item.category === "loose";
+  if (filter === "supplier") return item.category === "supplier";
+  return true;
+}
 
 function todayPHT(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -27,6 +37,18 @@ function addDays(date: string, days: number): string {
   const d = new Date(date + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + days);
   return d.toISOString().slice(0, 10);
+}
+
+function weekMonday(date: string): string {
+  const d = new Date(date + "T00:00:00Z");
+  const day = d.getUTCDay();
+  const diff = day === 0 ? -6 : 1 - day;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d.toISOString().slice(0, 10);
+}
+
+function formatDate(date: string): string {
+  return new Date(date + "T00:00:00Z").toLocaleDateString("en-PH", { month: "short", day: "numeric", timeZone: "UTC" });
 }
 
 interface DailyMetrics {
@@ -69,27 +91,26 @@ export default function StockPage() {
   const [stocks, setStocks] = useState<Record<string, BranchStock>>({});
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
   const [beginnings, setBeginnings] = useState<Record<string, number>>({});
+  const [dayClose, setDayClose] = useState<DailyClose | null>(null);
 
-  // Navigation
-  const [subTab, setSubTab] = useState<SubTab>("summary");
+  const [subTab, setSubTab] = useState<SubTab>("daily");
   const [categoryFilter, setCategoryFilter] = useState<FilterTab>("all");
 
-  // Summary tab
+  // Daily tab
   const [summaryDate, setSummaryDate] = useState(todayPHT);
   const [summaryAdj, setSummaryAdj] = useState<StockAdjustment[]>([]);
   const [summaryBeg, setSummaryBeg] = useState<Record<string, number>>({});
   const [varOnly, setVarOnly] = useState(false);
 
-  // End count tab
+  // Manual count tab
   const [endCounts, setEndCounts] = useState<Record<string, string>>({});
+  const [countedBy, setCountedBy] = useState("");
   const [showReview, setShowReview] = useState(false);
   const [recountItems, setRecountItems] = useState<Set<string>>(new Set());
 
   // Modals
   const [showReset, setShowReset] = useState(false);
-  const [adjustItem, setAdjustItem] = useState<string | null>(null);
   const [showCSVImport, setShowCSVImport] = useState(false);
-  const [dayClose, setDayClose] = useState<DailyClose | null>(null);
 
   useEffect(() => {
     const session = getSession();
@@ -106,27 +127,50 @@ export default function StockPage() {
       setStocks(map);
     });
 
-    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", b), where("department", "==", dept), where("date", "==", today));
+    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", b), where("department", "==", dept), where("date", "==", todayPHT()));
     const unsubAdj = onSnapshot(adjQ, snap => setAdjustments(snap.docs.map(d => d.data() as StockAdjustment)));
 
-    const begQ = query(collection(db, COLS.dailyBeginning), where("branch", "==", b), where("department", "==", dept), where("date", "==", today));
+    const begQ = query(collection(db, COLS.dailyBeginning), where("branch", "==", b), where("department", "==", dept), where("date", "==", todayPHT()));
     const unsubBeg = onSnapshot(begQ, snap => {
       const map: Record<string, number> = {};
       snap.docs.forEach(d => { const beg = d.data() as DailyBeginning; map[beg.item] = beg.qty; });
       setBeginnings(map);
     });
 
-    const closeQ = query(collection(db, COLS.dailyClose), where("branch", "==", b), where("department", "==", dept), where("date", "==", today));
+    const closeQ = query(collection(db, COLS.dailyClose), where("branch", "==", b), where("department", "==", dept), where("date", "==", todayPHT()));
     const unsubClose = onSnapshot(closeQ, snap => {
       setDayClose(snap.empty ? null : snap.docs[0].data() as DailyClose);
     });
 
     return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); };
-  }, [router, today]);
+  }, [router]);
 
-  // Fetch summary data when summaryDate changes
+  // Load localStorage once when branch/dept resolved
   useEffect(() => {
-    if (!branch) return;
+    if (!branch || !department) return;
+    const savedCounts = localStorage.getItem(`counts_${branch}_${department}_${today}`);
+    if (savedCounts) {
+      try { setEndCounts(JSON.parse(savedCounts)); } catch {}
+    }
+    const savedBy = localStorage.getItem(`countedBy_${branch}_${department}`);
+    if (savedBy) setCountedBy(savedBy);
+  }, [branch, department, today]);
+
+  // Persist endCounts to localStorage on change
+  useEffect(() => {
+    if (!branch || !department) return;
+    localStorage.setItem(`counts_${branch}_${department}_${today}`, JSON.stringify(endCounts));
+  }, [endCounts, branch, department, today]);
+
+  // Persist countedBy to localStorage
+  useEffect(() => {
+    if (!branch || !department || !countedBy) return;
+    localStorage.setItem(`countedBy_${branch}_${department}`, countedBy);
+  }, [countedBy, branch, department]);
+
+  // Fetch Daily tab data when summaryDate changes
+  useEffect(() => {
+    if (!branch || !department) return;
     if (summaryDate === today) {
       setSummaryAdj(adjustments);
       setSummaryBeg(beginnings);
@@ -152,26 +196,12 @@ export default function StockPage() {
   const dailyMetrics = useMemo(() => computeMetrics(deptCatalog, adjustments, beginnings), [deptCatalog, adjustments, beginnings]);
   const summaryMetrics = useMemo(() => computeMetrics(deptCatalog, summaryAdj, summaryBeg), [deptCatalog, summaryAdj, summaryBeg]);
 
-  // Pre-populate end count inputs from Firestore (only fill blanks, not override in-progress)
-  useEffect(() => {
-    setEndCounts(prev => {
-      const next = { ...prev };
-      for (const [item, m] of Object.entries(dailyMetrics)) {
-        if (!(item in next) && m.endCount !== null) next[item] = String(m.endCount);
-      }
-      return next;
-    });
-  }, [dailyMetrics]);
-
-  const filtered = useMemo(() => deptCatalog.filter(item =>
-    categoryFilter === "all" || item.category === categoryFilter
-  ), [deptCatalog, categoryFilter]);
+  const filtered = useMemo(() => deptCatalog.filter(item => matchesFilter(item, categoryFilter)), [deptCatalog, categoryFilter]);
 
   const lowCount  = deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).length;
   const critCount = deptCatalog.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).length;
 
   const posType = branch ? BRANCH_POS_TYPE[branch] : null;
-
 
   if (!branch || !department) return null;
 
@@ -200,17 +230,18 @@ export default function StockPage() {
 
         {/* Sub-tabs */}
         <div style={{ display: "flex", gap: 2, marginBottom: 0 }}>
-          {(["summary", "endcount", "adjust"] as SubTab[]).map(tab => {
-            const label = tab === "summary" ? "Summary" : tab === "endcount" ? "End Count" : "Adjust";
-            return (
-              <button key={tab} onClick={() => setSubTab(tab)} style={{
-                flex: 1, padding: "9px 4px", border: "none", cursor: "pointer",
-                fontWeight: 600, fontSize: 13, background: "transparent",
-                color: subTab === tab ? "#1A1A1A" : "var(--text-secondary)",
-                borderBottom: subTab === tab ? "2px solid #1A1A1A" : "2px solid transparent",
-              }}>{label}</button>
-            );
-          })}
+          {([
+            { id: "daily",       label: "Daily" },
+            { id: "manualcount", label: "Manual count" },
+            { id: "reports",     label: "Reports" },
+          ] as { id: SubTab; label: string }[]).map(tab => (
+            <button key={tab.id} onClick={() => setSubTab(tab.id)} style={{
+              flex: 1, padding: "9px 4px", border: "none", cursor: "pointer",
+              fontWeight: 600, fontSize: 13, background: "transparent",
+              color: subTab === tab.id ? "#1A1A1A" : "var(--text-secondary)",
+              borderBottom: subTab === tab.id ? "2px solid #1A1A1A" : "2px solid transparent",
+            }}>{tab.label}</button>
+          ))}
         </div>
       </div>
 
@@ -228,8 +259,8 @@ export default function StockPage() {
       </div>
 
       {/* ── Content ── */}
-      {subTab === "summary" && (
-        <SummaryContent
+      {subTab === "daily" && (
+        <DailyContent
           items={filtered}
           metrics={summaryMetrics}
           summaryDate={summaryDate}
@@ -240,24 +271,21 @@ export default function StockPage() {
           branch={branch}
         />
       )}
-      {subTab === "endcount" && (
+      {subTab === "manualcount" && (
         dayClose?.isLocked
-          ? <EndCountCompleted dayClose={dayClose} />
-          : <EndCountContent
+          ? <ManualCountCompleted dayClose={dayClose} />
+          : <ManualCountContent
               items={filtered}
               metrics={dailyMetrics}
               endCounts={endCounts}
+              countedBy={countedBy}
+              onCountedByChange={setCountedBy}
               onCountChange={(item, val) => setEndCounts(prev => ({ ...prev, [item]: val }))}
               onReview={() => setShowReview(true)}
             />
       )}
-      {subTab === "adjust" && (
-        <AdjustContent
-          items={filtered}
-          metrics={dailyMetrics}
-          stocks={stocks}
-          onTap={item => setAdjustItem(item)}
-        />
+      {subTab === "reports" && (
+        <ReportsContent branch={branch} department={department} items={filtered} />
       )}
 
       {/* ── Modals ── */}
@@ -266,6 +294,7 @@ export default function StockPage() {
           items={filtered}
           metrics={dailyMetrics}
           endCounts={endCounts}
+          countedBy={countedBy}
           recountItems={recountItems}
           onRecount={item => setRecountItems(prev => new Set([...prev, item]))}
           onConfirm={async () => {
@@ -273,6 +302,8 @@ export default function StockPage() {
             const batch = writeBatch(db);
             const now = Date.now();
             const closeItems: DailyClose["items"] = {};
+            const submittedToday = todayPHT();
+            const loggedBy = countedBy || BRANCH_LABELS[branch];
             for (const item of filtered) {
               if (recountItems.has(item.name)) continue;
               const val = endCounts[item.name];
@@ -280,12 +311,12 @@ export default function StockPage() {
               const qty = Number(val);
               if (isNaN(qty) || qty < 0) continue;
               const adjRef = doc(collection(db, COLS.adjustments));
-              batch.set(adjRef, { id: now + Math.random(), branch, department, date: today, item: item.name, type: "count", qty, loggedBy: BRANCH_LABELS[branch] });
+              batch.set(adjRef, { id: now + Math.random(), branch, department, date: submittedToday, item: item.name, type: "count", qty, loggedBy });
               const stockId = stockDocId(branch, department, item.name);
               batch.set(doc(db, COLS.branchStock, stockId), {
                 id: stockId, branch, department, item: item.name, category: item.category,
                 unit: item.unit, qty, reorderAt: item.reorderAt,
-                lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
+                lastUpdated: submittedToday, lastUpdatedBy: loggedBy,
               });
               const m = dailyMetrics[item.name];
               const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : qty;
@@ -296,33 +327,28 @@ export default function StockPage() {
             }
             await batch.commit();
 
-            // Lock the day
-            const closeId = `${branch}__${department}__${today}`;
+            const closeId = `${branch}__${department}__${submittedToday}`;
             await saveDocById(COLS.dailyClose, closeId, {
-              id: closeId, branch, department, date: today,
+              id: closeId, branch, department, date: submittedToday,
               countType: "manual", closedAt: new Date().toISOString(),
-              closedBy: BRANCH_LABELS[branch], isLocked: true, items: closeItems,
+              closedBy: loggedBy, isLocked: true, items: closeItems,
             });
 
-            // Carry forward today's confirmed counts as tomorrow's beginning
-            const tomorrow = addDays(today, 1);
+            const tomorrow = addDays(submittedToday, 1);
             const begBatch = writeBatch(db);
             let begCount = 0;
             for (const [itemName, data] of Object.entries(closeItems)) {
               const begId = beginningDocId(branch, department, itemName, tomorrow);
               begBatch.set(doc(db, COLS.dailyBeginning, begId), {
                 id: begId, branch, department, item: itemName, date: tomorrow,
-                qty: data.endCount, setBy: BRANCH_LABELS[branch], updatedAt: today,
+                qty: data.endCount, setBy: loggedBy, updatedAt: submittedToday,
               });
               begCount++;
             }
             if (begCount > 0) await begBatch.commit();
 
-            setEndCounts(prev => {
-              const next = { ...prev };
-              recountItems.forEach(item => { delete next[item]; });
-              return next;
-            });
+            localStorage.removeItem(`counts_${branch}_${department}_${submittedToday}`);
+            setEndCounts({});
             setRecountItems(new Set());
             setShowReview(false);
           }}
@@ -331,18 +357,6 @@ export default function StockPage() {
       )}
 
       {showReset && branch && <ResetModal branch={branch} onClose={() => setShowReset(false)} />}
-
-      {adjustItem && branch && department && (
-        <AdjustModal
-          item={adjustItem}
-          branch={branch}
-          department={department}
-          stock={stocks[adjustItem] ?? null}
-          beginningQty={beginnings[adjustItem] ?? null}
-          today={today}
-          onClose={() => setAdjustItem(null)}
-        />
-      )}
 
       {showCSVImport && branch && department && (
         <CSVImportModal
@@ -358,9 +372,9 @@ export default function StockPage() {
   );
 }
 
-// ── Summary tab ───────────────────────────────────────────────────────────────
+// ── Daily tab ─────────────────────────────────────────────────────────────────
 
-function SummaryContent({ items, metrics, summaryDate, today, varOnly, onDateChange, onVarOnlyChange, branch }: {
+function DailyContent({ items, metrics, summaryDate, today, varOnly, onDateChange, onVarOnlyChange, branch }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   summaryDate: string;
@@ -401,7 +415,6 @@ function SummaryContent({ items, metrics, summaryDate, today, varOnly, onDateCha
 
   return (
     <div style={{ padding: "12px 16px" }}>
-      {/* Controls */}
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <input
           type="date"
@@ -416,7 +429,6 @@ function SummaryContent({ items, metrics, summaryDate, today, varOnly, onDateCha
         </label>
       </div>
 
-      {/* Table */}
       <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", background: "#fff" }}>
         <table style={{ minWidth: 540, borderCollapse: "collapse", width: "100%" }}>
           <thead>
@@ -461,28 +473,57 @@ function SummaryContent({ items, metrics, summaryDate, today, varOnly, onDateCha
         onClick={exportCSV}
         style={{ marginTop: 16, width: "100%", padding: "13px 0", borderRadius: 12, border: "1.5px solid var(--border)", background: "#fff", color: "var(--text)", fontWeight: 600, fontSize: 14, cursor: "pointer" }}
       >
-        Export CSV
+        Export inventory
       </button>
     </div>
   );
 }
 
-// ── End Count tab ─────────────────────────────────────────────────────────────
+// ── Manual count tab ──────────────────────────────────────────────────────────
 
-function EndCountContent({ items, metrics, endCounts, onCountChange, onReview }: {
+function ManualCountContent({ items, metrics, endCounts, countedBy, onCountedByChange, onCountChange, onReview }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   endCounts: Record<string, string>;
+  countedBy: string;
+  onCountedByChange: (name: string) => void;
   onCountChange: (item: string, val: string) => void;
   onReview: () => void;
 }) {
   const enteredCount = items.filter(i => endCounts[i.name] !== undefined && endCounts[i.name] !== "").length;
+  const canProceed = countedBy !== "" && enteredCount > 0;
 
   return (
     <div style={{ paddingBottom: 80 }}>
-      <div style={{ padding: "10px 16px 4px", fontSize: 12, color: "var(--text-secondary)" }}>
+      {/* Counted by */}
+      <div style={{ background: "#fff", borderBottom: "1px solid var(--border)", padding: "12px 16px" }}>
+        <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
+          Counted by
+        </label>
+        <select
+          value={countedBy}
+          onChange={e => onCountedByChange(e.target.value)}
+          style={{
+            width: "100%", padding: "10px 12px", fontSize: 15, fontWeight: 600,
+            border: "1.5px solid", borderColor: countedBy ? "#1A1A1A" : "var(--border)",
+            borderRadius: 10, background: "#fff", color: countedBy ? "var(--text)" : "var(--text-secondary)",
+            outline: "none", appearance: "none",
+          }}
+        >
+          <option value="">Select name…</option>
+          {COUNTED_BY_NAMES.map(name => (
+            <option key={name} value={name}>{name}</option>
+          ))}
+        </select>
+        {!countedBy && (
+          <div style={{ fontSize: 12, color: "#D97706", marginTop: 6 }}>Select your name to start counting</div>
+        )}
+      </div>
+
+      <div style={{ padding: "6px 16px 4px", fontSize: 12, color: "var(--text-secondary)" }}>
         {enteredCount} of {items.length} counted
       </div>
+
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {items.map(item => {
           const m = metrics[item.name];
@@ -503,12 +544,15 @@ function EndCountContent({ items, metrics, endCounts, onCountChange, onReview }:
                 inputMode="numeric"
                 value={val}
                 placeholder="—"
+                disabled={!countedBy}
                 onChange={e => onCountChange(item.name, e.target.value)}
                 style={{
                   width: 72, padding: "8px 10px", fontSize: 16, fontWeight: 700,
                   textAlign: "right", border: "1.5px solid",
                   borderColor: val !== "" ? "#1A1A1A" : "var(--border)",
-                  borderRadius: 10, outline: "none", background: "var(--bg)", color: "var(--text)",
+                  borderRadius: 10, outline: "none",
+                  background: countedBy ? "var(--bg)" : "#F3F4F6",
+                  color: "var(--text)", opacity: countedBy ? 1 : 0.4,
                 }}
               />
             </div>
@@ -519,12 +563,12 @@ function EndCountContent({ items, metrics, endCounts, onCountChange, onReview }:
       <div style={{ position: "fixed", bottom: "calc(var(--nav-h) + 12px)", left: 0, right: 0, padding: "0 16px", zIndex: 30 }}>
         <button
           onClick={onReview}
-          disabled={enteredCount === 0}
+          disabled={!canProceed}
           style={{
             width: "100%", padding: "15px 0", borderRadius: 14, border: "none",
-            fontWeight: 700, fontSize: 16, cursor: enteredCount > 0 ? "pointer" : "not-allowed",
-            background: enteredCount > 0 ? "#1A1A1A" : "#E8E8E4",
-            color: enteredCount > 0 ? "#fff" : "var(--text-secondary)",
+            fontWeight: 700, fontSize: 16, cursor: canProceed ? "pointer" : "not-allowed",
+            background: canProceed ? "#1A1A1A" : "#E8E8E4",
+            color: canProceed ? "#fff" : "var(--text-secondary)",
             boxShadow: "0 4px 16px rgba(0,0,0,0.15)",
           }}
         >
@@ -535,62 +579,198 @@ function EndCountContent({ items, metrics, endCounts, onCountChange, onReview }:
   );
 }
 
-// ── Adjust tab ────────────────────────────────────────────────────────────────
+// ── Manual count completed (locked) ───────────────────────────────────────────
 
-function AdjustContent({ items, metrics, stocks, onTap }: {
-  items: typeof CATALOG;
-  metrics: Record<string, DailyMetrics>;
-  stocks: Record<string, BranchStock>;
-  onTap: (item: string) => void;
-}) {
+function ManualCountCompleted({ dayClose }: { dayClose: DailyClose }) {
+  const rows = Object.entries(dayClose.items).sort(([a], [b]) => a.localeCompare(b));
+  const closedTime = new Date(dayClose.closedAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true });
+
   return (
-    <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
-      {items.map(item => {
-        const m = metrics[item.name];
-        const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : null;
-        const variance = m.endCount !== null && expected !== null ? m.endCount - expected : null;
+    <div style={{ paddingBottom: 24 }}>
+      <div style={{ margin: "12px 16px", background: "#F0FDF4", borderRadius: 12, padding: "14px 16px" }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "#15803D" }}>Count Confirmed ✓</div>
+        <div style={{ fontSize: 12, color: "#16A34A", marginTop: 2 }}>
+          {dayClose.countType === "manual" ? `${dayClose.closedBy} · ${closedTime}` : "Auto-closed by system"}
+        </div>
+      </div>
 
-        let borderColor = "#D1D5DB";
-        if (variance !== null) {
-          borderColor = variance === 0 ? "#16A34A" : "#DC2626";
-        } else {
-          const s = stocks[item.name];
-          if (s) borderColor = s.qty <= 0 ? "#DC2626" : s.qty <= item.reorderAt ? "#D97706" : "#16A34A";
-        }
-
-        const varColor = variance === null ? "var(--text-secondary)" : variance === 0 ? "#16A34A" : "#DC2626";
-
-        return (
-          <div key={item.name} onClick={() => onTap(item.name)} style={{ background: "#fff", borderRadius: 14, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", cursor: "pointer", borderLeft: `4px solid ${borderColor}`, overflow: "hidden" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "11px 14px 9px" }}>
-              <div style={{ fontWeight: 600, fontSize: 15 }}>{item.name}</div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", background: "var(--bg)", padding: "3px 10px", borderRadius: 20 }}>
-                {item.packSize}
+      <div>
+        {rows.map(([item, data]) => {
+          const varColor = data.variance === 0 ? "#16A34A" : data.variance > 0 ? "#D97706" : "#DC2626";
+          return (
+            <div key={item} style={{ background: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>Expected: {data.expected} · BEG: {data.beginning}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 18, fontWeight: 700 }}>{data.endCount}</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: varColor }}>
+                  {data.variance > 0 ? `+${data.variance}` : data.variance === 0 ? "✓" : String(data.variance)}
+                </div>
               </div>
             </div>
-            <div style={{ borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
-              <MetricCell label="BEG" value={m.beginning} color="var(--text)" />
-              <MetricCell label="IN" value={m.inQty} color="#16A34A" prefix="+" border />
-              <MetricCell label="OUT" value={m.outQty} color="#DC2626" prefix="−" border />
-            </div>
-            <div style={{ borderTop: "1px solid var(--border)", display: "grid", gridTemplateColumns: "1fr 1fr 1fr" }}>
-              <MetricCell label="EXPECTED" value={expected} color="#2563EB" />
-              <MetricCell label="END COUNT" value={m.endCount} color="var(--text)" border />
-              <MetricCell label="VARIANCE" value={variance} color={varColor} showSign border />
-            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Reports tab ───────────────────────────────────────────────────────────────
+
+function ReportsContent({ branch, department, items }: {
+  branch: Branch;
+  department: Department;
+  items: typeof CATALOG;
+}) {
+  const [weekStart, setWeekStart] = useState(() => weekMonday(todayPHT()));
+  const [weekAdjs, setWeekAdjs] = useState<StockAdjustment[]>([]);
+  const [weekBeg, setWeekBeg] = useState<Record<string, number>>({});
+  const [loading, setLoading] = useState(false);
+
+  const todayStr = todayPHT();
+
+  useEffect(() => {
+    setLoading(true);
+    const weekEnd = addDays(weekStart, 6);
+    let cancelled = false;
+    (async () => {
+      const [adjSnap, begSnap] = await Promise.all([
+        getDocs(query(collection(db, COLS.adjustments), where("branch", "==", branch), where("department", "==", department))),
+        getDocs(query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("department", "==", department), where("date", "==", weekStart))),
+      ]);
+      if (cancelled) return;
+      const allAdjs = adjSnap.docs.map(d => d.data() as StockAdjustment);
+      setWeekAdjs(allAdjs.filter(a => a.date >= weekStart && a.date <= weekEnd));
+      const map: Record<string, number> = {};
+      begSnap.docs.forEach(d => { const b = d.data() as DailyBeginning; map[b.item] = b.qty; });
+      setWeekBeg(map);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [branch, department, weekStart]);
+
+  const weekEnd = addDays(weekStart, 6);
+
+  const weekSummary = useMemo(() => {
+    return items.map(item => {
+      const monBeg = weekBeg[item.name] ?? null;
+      const itemAdjs = weekAdjs.filter(a => a.item === item.name);
+      const totalIn  = itemAdjs.filter(a => a.type === "in").reduce((s, a) => s + a.qty, 0);
+      const totalOut = itemAdjs.filter(a => a.type === "out" || a.type === "waste" || a.type === "sales_import").reduce((s, a) => s + a.qty, 0);
+      const expected = monBeg !== null ? monBeg + totalIn - totalOut : null;
+      const weekCounts = itemAdjs.filter(a => a.type === "count");
+      const lastCount = weekCounts.length > 0
+        ? weekCounts.reduce((best, a) => a.id > best.id ? a : best).qty
+        : null;
+      const variance = expected !== null && lastCount !== null ? lastCount - expected : null;
+      return { item, monBeg, totalIn, totalOut, expected, lastCount, variance };
+    }).filter(r => r.monBeg !== null || r.totalIn > 0 || r.totalOut > 0);
+  }, [items, weekAdjs, weekBeg]);
+
+  const manualDays = new Set(
+    weekAdjs.filter(a => a.type === "count" && a.note !== "Auto-closed").map(a => a.date)
+  ).size;
+
+  function exportCSV() {
+    const header = ["Item", "Mon BEG", "Total IN", "Total OUT", "Expected End", "Actual Count", "Weekly Variance"];
+    const rows = weekSummary.map(r => [
+      r.item.name, r.monBeg ?? "", r.totalIn, r.totalOut,
+      r.expected ?? "", r.lastCount ?? "", r.variance ?? "",
+    ]);
+    const csv = [header, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `weekly-${BRANCH_LABELS[branch]}-${weekStart}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  return (
+    <div style={{ padding: "12px 16px" }}>
+      {/* Week picker */}
+      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <button
+            onClick={() => setWeekStart(addDays(weekStart, -7))}
+            style={{ width: 32, height: 32, borderRadius: 8, border: "1.5px solid var(--border)", background: "#fff", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center" }}
+          >‹</button>
+          <div style={{ fontSize: 13, fontWeight: 600, minWidth: 140, textAlign: "center" }}>
+            {formatDate(weekStart)} – {formatDate(weekEnd)}
           </div>
-        );
-      })}
+          <button
+            onClick={() => { const next = addDays(weekStart, 7); if (next <= weekMonday(todayStr)) setWeekStart(next); }}
+            disabled={addDays(weekStart, 7) > weekMonday(todayStr)}
+            style={{ width: 32, height: 32, borderRadius: 8, border: "1.5px solid var(--border)", background: "#fff", cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", justifyContent: "center", opacity: addDays(weekStart, 7) > weekMonday(todayStr) ? 0.3 : 1 }}
+          >›</button>
+        </div>
+        <button
+          onClick={exportCSV}
+          style={{ marginLeft: "auto", padding: "6px 14px", borderRadius: 8, border: "1.5px solid var(--border)", background: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}
+        >
+          Export CSV
+        </button>
+      </div>
+
+      <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 12 }}>
+        {manualDays} of 7 days manually counted
+      </div>
+
+      {loading ? (
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: "48px 0", fontSize: 14 }}>Loading…</div>
+      ) : weekSummary.length === 0 ? (
+        <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: "48px 0" }}>
+          <div style={{ fontSize: 28, marginBottom: 8 }}>📅</div>
+          <div style={{ fontSize: 15 }}>No data for this week</div>
+        </div>
+      ) : (
+        <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 12, overflow: "hidden" }}>
+            <thead>
+              <tr style={{ background: "var(--bg)" }}>
+                {["Item", "Mon BEG", "Total IN", "Total OUT", "Expected", "Actual Count", "Variance"].map(h => (
+                  <th key={h} style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--text-secondary)", textTransform: "uppercase", textAlign: h === "Item" ? "left" : "center", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {weekSummary.map(({ item, monBeg, totalIn, totalOut, expected, lastCount, variance }) => {
+                const varColor = variance === null ? "var(--text-secondary)" : variance === 0 ? "#16A34A" : variance > 0 ? "#D97706" : "#DC2626";
+                return (
+                  <tr key={item.name} style={{ borderBottom: "1px solid var(--border)" }}>
+                    <td style={{ padding: "10px 10px", fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", maxWidth: 130 }}>
+                      <div>{item.name}</div>
+                      <div style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 400, marginTop: 1 }}>{item.packSize}</div>
+                    </td>
+                    <td style={{ padding: "10px 6px", textAlign: "center", color: "var(--text-secondary)" }}>{monBeg ?? "—"}</td>
+                    <td style={{ padding: "10px 6px", textAlign: "center", color: "#059669", fontWeight: 600 }}>{totalIn > 0 ? `+${totalIn}` : "—"}</td>
+                    <td style={{ padding: "10px 6px", textAlign: "center", color: "#DC2626", fontWeight: 600 }}>{totalOut > 0 ? `−${totalOut}` : "—"}</td>
+                    <td style={{ padding: "10px 6px", textAlign: "center", color: "#2563EB", fontWeight: 600 }}>{expected ?? "—"}</td>
+                    <td style={{ padding: "10px 6px", textAlign: "center" }}>{lastCount ?? "—"}</td>
+                    <td style={{ padding: "10px 6px", textAlign: "center", fontWeight: 700, color: varColor }}>
+                      {variance === null ? "—" : variance === 0 ? "✓" : variance > 0 ? `+${variance}` : String(variance)}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
 
 // ── Review Modal ──────────────────────────────────────────────────────────────
 
-function ReviewModal({ items, metrics, endCounts, recountItems, onRecount, onConfirm, onClose }: {
+function ReviewModal({ items, metrics, endCounts, countedBy, recountItems, onRecount, onConfirm, onClose }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   endCounts: Record<string, string>;
+  countedBy: string;
   recountItems: Set<string>;
   onRecount: (item: string) => void;
   onConfirm: () => Promise<void>;
@@ -616,10 +796,13 @@ function ReviewModal({ items, metrics, endCounts, recountItems, onRecount, onCon
       <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "#fff", overflowY: "auto", display: "flex", flexDirection: "column" }}>
         <div style={{ padding: "20px 16px 12px", borderBottom: "1px solid var(--border)", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <div style={{ fontSize: 18, fontWeight: 700 }}>Review End Count</div>
+            <div style={{ fontSize: 18, fontWeight: 700 }}>Review Count</div>
             <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--text-secondary)", padding: 4 }}>✕</button>
           </div>
-          <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 4 }}>
+          {countedBy && (
+            <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>Counted by: <strong>{countedBy}</strong></div>
+          )}
+          <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 2 }}>
             {confirmable.length} item{confirmable.length !== 1 ? "s" : ""} will be saved · {recountItems.size} flagged for recount
           </div>
         </div>
@@ -818,137 +1001,6 @@ function CSVImportModal({ branch, department, today, onClose }: { branch: Branch
   );
 }
 
-// ── Shared components ─────────────────────────────────────────────────────────
-
-function MetricCell({ label, value, color, prefix, showSign, border }: {
-  label: string; value: number | null; color: string;
-  prefix?: string; showSign?: boolean; border?: boolean;
-}) {
-  let display: string;
-  if (value === null) display = "—";
-  else if (showSign) display = value > 0 ? `+${value}` : value < 0 ? `${value}` : "✓";
-  else if (prefix && value > 0) display = `${prefix}${value}`;
-  else display = value.toLocaleString();
-
-  return (
-    <div style={{ padding: "8px 4px 10px", textAlign: "center", borderLeft: border ? "1px solid var(--border)" : undefined }}>
-      <div style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
-      <div style={{ fontSize: 17, fontWeight: 700, color: value === null ? "var(--text-secondary)" : color }}>{display}</div>
-    </div>
-  );
-}
-
-// ── Adjust Modal ──────────────────────────────────────────────────────────────
-
-type ModalMode = "beginning" | "adjust" | "count";
-
-function AdjustModal({ item, branch, department, stock, beginningQty, today, onClose }: {
-  item: string; branch: Branch; department: Department; stock: BranchStock | null;
-  beginningQty: number | null; today: string; onClose: () => void;
-}) {
-  const catalogItem = CATALOG_MAP.get(item)!;
-  const [mode, setMode] = useState<ModalMode>("beginning");
-  const [qty, setQty] = useState("");
-  const [note, setNote] = useState("");
-  const [loading, setLoading] = useState(false);
-  const currentQty = stock?.qty ?? 0;
-
-  async function save() {
-    setLoading(true);
-    const now = Date.now();
-    const loggedBy = BRANCH_LABELS[branch];
-    const qtyNum = Number(qty);
-
-    if (mode === "beginning") {
-      const beginId = beginningDocId(branch, department, item, today);
-      const begDoc: DailyBeginning = { id: beginId, branch, department, item, date: today, qty: qtyNum, setBy: loggedBy, updatedAt: today };
-      await saveDocById(COLS.dailyBeginning, beginId, begDoc as unknown as Record<string, unknown>);
-    } else {
-      const type: StockAdjustment["type"] = mode === "count" ? "count" : qtyNum >= 0 ? "in" : "out";
-      const adj: StockAdjustment = { id: now, branch, department, date: today, item, type, qty: Math.abs(qtyNum), loggedBy };
-      if (note) adj.note = note;
-      const newQty = mode === "count" ? qtyNum : Math.max(0, currentQty + qtyNum);
-      const stockId = stockDocId(branch, department, item);
-      const stockDoc: BranchStock = {
-        id: stockId, branch, department, item, category: catalogItem.category, unit: catalogItem.unit,
-        qty: newQty, reorderAt: catalogItem.reorderAt, lastUpdated: today, lastUpdatedBy: loggedBy,
-      };
-      await Promise.all([
-        saveDocById(COLS.branchStock, stockId, stockDoc as unknown as Record<string, unknown>),
-        saveDoc(COLS.adjustments, adj as unknown as Record<string, unknown>),
-      ]);
-    }
-    setLoading(false);
-    onClose();
-  }
-
-  const qtyNum = Number(qty);
-  const canSave = qty !== "" && !isNaN(qtyNum) && (mode === "adjust" ? qtyNum !== 0 : qtyNum >= 0);
-
-  return (
-    <>
-      <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.4)", zIndex: 60 }} />
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 70, background: "#fff", borderRadius: "20px 20px 0 0", padding: "20px 20px 40px", boxShadow: "0 -4px 24px rgba(0,0,0,0.12)" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 4 }}>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>{item}</div>
-            <div style={{ color: "var(--text-secondary)", fontSize: 13, marginTop: 2 }}>
-              {catalogItem.packSize} · Stock: <strong>{currentQty}</strong>
-              {beginningQty !== null && <span> · BEG: <strong>{beginningQty}</strong></span>}
-            </div>
-          </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", fontSize: 20, lineHeight: 1, padding: 4 }}>✕</button>
-        </div>
-
-        <div style={{ display: "flex", gap: 6, margin: "16px 0" }}>
-          {([{ id: "beginning", label: "Beginning" }, { id: "adjust", label: "Adjust" }, { id: "count", label: "End Count" }] as { id: ModalMode; label: string }[]).map(m => (
-            <button key={m.id} onClick={() => { setMode(m.id); setQty(""); }} style={{
-              flex: 1, padding: "10px 0", borderRadius: 10, border: "none", cursor: "pointer",
-              fontWeight: 600, fontSize: 13,
-              background: mode === m.id ? "#1A1A1A" : "var(--bg)",
-              color: mode === m.id ? "#fff" : "var(--text-secondary)",
-            }}>{m.label}</button>
-          ))}
-        </div>
-
-        <div style={{ color: "var(--text-secondary)", fontSize: 13, marginBottom: 8 }}>
-          {mode === "beginning" && `Start-of-day count${beginningQty !== null ? ` (currently ${beginningQty})` : ""}`}
-          {mode === "adjust" && "Positive to add, negative to remove"}
-          {mode === "count" && "Physical end-of-day count"}
-        </div>
-
-        {mode === "adjust" ? (
-          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <button onClick={() => setQty(q => String((Number(q) || 0) - 1))} style={quickBtnStyle}>−</button>
-            <input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder="0" style={inputStyle} />
-            <button onClick={() => setQty(q => String((Number(q) || 0) + 1))} style={quickBtnStyle}>+</button>
-          </div>
-        ) : (
-          <input type="number" value={qty} onChange={e => setQty(e.target.value)} placeholder={`Count in ${catalogItem.unit}`} style={{ ...inputStyle, width: "100%" }} />
-        )}
-
-        {mode === "adjust" && qty && !isNaN(Number(qty)) && (
-          <div style={{ marginTop: 8, fontSize: 13, color: "var(--text-secondary)" }}>
-            New balance: <strong>{Math.max(0, currentQty + Number(qty))} {catalogItem.unit}</strong>
-          </div>
-        )}
-
-        {mode !== "beginning" && (
-          <input value={note} onChange={e => setNote(e.target.value)} placeholder="Note (optional)" style={{ ...inputStyle, width: "100%", marginTop: 10 }} />
-        )}
-
-        <button onClick={save} disabled={!canSave || loading} style={{
-          marginTop: 16, width: "100%", padding: "15px 0", borderRadius: 14, border: "none",
-          cursor: canSave ? "pointer" : "not-allowed", fontWeight: 700, fontSize: 16,
-          background: canSave ? "#1A1A1A" : "#E8E8E4", color: canSave ? "#fff" : "var(--text-secondary)",
-        }}>
-          {loading ? "Saving…" : mode === "beginning" ? "Set Beginning" : mode === "count" ? "Save End Count" : "Save Adjustment"}
-        </button>
-      </div>
-    </>
-  );
-}
-
 // ── Reset Modal ───────────────────────────────────────────────────────────────
 
 function ResetModal({ branch, onClose }: { branch: Branch; onClose: () => void }) {
@@ -1028,52 +1080,9 @@ function ResetModal({ branch, onClose }: { branch: Branch; onClose: () => void }
   );
 }
 
-// ── End Count Completed (locked) ──────────────────────────────────────────────
-
-function EndCountCompleted({ dayClose }: { dayClose: DailyClose }) {
-  const rows = Object.entries(dayClose.items).sort(([a], [b]) => a.localeCompare(b));
-  const closedTime = new Date(dayClose.closedAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true });
-
-  return (
-    <div style={{ paddingBottom: 24 }}>
-      <div style={{ margin: "12px 16px", background: "#F0FDF4", borderRadius: 12, padding: "14px 16px" }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#15803D" }}>End Count Confirmed ✓</div>
-        <div style={{ fontSize: 12, color: "#16A34A", marginTop: 2 }}>
-          {dayClose.countType === "manual" ? `${dayClose.closedBy} · ${closedTime}` : "Auto-closed by system"}
-        </div>
-      </div>
-
-      <div>
-        {rows.map(([item, data]) => {
-          const varColor = data.variance === 0 ? "#16A34A" : data.variance > 0 ? "#D97706" : "#DC2626";
-          return (
-            <div key={item} style={{ background: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid var(--border)" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>Expected: {data.expected} · BEG: {data.beginning}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{data.endCount}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: varColor }}>
-                  {data.variance > 0 ? `+${data.variance}` : data.variance === 0 ? "✓" : String(data.variance)}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 const inputStyle: React.CSSProperties = {
   border: "1.5px solid var(--border)", borderRadius: 10,
   padding: "12px 14px", fontSize: 16, outline: "none",
   background: "var(--bg)", color: "var(--text)", width: "100%",
 };
-
-const quickBtnStyle: React.CSSProperties = {
-  width: 44, height: 44, borderRadius: 10, border: "1.5px solid var(--border)",
-  background: "var(--bg)", cursor: "pointer", fontSize: 20, fontWeight: 700,
-  color: "#1A1A1A", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center",
-};
+void inputStyle;

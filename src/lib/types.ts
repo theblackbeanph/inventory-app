@@ -1,6 +1,6 @@
 export type Branch = "MKT" | "BF";
 export type Department = "kitchen" | "bar" | "cafe";
-export type ItemCategory = "portion" | "packed" | "loose";
+export type ItemCategory = "portion" | "packed" | "loose" | "supplier";
 export type AdjustmentType = "in" | "out" | "waste" | "count" | "sales_import";
 export type PosType = "csv" | "storehub";
 export type RequestStatus = "pending" | "approved" | "in_transit" | "received";
