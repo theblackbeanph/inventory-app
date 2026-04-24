@@ -2,8 +2,8 @@
 import { useState } from "react";
 import type { Branch, Department, StockAdjustment } from "@/lib/types";
 import { db, COLS } from "@/lib/firebase";
-import { collection, getDocs, query, where, writeBatch, doc } from "@/lib/firebase";
-import { CATALOG_MAP, stockDocId } from "@/lib/items";
+import { writeBatch, doc } from "@/lib/firebase";
+import { CATALOG_MAP, stockDocId, itemSlug } from "@/lib/items";
 import { BRANCH_LABELS } from "@/lib/auth";
 
 export function StoreHubSyncModal({ branch, department, today, onClose, onComplete }: {
@@ -38,32 +38,15 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
     setPhase("saving");
     setError(null);
     try {
-      // Query by branch+department+date only (already indexed), filter storehub client-side
-      const prevSnap = await getDocs(
-        query(collection(db, COLS.adjustments),
-          where("branch", "==", branch),
-          where("department", "==", department),
-          where("date", "==", today),
-        )
-      );
-      const toDelete = prevSnap.docs.filter(d => {
-        const adj = d.data() as StockAdjustment;
-        return adj.type === "sales_import" && adj.source === "storehub";
-      });
-      if (toDelete.length > 0) {
-        const deleteBatch = writeBatch(db);
-        toDelete.forEach(d => deleteBatch.delete(d.ref));
-        await deleteBatch.commit();
-      }
-
       const batch = writeBatch(db);
       const now = Date.now();
       for (const { item, qty } of matched) {
         const catalogItem = CATALOG_MAP.get(item);
         if (!catalogItem) continue;
-        const adjRef = doc(collection(db, COLS.adjustments));
-        batch.set(adjRef, {
-          id: now + Math.random(), branch, department, date: today, item,
+        // Deterministic doc ID — re-syncing overwrites the previous import, no delete needed
+        const adjId = `storehub__${branch}__${department}__${today}__${itemSlug(item)}`;
+        batch.set(doc(db, COLS.adjustments, adjId), {
+          id: now, branch, department, date: today, item,
           type: "sales_import", qty, loggedBy: BRANCH_LABELS[branch], source: "storehub",
         } satisfies StockAdjustment);
         const sid = stockDocId(branch, department, item);
