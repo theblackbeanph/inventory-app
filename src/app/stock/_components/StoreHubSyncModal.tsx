@@ -78,6 +78,7 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
       onComplete(unmatchedSkus.map(u => ({ name: u.sku, qty: u.qty })));
       setPhase("done");
     } catch (e: unknown) {
+      console.error("[StoreHub sync] confirm failed:", e);
       setError(e instanceof Error ? e.message : "Failed to save. Please try again.");
       setPhase("preview");
     }
@@ -113,6 +114,11 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
 
         {phase === "preview" && (
           <>
+            {error && (
+              <div style={{ background: "#FEF2F2", borderRadius: 10, padding: "10px 14px", color: "#DC2626", fontSize: 13, marginBottom: 14 }}>
+                {error}
+              </div>
+            )}
             <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Will deduct — {matched.length} items</div>
               {matched.map(({ item, qty }) => (
