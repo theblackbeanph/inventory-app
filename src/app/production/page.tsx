@@ -169,19 +169,17 @@ function DeliveryList({ deliveries, onNew, noItems }: { deliveries: SupplierDeli
       </div>
 
       {/* FAB */}
-      {!noItems && (
-        <button
-          onClick={onNew}
-          style={{
-            position: "fixed", bottom: "calc(var(--nav-h) + 20px)", right: 20,
-            width: 56, height: 56, borderRadius: "50%", border: "none",
-            background: "#059669", color: "#FFF", fontSize: 28, fontWeight: 300,
-            cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30,
-          }}
-          aria-label="Log supplier delivery"
-        >+</button>
-      )}
+      <button
+        onClick={onNew}
+        style={{
+          position: "fixed", bottom: "calc(var(--nav-h) + 20px)", right: 20,
+          width: 56, height: 56, borderRadius: "50%", border: "none",
+          background: "#059669", color: "#FFF", fontSize: 28, fontWeight: 300,
+          cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30,
+        }}
+        aria-label="Log supplier delivery"
+      >+</button>
     </div>
   );
 }
@@ -291,19 +289,17 @@ function PortioningList({ runs, onNew, noItems }: { runs: PortioningRun[]; onNew
       </div>
 
       {/* FAB */}
-      {!noItems && (
-        <button
-          onClick={onNew}
-          style={{
-            position: "fixed", bottom: "calc(var(--nav-h) + 20px)", right: 20,
-            width: 56, height: 56, borderRadius: "50%", border: "none",
-            background: "#7C3AED", color: "#FFF", fontSize: 28, fontWeight: 300,
-            cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
-            display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30,
-          }}
-          aria-label="Log portioning run"
-        >+</button>
-      )}
+      <button
+        onClick={onNew}
+        style={{
+          position: "fixed", bottom: "calc(var(--nav-h) + 20px)", right: 20,
+          width: 56, height: 56, borderRadius: "50%", border: "none",
+          background: "#7C3AED", color: "#FFF", fontSize: 28, fontWeight: 300,
+          cursor: "pointer", boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+          display: "flex", alignItems: "center", justifyContent: "center", zIndex: 30,
+        }}
+        aria-label="Log portioning run"
+      >+</button>
     </div>
   );
 }

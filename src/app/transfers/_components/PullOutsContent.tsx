@@ -81,13 +81,13 @@ export function PullOutsContent({ branch }: { branch: Branch }) {
     <div>
       {/* Sub-header */}
       <div style={{ background: "#FFFFFF", borderBottom: "1px solid var(--border)", padding: "10px 16px 0" }}>
-        <div style={{ marginBottom: 10, minHeight: 32, display: "flex", alignItems: "center" }}>
-          {pendingCount > 0 && (
-            <div style={{ background: "#FEF3C7", color: "#D97706", borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 600 }}>
+        {pendingCount > 0 && (
+          <div style={{ marginBottom: 10 }}>
+            <div style={{ background: "#FEF3C7", color: "#D97706", borderRadius: 20, padding: "4px 10px", fontSize: 12, fontWeight: 600, display: "inline-block" }}>
               {pendingCount} pending
             </div>
-          )}
-        </div>
+          </div>
+        )}
         <div style={{ display: "flex", gap: 4, overflowX: "auto" }}>
           {(["all", "pending", "active", "done"] as FilterTab[]).map(f => (
             <button key={f} onClick={() => setFilter(f)} style={{

@@ -36,41 +36,51 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
 
   async function confirm() {
     setPhase("saving");
+    setError(null);
+    try {
+      // Query by branch+department+date only (already indexed), filter storehub client-side
+      const prevSnap = await getDocs(
+        query(collection(db, COLS.adjustments),
+          where("branch", "==", branch),
+          where("department", "==", department),
+          where("date", "==", today),
+        )
+      );
+      const toDelete = prevSnap.docs.filter(d => {
+        const adj = d.data() as StockAdjustment;
+        return adj.type === "sales_import" && adj.source === "storehub";
+      });
+      if (toDelete.length > 0) {
+        const deleteBatch = writeBatch(db);
+        toDelete.forEach(d => deleteBatch.delete(d.ref));
+        await deleteBatch.commit();
+      }
 
-    const prevSnap = await getDocs(
-      query(collection(db, COLS.adjustments),
-        where("branch", "==", branch),
-        where("department", "==", department),
-        where("date", "==", today),
-        where("type", "==", "sales_import"),
-        where("source", "==", "storehub"),
-      )
-    );
-    const deleteBatch = writeBatch(db);
-    prevSnap.docs.forEach(d => deleteBatch.delete(d.ref));
-    if (!prevSnap.empty) await deleteBatch.commit();
-
-    const batch = writeBatch(db);
-    const now = Date.now();
-    for (const { item, qty } of matched) {
-      const catalogItem = CATALOG_MAP.get(item);
-      if (!catalogItem) continue;
-      const adjRef = doc(collection(db, COLS.adjustments));
-      batch.set(adjRef, {
-        id: now + Math.random(), branch, department, date: today, item,
-        type: "sales_import", qty, loggedBy: BRANCH_LABELS[branch], source: "storehub",
-      } satisfies StockAdjustment);
-      const sid = stockDocId(branch, department, item);
-      batch.set(doc(db, COLS.branchStock, sid), {
-        id: sid, branch, department, item, category: catalogItem.category,
-        unit: catalogItem.unit, qty: 0,
-        reorderAt: catalogItem.reorderAt,
-        lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
-      }, { merge: true });
+      const batch = writeBatch(db);
+      const now = Date.now();
+      for (const { item, qty } of matched) {
+        const catalogItem = CATALOG_MAP.get(item);
+        if (!catalogItem) continue;
+        const adjRef = doc(collection(db, COLS.adjustments));
+        batch.set(adjRef, {
+          id: now + Math.random(), branch, department, date: today, item,
+          type: "sales_import", qty, loggedBy: BRANCH_LABELS[branch], source: "storehub",
+        } satisfies StockAdjustment);
+        const sid = stockDocId(branch, department, item);
+        batch.set(doc(db, COLS.branchStock, sid), {
+          id: sid, branch, department, item, category: catalogItem.category,
+          unit: catalogItem.unit, qty: 0,
+          reorderAt: catalogItem.reorderAt,
+          lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
+        }, { merge: true });
+      }
+      await batch.commit();
+      onComplete(unmatchedSkus.map(u => ({ name: u.sku, qty: u.qty })));
+      setPhase("done");
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Failed to save. Please try again.");
+      setPhase("preview");
     }
-    await batch.commit();
-    onComplete(unmatchedSkus.map(u => ({ name: u.sku, qty: u.qty })));
-    setPhase("done");
   }
 
   return (
