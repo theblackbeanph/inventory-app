@@ -12,7 +12,7 @@ export function CSVImportModal({ branch, department, today, onClose, onComplete 
   department: Department;
   today: string;
   onClose: () => void;
-  onComplete: (unmatched: { name: string; qty: number }[]) => void;
+  onComplete: (matchedCount: number, unmatchedCount: number) => void;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [phase, setPhase] = useState<"pick" | "preview" | "saving" | "done">("pick");
@@ -61,7 +61,7 @@ export function CSVImportModal({ branch, department, today, onClose, onComplete 
       }, { merge: true });
     }
     await batch.commit();
-    onComplete(unmatched);
+    onComplete(matched.length, unmatched.length);
     setPhase("done");
   }
 

@@ -143,13 +143,12 @@ export default function StockPage() {
   const critCount = deptCatalog.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).length;
   const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
-  function handleImportComplete(unmatched: { name: string; qty: number }[], source: "csv" | "storehub") {
+  function handleImportComplete(matchedCount: number, unmatchedCount: number, source: "csv" | "storehub") {
     if (!branch || !department) return;
-    const warn = unmatched.length > 0 ? { source, unmatched } : null;
+    const warn: import("./_components/DailyContent").ImportWarning = { source, matchedCount, unmatchedCount };
     setImportWarning(warn);
     const key = `salesWarn_${branch}_${department}_${today}`;
-    if (warn) localStorage.setItem(key, JSON.stringify(warn));
-    else localStorage.removeItem(key);
+    localStorage.setItem(key, JSON.stringify(warn));
   }
 
   if (!branch || !department) return null;
@@ -314,7 +313,7 @@ export default function StockPage() {
           department={department}
           today={today}
           onClose={() => setShowStoreHubSync(false)}
-          onComplete={unmatched => handleImportComplete(unmatched, "storehub")}
+          onComplete={(matched, unmatched) => handleImportComplete(matched, unmatched, "storehub")}
         />
       )}
 
@@ -324,7 +323,7 @@ export default function StockPage() {
           department={department}
           today={today}
           onClose={() => setShowCSVImport(false)}
-          onComplete={unmatched => handleImportComplete(unmatched, "csv")}
+          onComplete={(matched, unmatched) => handleImportComplete(matched, unmatched, "csv")}
         />
       )}
 

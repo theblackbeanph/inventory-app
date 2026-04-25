@@ -1,4 +1,5 @@
 import { initializeApp, getApps } from "firebase/app";
+import { getAuth, signInAnonymously } from "firebase/auth";
 import {
   getFirestore,
   collection,
@@ -25,6 +26,9 @@ const firebaseConfig = {
 const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
+// Silent anonymous auth so Firestore rules can use request.auth != null
+signInAnonymously(getAuth(app)).catch(() => {});
+
 export const COLS = {
   branchStock:     "branch_stock",
   adjustments:     "branch_adjustments",
@@ -36,6 +40,7 @@ export const COLS = {
   invEntries:        "invEntries",          // commissary stock movements
   supplierDeliveries: "supplier_deliveries",
   portioningRuns:    "portioning_runs",
+  storehubUnmatched: "storehub_unmatched",
 } as const;
 
 export async function saveDoc(col: string, item: Record<string, unknown>) {

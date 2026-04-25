@@ -18,14 +18,18 @@ async function fetchStoreHub(path: string) {
   return res.json();
 }
 
-// Build productId → SKU map from the full product list
-async function buildSkuMap(): Promise<Record<string, string>> {
-  const products: { id: string; sku?: string }[] = await fetchStoreHub("/products");
-  const map: Record<string, string> = {};
+// Build productId → SKU map and SKU → product name map from the full product list
+async function buildSkuMaps(): Promise<{ skuMap: Record<string, string>; nameBySkuMap: Record<string, string> }> {
+  const products: { id: string; sku?: string; name?: string }[] = await fetchStoreHub("/products");
+  const skuMap: Record<string, string> = {};
+  const nameBySkuMap: Record<string, string> = {};
   for (const p of products) {
-    if (p.id && p.sku) map[p.id] = p.sku;
+    if (p.id && p.sku) {
+      skuMap[p.id] = p.sku;
+      if (p.name) nameBySkuMap[p.sku] = p.name;
+    }
   }
-  return map;
+  return { skuMap, nameBySkuMap };
 }
 
 export async function GET(request: NextRequest) {
@@ -36,24 +40,30 @@ export async function GET(request: NextRequest) {
   const date = searchParams.get("date") ?? phtToday();
 
   try {
-    const [skuMap, transactions] = await Promise.all([
-      buildSkuMap(),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}`),
+    // StoreHub stores transactionTime in UTC. MKT's business day runs 7am–2am PHT,
+    // which in UTC is 23:00 (prev day) – 18:00 (same day). We query yesterday+today
+    // in UTC so we don't miss the 7am–8am PHT window, then filter client-side.
+    const prevDate = addUtcDays(date, -1);
+    const bizStart = new Date(`${prevDate}T23:00:00Z`).getTime(); // 7:00 AM PHT
+    const bizEnd   = new Date(`${date}T18:00:00Z`).getTime();     // 2:00 AM PHT next day
+
+    const [{ skuMap, nameBySkuMap }, transactions] = await Promise.all([
+      buildSkuMaps(),
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${date}`),
     ]);
 
-    // Aggregate qty sold per SKU — Sales only, not cancelled, items only
+    // Aggregate qty sold per SKU — Sales only, not cancelled, items only, within PHT business day
     const soldBySkuMap: Record<string, number> = {};
-    const soldBySkuName: Record<string, { name: string; qty: number }> = {};
 
     for (const tx of transactions) {
       if (tx.transactionType !== "Sale" || tx.isCancelled) continue;
+      const txTime = new Date(tx.transactionTime).getTime();
+      if (txTime < bizStart || txTime > bizEnd) continue;
       for (const item of tx.items ?? []) {
         if (item.itemType !== "Item" || !item.productId || item.quantity <= 0) continue;
         const sku = skuMap[item.productId];
         if (!sku) continue;
         soldBySkuMap[sku] = (soldBySkuMap[sku] ?? 0) + item.quantity;
-        if (!soldBySkuName[sku]) soldBySkuName[sku] = { name: "", qty: 0 };
-        soldBySkuName[sku].qty += item.quantity;
       }
     }
 
@@ -63,7 +73,7 @@ export async function GET(request: NextRequest) {
     const mappedSkus = allMappedSkus();
     const unmatchedSkus = Object.entries(soldBySkuMap)
       .filter(([sku]) => !mappedSkus.has(sku))
-      .map(([sku, qty]) => ({ sku, qty }));
+      .map(([sku, qty]) => ({ sku, name: nameBySkuMap[sku] ?? sku, qty }));
 
     return NextResponse.json({ date, matched, unmatchedSkus });
   } catch (e) {
@@ -74,4 +84,10 @@ export async function GET(request: NextRequest) {
 
 function phtToday(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+function addUtcDays(date: string, days: number): string {
+  const d = new Date(date + "T00:00:00Z");
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }

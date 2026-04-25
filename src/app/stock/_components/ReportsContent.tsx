@@ -7,6 +7,14 @@ import { collection, getDocs, query, where } from "@/lib/firebase";
 import { BRANCH_LABELS } from "@/lib/auth";
 import { addDays, weekMonday, formatDate, todayPHT } from "../_lib/helpers";
 
+interface UnmatchedDoc {
+  id: string;
+  branch: Branch;
+  date: string;
+  syncedAt: string;
+  items: { sku: string; name: string; qty: number }[];
+}
+
 export function ReportsContent({ branch, department, items }: {
   branch: Branch;
   department: Department;
@@ -16,6 +24,7 @@ export function ReportsContent({ branch, department, items }: {
   const [weekAdjs, setWeekAdjs] = useState<StockAdjustment[]>([]);
   const [weekBeg, setWeekBeg] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
+  const [unmatchedDocs, setUnmatchedDocs] = useState<UnmatchedDoc[]>([]);
 
   const todayStr = todayPHT();
 
@@ -24,16 +33,29 @@ export function ReportsContent({ branch, department, items }: {
     const weekEnd = addDays(weekStart, 6);
     let cancelled = false;
     (async () => {
-      const [adjSnap, begSnap] = await Promise.all([
+      const queries: Promise<unknown>[] = [
         getDocs(query(collection(db, COLS.adjustments), where("branch", "==", branch), where("department", "==", department))),
         getDocs(query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("department", "==", department), where("date", "==", weekStart))),
-      ]);
+      ];
+      if (branch === "MKT") {
+        queries.push(getDocs(query(collection(db, COLS.storehubUnmatched), where("branch", "==", branch))));
+      }
+      const results = await Promise.all(queries);
       if (cancelled) return;
+      const [adjSnap, begSnap] = results as [Awaited<ReturnType<typeof getDocs>>, Awaited<ReturnType<typeof getDocs>>];
       const allAdjs = adjSnap.docs.map(d => d.data() as StockAdjustment);
       setWeekAdjs(allAdjs.filter(a => a.date >= weekStart && a.date <= weekEnd));
       const map: Record<string, number> = {};
       begSnap.docs.forEach(d => { const b = d.data() as DailyBeginning; map[b.item] = b.qty; });
       setWeekBeg(map);
+      if (branch === "MKT" && results[2]) {
+        const unmatchedSnap = results[2] as Awaited<ReturnType<typeof getDocs>>;
+        const docs = unmatchedSnap.docs
+          .map(d => d.data() as UnmatchedDoc)
+          .filter(d => d.date >= weekStart && d.date <= weekEnd)
+          .sort((a, b) => a.date.localeCompare(b.date));
+        setUnmatchedDocs(docs);
+      }
       setLoading(false);
     })();
     return () => { cancelled = true; };
@@ -73,6 +95,21 @@ export function ReportsContent({ branch, department, items }: {
     const a = document.createElement("a");
     a.href = url;
     a.download = `weekly-${BRANCH_LABELS[branch]}-${weekStart}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  function exportUnmatchedCSV() {
+    const header = ["Date", "SKU", "Product Name", "Qty Sold"];
+    const rows = unmatchedDocs.flatMap(doc =>
+      doc.items.map(it => [doc.date, it.sku, it.name, it.qty])
+    );
+    const csv = [header, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `unmatched-skus-${BRANCH_LABELS[branch]}-${weekStart}.csv`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -145,6 +182,50 @@ export function ReportsContent({ branch, department, items }: {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Unmatched SKUs — MKT only */}
+      {branch === "MKT" && !loading && (
+        <div style={{ marginTop: 24 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>Unmatched SKUs (StoreHub)</div>
+            {unmatchedDocs.length > 0 && (
+              <button
+                onClick={exportUnmatchedCSV}
+                style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid var(--border)", background: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}
+              >
+                Export CSV
+              </button>
+            )}
+          </div>
+          {unmatchedDocs.length === 0 ? (
+            <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: "20px 0", fontSize: 13 }}>No unmatched SKUs this week.</div>
+          ) : (
+            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 12, overflow: "hidden" }}>
+                <thead>
+                  <tr style={{ background: "var(--bg)" }}>
+                    {["Date", "SKU", "Product Name", "Qty Sold"].map(h => (
+                      <th key={h} style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--text-secondary)", textTransform: "uppercase", textAlign: h === "Product Name" ? "left" : "center", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {unmatchedDocs.flatMap(doc =>
+                    doc.items.map((it, i) => (
+                      <tr key={`${doc.date}-${it.sku}-${i}`} style={{ borderBottom: "1px solid var(--border)" }}>
+                        <td style={{ padding: "9px 10px", textAlign: "center", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{formatDate(doc.date)}</td>
+                        <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "monospace", fontSize: 12, color: "var(--text-secondary)" }}>{it.sku}</td>
+                        <td style={{ padding: "9px 10px", fontWeight: 500 }}>{it.name}</td>
+                        <td style={{ padding: "9px 10px", textAlign: "center", fontWeight: 700, color: "#D97706" }}>{it.qty}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -1,76 +1,52 @@
 "use client";
 import { useState } from "react";
-import type { Branch, Department, StockAdjustment } from "@/lib/types";
-import { db, COLS } from "@/lib/firebase";
-import { writeBatch, doc } from "@/lib/firebase";
-import { CATALOG_MAP, stockDocId, itemSlug } from "@/lib/items";
-import { BRANCH_LABELS } from "@/lib/auth";
+import type { Branch, Department } from "@/lib/types";
 
 export function StoreHubSyncModal({ branch, department, today, onClose, onComplete }: {
   branch: Branch;
   department: Department;
   today: string;
   onClose: () => void;
-  onComplete: (unmatched: { name: string; qty: number }[]) => void;
+  onComplete: (matchedCount: number, unmatchedCount: number) => void;
 }) {
-  const [phase, setPhase] = useState<"idle" | "loading" | "preview" | "saving" | "done">("idle");
+  const [phase, setPhase] = useState<"idle" | "syncing" | "done">("idle");
   const [error, setError] = useState<string | null>(null);
-  const [matched, setMatched] = useState<{ item: string; qty: number }[]>([]);
-  const [unmatchedSkus, setUnmatchedSkus] = useState<{ sku: string; qty: number }[]>([]);
+  const [matchedCount, setMatchedCount] = useState(0);
 
-  async function fetchSales() {
+  async function sync() {
     setError(null);
-    setPhase("loading");
+    setPhase("syncing");
     try {
-      const res = await fetch(`/api/storehub/sales?date=${today}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to fetch sales");
-      setMatched(data.matched);
-      setUnmatchedSkus(data.unmatchedSkus);
-      setPhase("preview");
-    } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Failed to fetch StoreHub sales");
-      setPhase("idle");
-    }
-  }
+      // Fetch sales from StoreHub
+      const salesRes = await fetch(`/api/storehub/sales?date=${today}`);
+      const salesData = await salesRes.json();
+      if (!salesRes.ok) throw new Error(salesData.error ?? "Failed to fetch sales");
 
-  async function confirm() {
-    setPhase("saving");
-    setError(null);
-    try {
-      const batch = writeBatch(db);
-      const now = Date.now();
-      for (const { item, qty } of matched) {
-        const catalogItem = CATALOG_MAP.get(item);
-        if (!catalogItem) continue;
-        // Deterministic doc ID — re-syncing overwrites the previous import, no delete needed
-        const adjId = `storehub__${branch}__${department}__${today}__${itemSlug(item)}`;
-        batch.set(doc(db, COLS.adjustments, adjId), {
-          id: now, branch, department, date: today, item,
-          type: "sales_import", qty, loggedBy: BRANCH_LABELS[branch], source: "storehub",
-        } satisfies StockAdjustment);
-        const sid = stockDocId(branch, department, item);
-        batch.set(doc(db, COLS.branchStock, sid), {
-          id: sid, branch, department, item, category: catalogItem.category,
-          unit: catalogItem.unit, qty: 0,
-          reorderAt: catalogItem.reorderAt,
-          lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
-        }, { merge: true });
-      }
-      await batch.commit();
-      onComplete(unmatchedSkus.map(u => ({ name: u.sku, qty: u.qty })));
+      const matched: { item: string; qty: number }[] = salesData.matched;
+      const unmatched: { sku: string; name: string; qty: number }[] = salesData.unmatchedSkus ?? [];
+
+      // Save to inventory
+      const syncRes = await fetch("/api/storehub/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ branch, department, today, matched, unmatched }),
+      });
+      const syncData = await syncRes.json();
+      if (!syncRes.ok) throw new Error(syncData.error ?? "Failed to save");
+
+      setMatchedCount(matched.length);
+      onComplete(matched.length, unmatched.length);
       setPhase("done");
     } catch (e: unknown) {
-      console.error("[StoreHub sync] confirm failed:", e);
-      setError(e instanceof Error ? e.message : "Failed to save. Please try again.");
-      setPhase("preview");
+      setError(e instanceof Error ? e.message : "Sync failed. Please try again.");
+      setPhase("idle");
     }
   }
 
   return (
     <>
       <div onClick={phase === "idle" ? onClose : undefined} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 60 }} />
-      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 70, background: "#fff", borderRadius: "20px 20px 0 0", padding: "24px 20px 40px", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)", maxHeight: "90dvh", overflowY: "auto" }}>
+      <div style={{ position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 70, background: "#fff", borderRadius: "20px 20px 0 0", padding: "24px 20px 40px", boxShadow: "0 -4px 24px rgba(0,0,0,0.15)" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontSize: 18, fontWeight: 700 }}>Sync Sales from StoreHub</div>
           <button onClick={onClose} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 20, color: "var(--text-secondary)", padding: 4 }}>✕</button>
@@ -83,63 +59,16 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
             </div>
             {error && <div style={{ background: "#FEF2F2", borderRadius: 10, padding: "10px 14px", color: "#DC2626", fontSize: 13, marginBottom: 16 }}>{error}</div>}
             <button
-              onClick={fetchSales}
+              onClick={sync}
               style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: "#1A1A1A", color: "#fff", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
             >
-              Fetch today&apos;s sales
+              Sync today&apos;s sales
             </button>
           </>
         )}
 
-        {phase === "loading" && (
-          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-secondary)", fontSize: 15 }}>Fetching from StoreHub…</div>
-        )}
-
-        {phase === "preview" && (
-          <>
-            {error && (
-              <div style={{ background: "#FEF2F2", borderRadius: 10, padding: "10px 14px", color: "#DC2626", fontSize: 13, marginBottom: 14 }}>
-                {error}
-              </div>
-            )}
-            <div style={{ background: "#F0FDF4", borderRadius: 10, padding: "10px 14px", marginBottom: 14 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "#15803D", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Will deduct — {matched.length} items</div>
-              {matched.map(({ item, qty }) => (
-                <div key={item} style={{ display: "flex", justifyContent: "space-between", fontSize: 13, marginBottom: 3 }}>
-                  <span>{item}</span>
-                  <span style={{ fontWeight: 700, color: "#DC2626" }}>−{qty}</span>
-                </div>
-              ))}
-              {matched.length === 0 && <div style={{ fontSize: 13, color: "#15803D" }}>No commissary items matched.</div>}
-            </div>
-
-            {unmatchedSkus.length > 0 && (
-              <div style={{ background: "#FEF3C7", borderRadius: 10, padding: "10px 14px", marginBottom: 20 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: "#D97706", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 6 }}>Not tracked — {unmatchedSkus.length} SKU{unmatchedSkus.length !== 1 ? "s" : ""}</div>
-                {unmatchedSkus.map(({ sku, qty }) => (
-                  <div key={sku} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#92400E", marginBottom: 2 }}>
-                    <span>{sku}</span>
-                    <span style={{ fontWeight: 700 }}>{qty} sold</span>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => setPhase("idle")} style={{ flex: 1, padding: "14px 0", borderRadius: 12, border: "1.5px solid var(--border)", background: "#fff", color: "var(--text)", fontWeight: 600, fontSize: 15, cursor: "pointer" }}>Back</button>
-              <button
-                onClick={confirm}
-                disabled={matched.length === 0}
-                style={{ flex: 2, padding: "14px 0", borderRadius: 12, border: "none", background: matched.length > 0 ? "#1A1A1A" : "#E8E8E4", color: matched.length > 0 ? "#fff" : "var(--text-secondary)", fontWeight: 700, fontSize: 15, cursor: matched.length > 0 ? "pointer" : "not-allowed" }}
-              >
-                Confirm import
-              </button>
-            </div>
-          </>
-        )}
-
-        {phase === "saving" && (
-          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-secondary)", fontSize: 15 }}>Saving…</div>
+        {phase === "syncing" && (
+          <div style={{ textAlign: "center", padding: "24px 0", color: "var(--text-secondary)", fontSize: 15 }}>Syncing with StoreHub…</div>
         )}
 
         {phase === "done" && (
@@ -147,7 +76,7 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
             <div style={{ textAlign: "center", padding: "12px 0 20px", fontSize: 32 }}>✓</div>
             <div style={{ textAlign: "center", fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Sync complete</div>
             <div style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: 13, marginBottom: 24 }}>
-              {matched.length} item{matched.length !== 1 ? "s" : ""} deducted from today&apos;s inventory.
+              {matchedCount} item{matchedCount !== 1 ? "s" : ""} deducted from today&apos;s inventory.
             </div>
             <button onClick={onClose} style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: "#1A1A1A", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Done</button>
           </>

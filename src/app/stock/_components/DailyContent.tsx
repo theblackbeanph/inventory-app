@@ -6,7 +6,8 @@ import type { DailyMetrics } from "../_lib/helpers";
 
 export type ImportWarning = {
   source: "csv" | "storehub";
-  unmatched: { name: string; qty: number }[];
+  matchedCount: number;
+  unmatchedCount: number;
 };
 
 export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDateChange, onVarOnlyChange, branch, importWarning }: {
@@ -65,17 +66,17 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDa
         </label>
       </div>
 
-      {summaryDate === today && importWarning && importWarning.unmatched.length > 0 && (
+      {summaryDate === today && importWarning && (
         <div style={{ background: "#FEF3C7", borderRadius: 10, padding: "10px 14px", marginBottom: 14, border: "1px solid #FCD34D" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 6 }}>
-            Sales import — {importWarning.unmatched.length} unmatched {importWarning.source === "csv" ? "POS item" : "SKU"}{importWarning.unmatched.length !== 1 ? "s" : ""} not deducted
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
+            Sales synced
           </div>
-          {importWarning.unmatched.map(({ name, qty }) => (
-            <div key={name} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "#78350F", marginBottom: 2 }}>
-              <span>{name}</span>
-              <span style={{ fontWeight: 700 }}>{qty} {qty === 1 ? "unit" : "units"} undeducted</span>
-            </div>
-          ))}
+          <div style={{ fontSize: 13, color: "#78350F" }}>
+            <span style={{ fontWeight: 700, color: "#15803D" }}>{importWarning.matchedCount} matched</span>
+            {importWarning.unmatchedCount > 0 && (
+              <span> · <span style={{ fontWeight: 700, color: "#B45309" }}>{importWarning.unmatchedCount} not tracked</span></span>
+            )}
+          </div>
         </div>
       )}
 
