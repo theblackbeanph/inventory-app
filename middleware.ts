@@ -1,13 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getRedirectPath } from "@/lib/middleware-helpers";
+import { ROLE_ORDER } from "@/lib/roles";
+import type { Role } from "@/lib/roles";
 
 export function middleware(request: NextRequest) {
   const identityCookie = request.cookies.get("__identity")?.value;
 
-  let session: { role: import("@/lib/roles").Role } | null = null;
+  let session: { role: Role } | null = null;
   if (identityCookie) {
     try {
-      session = JSON.parse(decodeURIComponent(identityCookie));
+      const parsed = JSON.parse(decodeURIComponent(identityCookie));
+      if (parsed && ROLE_ORDER.includes(parsed.role)) {
+        session = parsed as { role: Role };
+      }
     } catch {
       // malformed cookie — treat as unauthenticated
     }

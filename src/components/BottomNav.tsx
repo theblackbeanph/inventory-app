@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getSession } from "@/lib/auth";
@@ -17,12 +17,7 @@ interface IconProps { size: number; active: boolean }
 
 export default function BottomNav() {
   const path = usePathname();
-  const [role, setRole] = useState<Role | null>(null);
-
-  useEffect(() => {
-    const session = getSession();
-    if (session) setRole(session.role);
-  }, []);
+  const [role] = useState<Role | null>(() => getSession()?.role ?? null);
 
   return (
     <nav style={{
