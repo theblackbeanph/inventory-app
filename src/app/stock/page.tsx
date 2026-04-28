@@ -42,7 +42,7 @@ export default function StockPage() {
 
   // Manual count tab
   const [endCounts, setEndCounts] = useState<Record<string, string>>({});
-  const [countedBy, setCountedBy] = useState(() => getSession()?.displayName ?? "");
+  const [countedBy] = useState(() => getSession()?.displayName ?? "");
   const [showReview, setShowReview] = useState(false);
   const [recountItems, setRecountItems] = useState<Set<string>>(new Set());
 
@@ -232,8 +232,6 @@ export default function StockPage() {
               metrics={dailyMetrics}
               endCounts={endCounts}
               countedBy={countedBy}
-              staffNames={[]}
-              onCountedByChange={setCountedBy}
               onCountChange={(item, val) => setEndCounts(prev => ({ ...prev, [item]: val }))}
               onReview={() => setShowReview(true)}
             />

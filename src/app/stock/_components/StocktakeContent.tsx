@@ -2,13 +2,11 @@
 import { CATALOG } from "@/lib/items";
 import type { DailyMetrics } from "../_lib/helpers";
 
-export function StocktakeContent({ items, metrics, endCounts, countedBy, staffNames, onCountedByChange, onCountChange, onReview }: {
+export function StocktakeContent({ items, metrics, endCounts, countedBy, onCountChange, onReview }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   endCounts: Record<string, string>;
   countedBy: string;
-  staffNames: string[];
-  onCountedByChange: (name: string) => void;
   onCountChange: (item: string, val: string) => void;
   onReview: () => void;
 }) {
@@ -21,24 +19,13 @@ export function StocktakeContent({ items, metrics, endCounts, countedBy, staffNa
         <label style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", letterSpacing: "0.06em", textTransform: "uppercase", display: "block", marginBottom: 6 }}>
           Counted by
         </label>
-        <select
-          value={countedBy}
-          onChange={e => onCountedByChange(e.target.value)}
-          style={{
-            width: "100%", padding: "10px 12px", fontSize: 15, fontWeight: 600,
-            border: "1.5px solid", borderColor: countedBy ? "#1A1A1A" : "var(--border)",
-            borderRadius: 10, background: "#fff", color: countedBy ? "var(--text)" : "var(--text-secondary)",
-            outline: "none", appearance: "none",
-          }}
-        >
-          <option value="">Select name…</option>
-          {staffNames.map(name => (
-            <option key={name} value={name}>{name}</option>
-          ))}
-        </select>
-        {!countedBy && (
-          <div style={{ fontSize: 12, color: "#D97706", marginTop: 6 }}>Select your name to start counting</div>
-        )}
+        <div style={{
+          width: "100%", padding: "10px 12px", fontSize: 15, fontWeight: 600,
+          border: "1.5px solid var(--border)", borderRadius: 10,
+          background: "#fff", color: "var(--text)",
+        }}>
+          {countedBy || "—"}
+        </div>
       </div>
 
       <div style={{ padding: "6px 16px 4px", fontSize: 12, color: "var(--text-secondary)" }}>
