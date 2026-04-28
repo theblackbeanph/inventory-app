@@ -1,53 +1,51 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { login, BRANCH_LABELS } from "@/lib/auth";
-import type { Branch } from "@/lib/types";
+import { signIn, BRANCH_LABELS, DEPARTMENT_LABELS } from "@/lib/auth";
+import type { Branch, Department } from "@/lib/types";
 
+type Step = "branch" | "dept" | "email";
 const BRANCHES: Branch[] = ["MKT", "BF"];
+const DEPARTMENTS: { id: Department; desc: string }[] = [
+  { id: "kitchen", desc: "Daily food inventory" },
+  { id: "bar",     desc: "Daily bar inventory" },
+  { id: "cafe",    desc: "Monthly cafe stock" },
+];
 
 export default function LoginPage() {
   const router = useRouter();
+  const [step, setStep] = useState<Step>("branch");
   const [branch, setBranch] = useState<Branch>("MKT");
-  const [pin, setPin] = useState("");
-  const [error, setError] = useState(false);
-  const [shake, setShake] = useState(false);
+  const [department, setDepartment] = useState<Department | null>(null);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  function tap(digit: string) {
-    if (pin.length >= 6) return;
-    const next = pin + digit;
-    setPin(next);
-    setError(false);
-    if (next.length >= 4) attemptLogin(branch, next);
+  function pickBranch(b: Branch) {
+    setBranch(b);
+    setStep("dept");
   }
 
-  function del() {
-    setPin(p => p.slice(0, -1));
-    setError(false);
+  function pickDept(d: Department) {
+    setDepartment(d);
+    setStep("email");
   }
 
-  function attemptLogin(b: Branch, p: string) {
-    if (login(b, p)) {
-      router.replace("/department");
-    } else if (p.length >= 4) {
-      setError(true);
-      setShake(true);
-      setTimeout(() => { setPin(""); setShake(false); }, 600);
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!department) return;
+    setLoading(true);
+    setError(null);
+    try {
+      // Branch/dept validation happens server-side in /api/auth/session
+      await signIn(email, password, branch, department);
+      router.replace("/stock");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Login failed. Check your email and password.");
+      setLoading(false);
     }
   }
-
-  const dots = Array.from({ length: 4 }).map((_, i) => (
-    <div
-      key={i}
-      style={{
-        width: 14, height: 14, borderRadius: "50%",
-        background: i < pin.length ? "#1A1A1A" : "transparent",
-        border: "2px solid",
-        borderColor: error ? "#DC2626" : "#1A1A1A",
-        transition: "background 0.1s",
-      }}
-    />
-  ));
 
   return (
     <div style={{
@@ -55,7 +53,6 @@ export default function LoginPage() {
       alignItems: "center", justifyContent: "center",
       background: "var(--bg)", padding: "24px",
     }}>
-      {/* Logo / wordmark */}
       <div style={{ marginBottom: 48, textAlign: "center" }}>
         <div style={{ fontSize: 13, fontWeight: 600, letterSpacing: "0.12em", color: "var(--text-secondary)", textTransform: "uppercase" }}>
           The Black Bean
@@ -63,87 +60,100 @@ export default function LoginPage() {
         <div style={{ fontSize: 22, fontWeight: 700, marginTop: 4 }}>Branch Inventory</div>
       </div>
 
-      {/* Branch selector */}
-      <div style={{
-        display: "flex", gap: 8, marginBottom: 40,
-        background: "#E8E8E4", borderRadius: 12, padding: 4,
-      }}>
-        {BRANCHES.map(b => (
-          <button
-            key={b}
-            onClick={() => { setBranch(b); setPin(""); setError(false); }}
-            style={{
-              padding: "8px 24px", borderRadius: 8, border: "none", cursor: "pointer",
-              fontWeight: 600, fontSize: 14,
-              background: branch === b ? "#FFFFFF" : "transparent",
-              color: branch === b ? "#1A1A1A" : "var(--text-secondary)",
-              boxShadow: branch === b ? "0 1px 4px rgba(0,0,0,0.10)" : "none",
-              transition: "all 0.15s",
-            }}
-          >
-            {BRANCH_LABELS[b]}
-          </button>
-        ))}
-      </div>
-
-      {/* PIN dots */}
-      <div style={{
-        display: "flex", gap: 16, marginBottom: 40,
-        animation: shake ? "shake 0.4s ease" : "none",
-      }}>
-        {dots}
-      </div>
-
-      {error && (
-        <div style={{ color: "#DC2626", fontSize: 13, fontWeight: 500, marginBottom: 16, marginTop: -28 }}>
-          Wrong PIN. Try again.
+      {/* ── Step 1: Branch ── */}
+      {step === "branch" && (
+        <div style={{ width: "100%", maxWidth: 320 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16, textAlign: "center" }}>
+            Select Branch
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {BRANCHES.map(b => (
+              <button key={b} onClick={() => pickBranch(b)} style={{
+                padding: "20px 24px", borderRadius: 16, border: "1.5px solid var(--border)",
+                background: "#FFFFFF", cursor: "pointer", textAlign: "left",
+                fontWeight: 700, fontSize: 17, boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+              }}>
+                {BRANCH_LABELS[b]}
+              </button>
+            ))}
+          </div>
         </div>
       )}
 
-      {/* Numpad */}
-      <div style={{
-        display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 12,
-        width: "100%", maxWidth: 280,
-      }}>
-        {["1","2","3","4","5","6","7","8","9"].map(d => (
-          <PadButton key={d} label={d} onTap={() => tap(d)} />
-        ))}
-        <div />
-        <PadButton label="0" onTap={() => tap("0")} />
-        <PadButton label="⌫" onTap={del} muted />
-      </div>
+      {/* ── Step 2: Department ── */}
+      {step === "dept" && (
+        <div style={{ width: "100%", maxWidth: 320 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 16, textAlign: "center" }}>
+            {BRANCH_LABELS[branch]} · Select Department
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            {DEPARTMENTS.map(d => (
+              <button key={d.id} onClick={() => pickDept(d.id)} style={{
+                padding: "20px 24px", borderRadius: 16, border: "1.5px solid var(--border)",
+                background: "#FFFFFF", cursor: "pointer", textAlign: "left",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+              }}>
+                <div style={{ fontWeight: 700, fontSize: 17 }}>{DEPARTMENT_LABELS[d.id]}</div>
+                <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 3 }}>{d.desc}</div>
+              </button>
+            ))}
+          </div>
+          <button onClick={() => setStep("branch")} style={{ marginTop: 24, background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13, padding: "4px 8px" }}>
+            ← Back
+          </button>
+        </div>
+      )}
 
-      <style>{`
-        @keyframes shake {
-          0%,100%{transform:translateX(0)}
-          20%{transform:translateX(-8px)}
-          40%{transform:translateX(8px)}
-          60%{transform:translateX(-6px)}
-          80%{transform:translateX(6px)}
-        }
-      `}</style>
+      {/* ── Step 3: Email + Password ── */}
+      {step === "email" && department && (
+        <div style={{ width: "100%", maxWidth: 320 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 24, textAlign: "center" }}>
+            {BRANCH_LABELS[branch]} · {DEPARTMENT_LABELS[department]}
+          </div>
+          <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+            <input
+              type="email"
+              placeholder="Email"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              autoFocus
+              style={{
+                padding: "14px 16px", borderRadius: 12, border: "1.5px solid var(--border)",
+                fontSize: 15, background: "#FFFFFF", outline: "none",
+              }}
+            />
+            <input
+              type="password"
+              placeholder="Password"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              style={{
+                padding: "14px 16px", borderRadius: 12, border: "1.5px solid var(--border)",
+                fontSize: 15, background: "#FFFFFF", outline: "none",
+              }}
+            />
+            {error && (
+              <div style={{ color: "#DC2626", fontSize: 13, fontWeight: 500 }}>{error}</div>
+            )}
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                marginTop: 8, padding: "14px", borderRadius: 12, border: "none",
+                background: loading ? "#9CA3AF" : "#1A1A1A", color: "#FFFFFF",
+                fontWeight: 600, fontSize: 15, cursor: loading ? "default" : "pointer",
+              }}
+            >
+              {loading ? "Signing in…" : "Sign In"}
+            </button>
+          </form>
+          <button onClick={() => setStep("dept")} style={{ marginTop: 20, background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13, padding: "4px 8px" }}>
+            ← Back
+          </button>
+        </div>
+      )}
     </div>
-  );
-}
-
-function PadButton({ label, onTap, muted }: { label: string; onTap: () => void; muted?: boolean }) {
-  const [pressed, setPressed] = useState(false);
-  return (
-    <button
-      onPointerDown={() => setPressed(true)}
-      onPointerUp={() => { setPressed(false); onTap(); }}
-      onPointerLeave={() => setPressed(false)}
-      style={{
-        height: 64, borderRadius: 16, border: "none", cursor: "pointer",
-        fontSize: muted ? 20 : 22, fontWeight: 600,
-        background: pressed ? "#E0E0DC" : "#FFFFFF",
-        color: muted ? "var(--text-secondary)" : "#1A1A1A",
-        boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
-        transition: "background 0.08s",
-        userSelect: "none",
-      }}
-    >
-      {label}
-    </button>
   );
 }
