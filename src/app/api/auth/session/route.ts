@@ -1,7 +1,6 @@
 import { adminAuth, adminDb } from "@/lib/firebase-admin";
 import { cookies } from "next/headers";
-import type { UserDoc, AuthState } from "@/lib/types";
-import type { Branch, Department } from "@/lib/types";
+import type { UserDoc, AuthState, Branch, Department } from "@/lib/types";
 
 // Must use Node.js runtime — firebase-admin does not support Edge
 export const runtime = "nodejs";
