@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
-import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE, STAFF_NAMES } from "@/lib/auth";
+import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
 import { db, COLS, saveDocById } from "@/lib/firebase";
 import { CATALOG, stockDocId, beginningDocId } from "@/lib/items";
 import { collection, onSnapshot, query, where, getDocs, writeBatch, doc } from "@/lib/firebase";
@@ -14,8 +14,8 @@ import {
   type SubTab, type FilterTab,
 } from "./_lib/helpers";
 import { DailyContent, type ImportWarning } from "./_components/DailyContent";
-import { ManualCountContent } from "./_components/ManualCountContent";
-import { ManualCountCompleted } from "./_components/ManualCountCompleted";
+import { StocktakeContent } from "./_components/StocktakeContent";
+import { StocktakeCompleted } from "./_components/StocktakeCompleted";
 import { ReviewModal } from "./_components/ReviewModal";
 import { StoreHubSyncModal } from "./_components/StoreHubSyncModal";
 import { CSVImportModal } from "./_components/CSVImportModal";
@@ -42,7 +42,7 @@ export default function StockPage() {
 
   // Manual count tab
   const [endCounts, setEndCounts] = useState<Record<string, string>>({});
-  const [countedBy, setCountedBy] = useState(() => getSession()?.staffName ?? "");
+  const [countedBy, setCountedBy] = useState(() => getSession()?.displayName ?? "");
   const [showReview, setShowReview] = useState(false);
   const [recountItems, setRecountItems] = useState<Set<string>>(new Set());
 
@@ -185,7 +185,7 @@ export default function StockPage() {
         <div style={{ display: "flex", gap: 2, marginBottom: 0 }}>
           {([
             { id: "daily",       label: "Daily" },
-            { id: "manualcount", label: "Manual count" },
+            { id: "manualcount", label: "Stocktake" },
           ] as { id: SubTab; label: string }[]).map(tab => (
             <button key={tab.id} onClick={() => setSubTab(tab.id)} style={{
               flex: 1, padding: "9px 4px", border: "none", cursor: "pointer",
@@ -226,13 +226,13 @@ export default function StockPage() {
       )}
       {subTab === "manualcount" && (
         dayClose?.isLocked
-          ? <ManualCountCompleted dayClose={dayClose} />
-          : <ManualCountContent
+          ? <StocktakeCompleted dayClose={dayClose} />
+          : <StocktakeContent
               items={filtered}
               metrics={dailyMetrics}
               endCounts={endCounts}
               countedBy={countedBy}
-              staffNames={STAFF_NAMES[department]}
+              staffNames={[]}
               onCountedByChange={setCountedBy}
               onCountChange={(item, val) => setEndCounts(prev => ({ ...prev, [item]: val }))}
               onReview={() => setShowReview(true)}

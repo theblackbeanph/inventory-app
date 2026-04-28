@@ -2,7 +2,7 @@
 import { CATALOG } from "@/lib/items";
 import type { DailyMetrics } from "../_lib/helpers";
 
-export function ManualCountContent({ items, metrics, endCounts, countedBy, staffNames, onCountedByChange, onCountChange, onReview }: {
+export function StocktakeContent({ items, metrics, endCounts, countedBy, staffNames, onCountedByChange, onCountChange, onReview }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   endCounts: Record<string, string>;
