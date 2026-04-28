@@ -40,7 +40,7 @@ export default function LoginPage() {
     try {
       // Branch/dept validation happens server-side in /api/auth/session
       await signIn(email, password, branch, department);
-      router.replace("/stock");
+      await router.replace("/stock");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed. Check your email and password.");
       setLoading(false);
