@@ -1,5 +1,4 @@
 import { initializeApp, getApps } from "firebase/app";
-import { getAuth, signInAnonymously } from "firebase/auth";
 import {
   getFirestore,
   collection,
@@ -13,7 +12,6 @@ import {
   writeBatch,
 } from "firebase/firestore";
 
-// Shared Firebase project with commissary dashboard
 const firebaseConfig = {
   apiKey: "AIzaSyBLBVqOwq6PRqNJJIQHlnsPR232Tu3ZV2s",
   authDomain: "commissary-dashboard-ccd7c.firebaseapp.com",
@@ -23,24 +21,22 @@ const firebaseConfig = {
   appId: "1:430542841830:web:06014985cd9e8e1c9b5827",
 };
 
-const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
+export const app = getApps().length ? getApps()[0] : initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 
-// Silent anonymous auth so Firestore rules can use request.auth != null
-signInAnonymously(getAuth(app)).catch(() => {});
-
 export const COLS = {
-  branchStock:     "branch_stock",
-  adjustments:     "branch_adjustments",
-  pulloutReqs:     "pullout_requests",   // legacy
-  dailyBeginning:  "daily_beginning",
-  dailyClose:      "daily_close",
-  pullOuts:        "pull_outs",
-  deliveryNotes:   "delivery_notes",
-  invEntries:        "invEntries",          // commissary stock movements
+  branchStock:        "branch_stock",
+  adjustments:        "branch_adjustments",
+  pulloutReqs:        "pullout_requests",
+  dailyBeginning:     "daily_beginning",
+  dailyClose:         "daily_close",
+  pullOuts:           "pull_outs",
+  deliveryNotes:      "delivery_notes",
+  invEntries:         "invEntries",
   supplierDeliveries: "supplier_deliveries",
-  portioningRuns:    "portioning_runs",
-  storehubUnmatched: "storehub_unmatched",
+  portioningRuns:     "portioning_runs",
+  storehubUnmatched:  "storehub_unmatched",
+  users:              "users",
 } as const;
 
 export async function saveDoc(col: string, item: Record<string, unknown>) {

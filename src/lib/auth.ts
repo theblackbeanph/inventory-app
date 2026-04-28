@@ -1,17 +1,7 @@
-import type { Branch, Department, AuthState, PosType } from "./types";
-
-// Staff names per department — update these to match your actual team per dept
-export const STAFF_NAMES: Record<Department, string[]> = {
-  kitchen: ["Jacq", "Minh", "Brian", "Joshua", "Wilfred", "MJ", "Roji", "Lady", "Mike", "John", "Dexter", "Jesryl", "Rafael"],
-  bar:     ["Homer", "Eric", "Jess", "RJ", "Ivan", "Josh"],
-  cafe:    ["Je", "Raniel"],
-};
-
-// Branch PINs — change these per deployment
-export const BRANCH_PINS: Record<Branch, string> = {
-  MKT: "0317",
-  BF:  "0317",
-};
+import { getAuth, signInWithEmailAndPassword, signOut as fbSignOut } from "firebase/auth";
+import { app } from "@/lib/firebase";
+import type { Branch, Department, AuthState } from "@/lib/types";
+import type { PosType } from "@/lib/types";
 
 export const BRANCH_LABELS: Record<Branch, string> = {
   MKT: "Makati",
@@ -29,72 +19,54 @@ export const BRANCH_POS_TYPE: Record<Branch, PosType> = {
   BF:  "csv",
 };
 
-const AUTH_KEY = "branch_auth";
-const SESSION_TTL = 24 * 60 * 60 * 1000; // 24 hours
+// ── Cookie helpers ────────────────────────────────────────────────────────────
 
-interface StoredState {
-  branch: Branch;
-  department?: Department;
-  staffName?: string;
-  authedAt: number;
-}
-
-function readStored(): StoredState | null {
-  if (typeof window === "undefined") return null;
+function readIdentityCookie(): AuthState | null {
+  if (typeof document === "undefined") return null;
+  const match = document.cookie.match(/(?:^|;\s*)__identity=([^;]+)/);
+  if (!match) return null;
   try {
-    const raw = localStorage.getItem(AUTH_KEY);
-    if (!raw) return null;
-    const state: StoredState = JSON.parse(raw);
-    if (Date.now() - state.authedAt > SESSION_TTL) {
-      localStorage.removeItem(AUTH_KEY);
-      return null;
-    }
-    return state;
+    return JSON.parse(decodeURIComponent(match[1])) as AuthState;
   } catch {
     return null;
   }
 }
 
-// Returns branch session even if department hasn't been selected yet
-export function getBranchSession(): { branch: Branch; authedAt: number } | null {
-  const state = readStored();
-  if (!state) return null;
-  return { branch: state.branch, authedAt: state.authedAt };
-}
+// ── Public API ────────────────────────────────────────────────────────────────
 
-// Returns full session only when department and staffName are both set
 export function getSession(): AuthState | null {
-  const state = readStored();
-  if (!state || !state.department || !state.staffName) return null;
-  return { branch: state.branch, department: state.department, staffName: state.staffName, authedAt: state.authedAt };
+  return readIdentityCookie();
 }
 
-export function login(branch: Branch, pin: string): boolean {
-  if (pin !== BRANCH_PINS[branch]) return false;
-  const state: StoredState = { branch, authedAt: Date.now() };
-  localStorage.setItem(AUTH_KEY, JSON.stringify(state));
-  return true;
+export async function signIn(
+  email: string,
+  password: string,
+  selectedBranch: Branch,
+  selectedDept: Department
+): Promise<AuthState> {
+  const auth = getAuth(app);
+  const cred = await signInWithEmailAndPassword(auth, email, password);
+  const idToken = await cred.user.getIdToken();
+
+  const res = await fetch("/api/auth/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ idToken, selectedBranch, selectedDept }),
+  });
+
+  if (!res.ok) {
+    const { error } = await res.json().catch(() => ({ error: "Login failed" }));
+    throw new Error(error);
+  }
+
+  const { identity } = await res.json();
+  return identity as AuthState;
 }
 
-export function setDepartment(department: Department) {
-  if (typeof window === "undefined") return;
-  const raw = localStorage.getItem(AUTH_KEY);
-  if (!raw) return;
-  const state: StoredState = JSON.parse(raw);
-  state.department = department;
-  state.staffName = undefined; // reset name when dept changes
-  localStorage.setItem(AUTH_KEY, JSON.stringify(state));
-}
-
-export function setStaffName(name: string) {
-  if (typeof window === "undefined") return;
-  const raw = localStorage.getItem(AUTH_KEY);
-  if (!raw) return;
-  const state: StoredState = JSON.parse(raw);
-  state.staffName = name;
-  localStorage.setItem(AUTH_KEY, JSON.stringify(state));
-}
-
-export function logout() {
-  localStorage.removeItem(AUTH_KEY);
+export async function logout(): Promise<void> {
+  const auth = getAuth(app);
+  await Promise.all([
+    fbSignOut(auth),
+    fetch("/api/auth/session", { method: "DELETE" }),
+  ]);
 }
