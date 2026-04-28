@@ -3,25 +3,26 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { getSession } from "@/lib/auth";
-import type { Department } from "@/lib/types";
+import { hasMinRole } from "@/lib/roles";
+import type { Role } from "@/lib/roles";
 
-const ALL_TABS = [
-  { href: "/stock",      icon: StockIcon,      label: "Stock",      kitchenOnly: false },
-  { href: "/transfers",  icon: TransfersIcon,  label: "Transfers",  kitchenOnly: true  },
-  { href: "/production", icon: ProductionIcon, label: "Production", kitchenOnly: false },
-  { href: "/dashboard",  icon: DashboardIcon,  label: "Dashboard",  kitchenOnly: false },
+const ALL_TABS: { href: string; icon: React.FC<IconProps>; label: string; minRole: Role }[] = [
+  { href: "/stock",      icon: StockIcon,      label: "Stock",      minRole: "linecook"   },
+  { href: "/transfers",  icon: TransfersIcon,  label: "Transfers",  minRole: "superadmin" },
+  { href: "/production", icon: ProductionIcon, label: "Production", minRole: "superadmin" },
+  { href: "/dashboard",  icon: DashboardIcon,  label: "Dashboard",  minRole: "linecook"   },
 ];
+
+interface IconProps { size: number; active: boolean }
 
 export default function BottomNav() {
   const path = usePathname();
-  const [department, setDepartment] = useState<Department | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
 
   useEffect(() => {
     const session = getSession();
-    if (session) setDepartment(session.department);
+    if (session) setRole(session.role);
   }, []);
-
-  const tabs = ALL_TABS.filter(t => !t.kitchenOnly || department === "kitchen");
 
   return (
     <nav style={{
@@ -32,13 +33,38 @@ export default function BottomNav() {
       paddingBottom: "env(safe-area-inset-bottom)",
       zIndex: 50,
     }}>
-      {tabs.map(({ href, icon: Icon, label }) => {
+      {ALL_TABS.map(({ href, icon: Icon, label, minRole }) => {
         const active = path.startsWith(href);
+        const allowed = role !== null && hasMinRole(role, minRole);
+
+        if (!allowed) {
+          return (
+            <div key={href} style={{
+              flex: 1, display: "flex", flexDirection: "column",
+              alignItems: "center", justifyContent: "center", gap: 3,
+              color: "#D1D5DB", fontSize: 10, position: "relative",
+              userSelect: "none",
+            }}>
+              <Icon size={21} active={false} />
+              {label}
+              <span style={{
+                position: "absolute", top: 6, right: "calc(50% - 20px)",
+                fontSize: 8, fontWeight: 600, background: "#F3F4F6",
+                color: "#9CA3AF", borderRadius: 3, padding: "1px 4px",
+                textTransform: "uppercase", letterSpacing: "0.04em",
+              }}>
+                soon
+              </span>
+            </div>
+          );
+        }
+
         return (
           <Link key={href} href={href} style={{
             flex: 1, display: "flex", flexDirection: "column",
             alignItems: "center", justifyContent: "center", gap: 3,
-            textDecoration: "none", color: active ? "#1A1A1A" : "#9CA3AF",
+            textDecoration: "none",
+            color: active ? "#1A1A1A" : "#9CA3AF",
             fontWeight: active ? 600 : 400, fontSize: 10,
             transition: "color 0.15s",
           }}>
@@ -51,7 +77,7 @@ export default function BottomNav() {
   );
 }
 
-function StockIcon({ size, active }: { size: number; active: boolean }) {
+function StockIcon({ size, active }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
       <rect x="2" y="3" width="20" height="5" rx="1" />
@@ -61,7 +87,7 @@ function StockIcon({ size, active }: { size: number; active: boolean }) {
   );
 }
 
-function TransfersIcon({ size, active }: { size: number; active: boolean }) {
+function TransfersIcon({ size, active }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
       <path d="M5 12H19M19 12l-4-4M19 12l-4 4" />
@@ -70,7 +96,7 @@ function TransfersIcon({ size, active }: { size: number; active: boolean }) {
   );
 }
 
-function ProductionIcon({ size, active }: { size: number; active: boolean }) {
+function ProductionIcon({ size, active }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
       <path d="M2 20h20" />
@@ -80,7 +106,7 @@ function ProductionIcon({ size, active }: { size: number; active: boolean }) {
   );
 }
 
-function DashboardIcon({ size, active }: { size: number; active: boolean }) {
+function DashboardIcon({ size, active }: IconProps) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="3" width="7" height="7" rx="1" />
