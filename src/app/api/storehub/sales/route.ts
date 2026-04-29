@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { applyStoreHubMapping, allMappedSkus } from "@/lib/storehub-mapping";
 
+export const maxDuration = 30;
+
 const BASE_URL = "https://api.storehubhq.com";
 
 function authHeader(): string {
@@ -14,8 +16,13 @@ async function fetchStoreHub(path: string) {
     headers: { Authorization: authHeader(), Accept: "application/json" },
     cache: "no-store",
   });
-  if (!res.ok) throw new Error(`StoreHub ${path} → ${res.status}`);
-  return res.json();
+  const text = await res.text();
+  if (!res.ok) throw new Error(`StoreHub ${path} → ${res.status}: ${text.slice(0, 200)}`);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`StoreHub ${path} returned non-JSON: ${text.slice(0, 200)}`);
+  }
 }
 
 // Build productId → SKU map and SKU → product name map from the full product list

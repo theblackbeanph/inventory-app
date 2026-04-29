@@ -9,7 +9,7 @@ import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, 
 import BottomNav from "@/components/BottomNav";
 
 import {
-  todayPHT, addDays, weekMonday, computeMetrics, matchesFilter,
+  todayPHT, syncDatePHT, addDays, weekMonday, computeMetrics, matchesFilter,
   CATEGORY_FILTERS,
   type SubTab, type FilterTab,
 } from "./_lib/helpers";
@@ -311,7 +311,7 @@ export default function StockPage() {
         <StoreHubSyncModal
           branch={branch}
           department={department}
-          today={today}
+          today={syncDatePHT()}
           onClose={() => setShowStoreHubSync(false)}
           onComplete={(matched, unmatched) => handleImportComplete(matched, unmatched, "storehub")}
         />

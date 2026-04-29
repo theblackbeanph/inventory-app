@@ -30,6 +30,13 @@ export function todayPHT(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+// Business date for StoreHub sync: before 7 AM PHT, the active business day is still yesterday
+export function syncDatePHT(): string {
+  const pht = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  if (pht.getUTCHours() < 7) pht.setUTCDate(pht.getUTCDate() - 1);
+  return pht.toISOString().slice(0, 10);
+}
+
 export function addDays(date: string, days: number): string {
   const d = new Date(date + "T00:00:00Z");
   d.setUTCDate(d.getUTCDate() + days);

@@ -16,9 +16,12 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
   async function sync() {
     setError(null);
     setPhase("syncing");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
     try {
       // Fetch sales from StoreHub
-      const salesRes = await fetch(`/api/storehub/sales?date=${today}`);
+      const salesRes = await fetch(`/api/storehub/sales?date=${today}`, { signal: controller.signal });
+      clearTimeout(timeout);
       const salesData = await salesRes.json();
       if (!salesRes.ok) throw new Error(salesData.error ?? "Failed to fetch sales");
 
@@ -38,7 +41,11 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
       onComplete(matched.length, unmatched.length);
       setPhase("done");
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : "Sync failed. Please try again.");
+      clearTimeout(timeout);
+      const msg = e instanceof Error && e.name === "AbortError"
+        ? "Sync timed out — StoreHub took too long to respond. Try again."
+        : (e instanceof Error ? e.message : "Sync failed. Please try again.");
+      setError(msg);
       setPhase("idle");
     }
   }

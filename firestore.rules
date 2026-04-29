@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isKnownUser() {
+      return request.auth != null && request.auth.token.email in [
+        'chris@theblackbean.ph',
+        'hello@theblackbean.ph',
+        'kliendacasin1996@gmail.com',
+        'tonixgil04@gmail.com'
+      ];
+    }
+
+    // Branch inventory app — requires Firebase Auth (anonymous sign-in on load)
+    match /branch_stock/{doc}        { allow read, write: if request.auth != null; }
+    match /branch_adjustments/{doc}  { allow read, write: if request.auth != null; }
+    match /storehub_unmatched/{doc}  { allow read, write: if request.auth != null; }
+    match /daily_beginning/{doc}     { allow read, write: if request.auth != null; }
+    match /daily_close/{doc}         { allow read, write: if request.auth != null; }
+    match /pull_outs/{doc}           { allow read, write: if request.auth != null; }
+    match /delivery_notes/{doc}      { allow read, write: if request.auth != null; }
+    match /supplier_deliveries/{doc} { allow read, write: if request.auth != null; }
+    match /portioning_runs/{doc}     { allow read, write: if request.auth != null; }
+    match /pullout_requests/{doc}    { allow read, write: if request.auth != null; }
+
+    // Commissary app — writes restricted to known users only
+    match /{document=**} {
+      allow read: if request.auth != null;
+      allow write: if isKnownUser();
+    }
+  }
+}
