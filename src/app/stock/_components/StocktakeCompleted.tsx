@@ -1,7 +1,7 @@
 "use client";
 import type { DailyClose } from "@/lib/types";
 
-export function ManualCountCompleted({ dayClose }: { dayClose: DailyClose }) {
+export function StocktakeCompleted({ dayClose }: { dayClose: DailyClose }) {
   const rows = Object.entries(dayClose.items).sort(([a], [b]) => a.localeCompare(b));
   const closedTime = new Date(dayClose.closedAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true });
 

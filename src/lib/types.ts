@@ -1,3 +1,5 @@
+import type { Role } from "./roles";
+
 export type Branch = "MKT" | "BF";
 export type Department = "kitchen" | "bar" | "cafe";
 export type ItemCategory = "portion" | "packed" | "loose" | "supplier";
@@ -71,8 +73,16 @@ export interface PulloutItem {
 export interface AuthState {
   branch: Branch;
   department: Department;
-  staffName: string;
-  authedAt: number;
+  displayName: string;
+  role: Role;
+  uid: string;
+}
+
+export interface UserDoc {
+  role: Role;
+  branch: Branch | "both";
+  department: Department | "all";
+  displayName: string;
 }
 
 // ── Pull-Out module ───────────────────────────────────────────────────────────

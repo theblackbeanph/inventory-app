@@ -4,10 +4,13 @@ import { BRANCH_LABELS } from "@/lib/auth";
 import { CATALOG_MAP } from "@/lib/items";
 import { db, COLS, saveDocById } from "@/lib/firebase";
 import { collection, onSnapshot, query, where, getDocs } from "@/lib/firebase";
-import {
-  PULLOUT_ITEMS, generatePoNumber, generateDnNumber,
-} from "@/lib/pullout-config";
 import type { Branch, PullOut, PullOutItem, PullOutStatus, DeliveryNote, StockAdjustment } from "@/lib/types";
+
+// Phase 2: Stub implementations for pullout-config functions (being refactored)
+interface PullOutConfigItem { name: string; itemClass: "A" | "B" | "C"; }
+const PULLOUT_ITEMS: PullOutConfigItem[] = []; // TODO(Phase 2): restore item catalog from commissary data
+const generatePoNumber = (branch: Branch, date: string, seq: number): string => `PO-${date.slice(2, 4)}-${date.slice(5, 7)}${date.slice(8, 10)}-${branch}${String(seq).padStart(3, "0")}`;
+const generateDnNumber = (branch: Branch, date: string, seq: number): string => `DN-${date.slice(2, 4)}-${date.slice(5, 7)}${date.slice(8, 10)}-${branch}${String(seq).padStart(3, "0")}`;
 
 type View = "list" | "detail" | "new";
 type FilterTab = "all" | "pending" | "active" | "done";
