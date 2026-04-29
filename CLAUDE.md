@@ -35,10 +35,11 @@ After any session where a feature is completed, a bug is fixed, or the architect
 - **Discrepancy handling**: commissary adjusts their inventory + notifies branch; branch re-requests if replacement needed; no auto-replacement sends from commissary
 - **Cutover strategy**: 1-week shadow mode (Orders tab visible but old flow still active), then hard disable
 
-### Auth Gap — Must Resolve Before Phase 2
-- Branch uses: **anonymous Firebase Auth + PIN** (localStorage session)
+### Auth — Resolved 2026-04-29
+- Branch now uses: **email/password Firebase Auth** — role system (superadmin/admin/linecook), `__identity` cookie, route-protection middleware
 - Commissary uses: **email/password Firebase Auth**
-- Firestore security rules must be updated to allow both auth types to write to shared collections (`pull_outs`, `delivery_notes`, `invEntries`) before Phase 2 launches
+- Firestore security rules updated (`firestore.rules`) — branch collections open to any authenticated user, commissary writes restricted to known emails
+- Phase 2 can proceed: both apps use proper Firebase Auth, shared collections are accessible to both
 
 ### Recipe Database (future 3rd app — not yet built)
 - Will share the same Firebase project (`commissary-dashboard-ccd7c`)
