@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, COLS, collection, doc, getDocs, query, where, writeBatch, setDoc } from "@/lib/firebase";
+import { db, COLS, doc, writeBatch, setDoc } from "@/lib/firebase";
 import { CATALOG_MAP, itemSlug, stockDocId } from "@/lib/items";
 import { applyStoreHubMapping, allMappedSkus } from "@/lib/storehub-mapping";
 import type { StockAdjustment } from "@/lib/types";
@@ -47,14 +47,7 @@ export async function GET(request: NextRequest) {
 
   const date = syncDatePHT();
 
-  // Skip if already synced for this date (manual sync takes priority)
   const unmatchedDocId = `${BRANCH}__${date}`;
-  const existing = await getDocs(
-    query(collection(db, COLS.storehubUnmatched), where("id", "==", unmatchedDocId))
-  );
-  if (!existing.empty) {
-    return NextResponse.json({ ok: true, skipped: true, reason: "Already synced for this date", date });
-  }
 
   try {
     const prevDate = addUtcDays(date, -1);
