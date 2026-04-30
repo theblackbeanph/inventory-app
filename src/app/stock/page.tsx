@@ -13,7 +13,7 @@ import {
   CATEGORY_FILTERS,
   type SubTab, type FilterTab,
 } from "./_lib/helpers";
-import { DailyContent, type ImportWarning } from "./_components/DailyContent";
+import { DailyContent } from "./_components/DailyContent";
 import { StocktakeContent } from "./_components/StocktakeContent";
 import { StocktakeCompleted } from "./_components/StocktakeCompleted";
 import { SubmitAllModal } from "./_components/SubmitAllModal";
@@ -52,8 +52,6 @@ export default function StockPage() {
   const [showCSVImport, setShowCSVImport] = useState(false);
   const [showStoreHubSync, setShowStoreHubSync] = useState(false);
 
-  // Import warning (persisted to localStorage)
-  const [importWarning, setImportWarning] = useState<ImportWarning | null>(null);
 
   useEffect(() => {
     const session = getSession();
@@ -106,14 +104,6 @@ export default function StockPage() {
     return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); unsubDrafts(); };
   }, [router]);
 
-  // Load sales warning from localStorage
-  useEffect(() => {
-    if (!branch || !department) return;
-    const savedWarn = localStorage.getItem(`salesWarn_${branch}_${department}_${today}`);
-    if (savedWarn) {
-      try { setImportWarning(JSON.parse(savedWarn)); } catch {}
-    }
-  }, [branch, department, today]);
 
   // Fetch Daily tab data when summaryDate changes
   useEffect(() => {
@@ -152,13 +142,6 @@ export default function StockPage() {
   const critCount = deptCatalog.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).length;
   const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
-  function handleImportComplete(matchedCount: number, unmatchedCount: number, source: "csv" | "storehub") {
-    if (!branch || !department) return;
-    const warn: import("./_components/DailyContent").ImportWarning = { source, matchedCount, unmatchedCount };
-    setImportWarning(warn);
-    const key = `salesWarn_${branch}_${department}_${today}`;
-    localStorage.setItem(key, JSON.stringify(warn));
-  }
 
   async function handleSaveLocation(location: string) {
     if (!branch || !department) return;
@@ -322,7 +305,6 @@ export default function StockPage() {
           onDateChange={setSummaryDate}
           onVarOnlyChange={setVarOnly}
           branch={branch}
-          importWarning={importWarning}
         />
       )}
       {subTab === "manualcount" && (
@@ -365,7 +347,7 @@ export default function StockPage() {
           department={department}
           today={syncDatePHT()}
           onClose={() => setShowStoreHubSync(false)}
-          onComplete={(matched, unmatched) => handleImportComplete(matched, unmatched, "storehub")}
+          onComplete={() => {}}
         />
       )}
 
@@ -375,7 +357,7 @@ export default function StockPage() {
           department={department}
           today={today}
           onClose={() => setShowCSVImport(false)}
-          onComplete={(matched, unmatched) => handleImportComplete(matched, unmatched, "csv")}
+          onComplete={() => {}}
         />
       )}
 

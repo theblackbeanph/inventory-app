@@ -4,13 +4,7 @@ import { CATALOG } from "@/lib/items";
 import { BRANCH_LABELS } from "@/lib/auth";
 import type { DailyMetrics } from "../_lib/helpers";
 
-export type ImportWarning = {
-  source: "csv" | "storehub";
-  matchedCount: number;
-  unmatchedCount: number;
-};
-
-export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDateChange, onVarOnlyChange, branch, importWarning }: {
+export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDateChange, onVarOnlyChange, branch }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   summaryDate: string;
@@ -19,7 +13,6 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDa
   onDateChange: (d: string) => void;
   onVarOnlyChange: (v: boolean) => void;
   branch: Branch;
-  importWarning: ImportWarning | null;
 }) {
   const rows = items.map(item => {
     const m = metrics[item.name];
@@ -66,21 +59,7 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDa
         </label>
       </div>
 
-      {summaryDate === today && importWarning && (
-        <div style={{ background: "#FEF3C7", borderRadius: 10, padding: "10px 14px", marginBottom: 14, border: "1px solid #FCD34D" }}>
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#92400E", textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 4 }}>
-            Sales synced
-          </div>
-          <div style={{ fontSize: 13, color: "#78350F" }}>
-            <span style={{ fontWeight: 700, color: "#15803D" }}>{importWarning.matchedCount} matched</span>
-            {importWarning.unmatchedCount > 0 && (
-              <span> · <span style={{ fontWeight: 700, color: "#B45309" }}>{importWarning.unmatchedCount} not tracked</span></span>
-            )}
-          </div>
-        </div>
-      )}
-
-      <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", background: "#fff" }}>
+<div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", background: "#fff" }}>
         <table style={{ minWidth: 540, borderCollapse: "collapse", width: "100%" }}>
           <thead>
             <tr>
