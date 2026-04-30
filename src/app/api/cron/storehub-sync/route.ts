@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, COLS, doc, writeBatch, setDoc } from "@/lib/firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { db, auth, COLS, doc, writeBatch, setDoc } from "@/lib/firebase";
 import { CATALOG_MAP, itemSlug, stockDocId } from "@/lib/items";
 import { applyStoreHubMapping, allMappedSkus } from "@/lib/storehub-mapping";
 import type { StockAdjustment } from "@/lib/types";
@@ -44,6 +45,11 @@ export async function GET(request: NextRequest) {
 
   const storeId = process.env.STOREHUB_MKT_STORE_ID;
   if (!storeId) return NextResponse.json({ error: "STOREHUB_MKT_STORE_ID not configured" }, { status: 500 });
+
+  if (!process.env.SYSTEM_EMAIL || !process.env.SYSTEM_PASSWORD) {
+    return NextResponse.json({ error: "SYSTEM_EMAIL / SYSTEM_PASSWORD not configured" }, { status: 500 });
+  }
+  await signInWithEmailAndPassword(auth, process.env.SYSTEM_EMAIL, process.env.SYSTEM_PASSWORD);
 
   const date = syncDatePHT();
 

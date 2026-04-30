@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { db, COLS, collection, getDocs, query, where, writeBatch, doc } from "@/lib/firebase";
+import { signInWithEmailAndPassword } from "firebase/auth";
+import { db, auth, COLS, collection, getDocs, query, where, writeBatch, doc } from "@/lib/firebase";
 import type { Branch, Department, StockAdjustment, DailyBeginning, DailyClose, StocktakeDraft } from "@/lib/types";
 import { CATALOG, CATALOG_MAP, beginningDocId, stockDocId } from "@/lib/items";
 
@@ -21,6 +22,11 @@ export async function GET(request: NextRequest) {
   if (process.env.CRON_SECRET && auth !== `Bearer ${process.env.CRON_SECRET}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  if (!process.env.SYSTEM_EMAIL || !process.env.SYSTEM_PASSWORD) {
+    return NextResponse.json({ error: "SYSTEM_EMAIL / SYSTEM_PASSWORD not configured" }, { status: 500 });
+  }
+  await signInWithEmailAndPassword(auth, process.env.SYSTEM_EMAIL, process.env.SYSTEM_PASSWORD);
 
   const today = phtToday();
   const yesterday = addDays(today, -1);
