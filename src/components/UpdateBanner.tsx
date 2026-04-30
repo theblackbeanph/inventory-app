@@ -14,12 +14,14 @@ export default function UpdateBanner() {
       try {
         const res = await fetch("/api/version", { cache: "no-store" });
         const { version } = await res.json();
+        console.debug("[UpdateBanner] client:", CURRENT, "server:", version);
         if (version !== CURRENT) setOutdated(true);
       } catch {
         // silently ignore network errors
       }
     }
 
+    check(); // immediate check on mount
     const id = setInterval(check, POLL_MS);
     return () => clearInterval(id);
   }, []);
