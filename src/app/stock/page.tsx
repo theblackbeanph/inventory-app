@@ -181,7 +181,7 @@ export default function StockPage() {
     });
   }
 
-  async function handleSubmitAll(recountItems: Set<string>) {
+  async function handleSubmitAll() {
     if (!branch || !department) return;
     setSubmitLoading(true);
     try {
@@ -193,7 +193,6 @@ export default function StockPage() {
       const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
 
       for (const item of deptCatalog) {
-        if (recountItems.has(item.name)) continue;
         const val = endCounts[item.name];
         if (val === undefined || val === "") continue;
         const qty = Number(val);
@@ -349,6 +348,10 @@ export default function StockPage() {
           endCounts={endCounts}
           drafts={drafts}
           onConfirm={handleSubmitAll}
+          onRecount={item => {
+            setEndCounts(prev => { const n = { ...prev }; delete n[item]; return n; });
+            setShowSubmitAll(false);
+          }}
           onClose={() => setShowSubmitAll(false)}
           loading={submitLoading}
         />
