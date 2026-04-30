@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db, COLS, collection, getDocs, query, where, writeBatch, doc } from "@/lib/firebase";
-import type { Branch, Department, StockAdjustment, DailyBeginning, DailyClose } from "@/lib/types";
+import type { Branch, Department, StockAdjustment, DailyBeginning, DailyClose, StocktakeDraft } from "@/lib/types";
 import { CATALOG, CATALOG_MAP, beginningDocId, stockDocId } from "@/lib/items";
 
 const BRANCHES: Branch[] = ["MKT", "BF"];
@@ -28,12 +28,13 @@ export async function GET(request: NextRequest) {
   const log: string[] = [];
 
   for (const branch of BRANCHES) {
-    // Fetch all of yesterday's data for this branch in 4 parallel queries
-    const [adjSnap, begSnap, closeSnap, todayBegSnap] = await Promise.all([
+    // Fetch all of yesterday's data for this branch in parallel
+    const [adjSnap, begSnap, closeSnap, todayBegSnap, draftSnap] = await Promise.all([
       getDocs(query(collection(db, COLS.adjustments),    where("branch", "==", branch), where("date", "==", yesterday))),
       getDocs(query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("date", "==", yesterday))),
       getDocs(query(collection(db, COLS.dailyClose),     where("branch", "==", branch), where("date", "==", yesterday))),
       getDocs(query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("date", "==", today))),
+      getDocs(query(collection(db, COLS.stocktakeDrafts), where("branch", "==", branch), where("date", "==", yesterday))),
     ]);
 
     const allAdj  = adjSnap.docs.map(d => d.data() as StockAdjustment);
@@ -71,6 +72,16 @@ export async function GET(request: NextRequest) {
         const beginnings: Record<string, number> = {};
         for (const b of deptBeg) beginnings[b.item] = b.qty;
 
+        // Merge draft counts for this dept (lower priority than explicit count adjustments)
+        const draftCounts: Record<string, number> = {};
+        for (const draftDoc of draftSnap.docs) {
+          const draft = draftDoc.data() as StocktakeDraft;
+          if (draft.department !== dept) continue;
+          for (const [item, qty] of Object.entries(draft.counts)) {
+            if (!(item in draftCounts)) draftCounts[item] = qty;
+          }
+        }
+
         // Tally adjustments per item
         const latestManualCount: Record<string, { qty: number; id: number }> = {};
         const inQtyMap: Record<string, number> = {};
@@ -97,7 +108,7 @@ export async function GET(request: NextRequest) {
           const outQ    = outQtyMap[itemName]   ?? 0;
           const expected = Math.max(0, beg + inQ - outQ);
           const manualCount = latestManualCount[itemName];
-          const finalEnd = manualCount?.qty ?? expected;
+          const finalEnd = manualCount?.qty ?? draftCounts[itemName] ?? expected;
           const variance = finalEnd - expected;
 
           endCounts[itemName] = finalEnd;
@@ -147,6 +158,15 @@ export async function GET(request: NextRequest) {
           }
         }
         log.push(`${branch}/${dept}: already closed (manual)`);
+      }
+
+      // ── Clean up any leftover draft docs for this dept ──────────────────
+      const deptDraftDocs = draftSnap.docs.filter(d => (d.data() as StocktakeDraft).department === dept);
+      if (deptDraftDocs.length > 0) {
+        const delBatch = writeBatch(db);
+        for (const draftDoc of deptDraftDocs) delBatch.delete(draftDoc.ref);
+        await delBatch.commit();
+        log.push(`${branch}/${dept}: deleted ${deptDraftDocs.length} draft(s)`);
       }
 
       // ── Carry forward: write today's BEG from yesterday's end counts ──────

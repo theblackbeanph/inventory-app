@@ -7,6 +7,7 @@ import {
   onSnapshot,
   setDoc,
   getDocs,
+  deleteDoc,
   query,
   where,
   orderBy,
@@ -38,6 +39,7 @@ export const COLS = {
   supplierDeliveries: "supplier_deliveries",
   portioningRuns:     "portioning_runs",
   storehubUnmatched:  "storehub_unmatched",
+  stocktakeDrafts:    "stocktake_drafts",
   users:              "users",
 } as const;
 
@@ -66,5 +68,5 @@ export async function saveBatch(col: string, items: Record<string, unknown>[]) {
 
 export {
   collection, doc, onSnapshot, setDoc, getDocs,
-  query, where, orderBy, writeBatch,
+  deleteDoc, query, where, orderBy, writeBatch,
 };

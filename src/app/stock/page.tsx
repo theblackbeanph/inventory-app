@@ -1,22 +1,22 @@
 "use client";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
-import { db, COLS, saveDocById } from "@/lib/firebase";
+import { auth, db, COLS, saveDocById } from "@/lib/firebase";
 import { CATALOG, stockDocId, beginningDocId } from "@/lib/items";
 import { collection, onSnapshot, query, where, getDocs, writeBatch, doc } from "@/lib/firebase";
-import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, DailyClose } from "@/lib/types";
+import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, DailyClose, StocktakeDraft } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 
 import {
-  todayPHT, syncDatePHT, addDays, weekMonday, computeMetrics, matchesFilter,
+  todayPHT, syncDatePHT, addDays, computeMetrics, matchesFilter,
   CATEGORY_FILTERS,
   type SubTab, type FilterTab,
 } from "./_lib/helpers";
 import { DailyContent, type ImportWarning } from "./_components/DailyContent";
 import { StocktakeContent } from "./_components/StocktakeContent";
 import { StocktakeCompleted } from "./_components/StocktakeCompleted";
-import { ReviewModal } from "./_components/ReviewModal";
+import { SubmitAllModal } from "./_components/SubmitAllModal";
 import { StoreHubSyncModal } from "./_components/StoreHubSyncModal";
 import { CSVImportModal } from "./_components/CSVImportModal";
 import { ResetModal } from "./_components/ResetModal";
@@ -40,11 +40,12 @@ export default function StockPage() {
   const [summaryBeg, setSummaryBeg] = useState<Record<string, number>>({});
   const [varOnly, setVarOnly] = useState(false);
 
-  // Manual count tab
+  // Stocktake tab
   const [endCounts, setEndCounts] = useState<Record<string, string>>({});
-  const [countedBy] = useState(() => getSession()?.displayName ?? "");
-  const [showReview, setShowReview] = useState(false);
-  const [recountItems, setRecountItems] = useState<Set<string>>(new Set());
+  const [drafts, setDrafts] = useState<Record<string, StocktakeDraft>>({});
+  const [showSubmitAll, setShowSubmitAll] = useState(false);
+  const [submitLoading, setSubmitLoading] = useState(false);
+  const draftsInitRef = useRef(false);
 
   // Modals
   const [showReset, setShowReset] = useState(false);
@@ -84,27 +85,35 @@ export default function StockPage() {
       setDayClose(snap.empty ? null : snap.docs[0].data() as DailyClose);
     });
 
-    return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); };
+    const draftQ = query(collection(db, COLS.stocktakeDrafts), where("branch", "==", b), where("department", "==", dept), where("date", "==", todayPHT()));
+    const unsubDrafts = onSnapshot(draftQ, snap => {
+      const map: Record<string, StocktakeDraft> = {};
+      snap.docs.forEach(d => { const dr = d.data() as StocktakeDraft; map[dr.location] = dr; });
+      // Populate endCounts from drafts on first load only
+      if (!draftsInitRef.current) {
+        draftsInitRef.current = true;
+        const counts: Record<string, string> = {};
+        for (const dr of Object.values(map)) {
+          for (const [item, qty] of Object.entries(dr.counts)) {
+            counts[item] = String(qty);
+          }
+        }
+        if (Object.keys(counts).length > 0) setEndCounts(counts);
+      }
+      setDrafts(map);
+    });
+
+    return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); unsubDrafts(); };
   }, [router]);
 
-  // Load localStorage once when branch/dept resolved
+  // Load sales warning from localStorage
   useEffect(() => {
     if (!branch || !department) return;
-    const savedCounts = localStorage.getItem(`counts_${branch}_${department}_${today}`);
-    if (savedCounts) {
-      try { setEndCounts(JSON.parse(savedCounts)); } catch {}
-    }
     const savedWarn = localStorage.getItem(`salesWarn_${branch}_${department}_${today}`);
     if (savedWarn) {
       try { setImportWarning(JSON.parse(savedWarn)); } catch {}
     }
   }, [branch, department, today]);
-
-  // Persist endCounts to localStorage on change
-  useEffect(() => {
-    if (!branch || !department) return;
-    localStorage.setItem(`counts_${branch}_${department}_${today}`, JSON.stringify(endCounts));
-  }, [endCounts, branch, department, today]);
 
   // Fetch Daily tab data when summaryDate changes
   useEffect(() => {
@@ -149,6 +158,98 @@ export default function StockPage() {
     setImportWarning(warn);
     const key = `salesWarn_${branch}_${department}_${today}`;
     localStorage.setItem(key, JSON.stringify(warn));
+  }
+
+  async function handleSaveLocation(location: string) {
+    if (!branch || !department) return;
+    const session = getSession();
+    const locItems = deptCatalog.filter(i => i.location === location);
+    const counts: Record<string, number> = {};
+    for (const item of locItems) {
+      const val = endCounts[item.name];
+      if (val !== undefined && val !== "") {
+        const n = Number(val);
+        if (!isNaN(n) && n >= 0) counts[item.name] = n;
+      }
+    }
+    await auth.authStateReady();
+    const draftId = `${branch}__${department}__${today}__${location}`;
+    await saveDocById(COLS.stocktakeDrafts, draftId, {
+      id: draftId, branch, department, date: today, location,
+      counts, savedAt: new Date().toISOString(),
+      savedBy: session?.displayName ?? BRANCH_LABELS[branch],
+    });
+  }
+
+  async function handleSubmitAll() {
+    if (!branch || !department) return;
+    setSubmitLoading(true);
+    try {
+      await auth.authStateReady();
+      const batch = writeBatch(db);
+      const now = Date.now();
+      const closeItems: DailyClose["items"] = {};
+      const submittedToday = todayPHT();
+      const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
+
+      for (const item of deptCatalog) {
+        const val = endCounts[item.name];
+        if (val === undefined || val === "") continue;
+        const qty = Number(val);
+        if (isNaN(qty) || qty < 0) continue;
+
+        const adjRef = doc(collection(db, COLS.adjustments));
+        batch.set(adjRef, { id: now + Math.random(), branch, department, date: submittedToday, item: item.name, type: "count", qty, loggedBy });
+        const stockId = stockDocId(branch, department, item.name);
+        batch.set(doc(db, COLS.branchStock, stockId), {
+          id: stockId, branch, department, item: item.name, category: item.category,
+          unit: item.unit, qty, reorderAt: item.reorderAt,
+          lastUpdated: submittedToday, lastUpdatedBy: loggedBy,
+        });
+        const m = dailyMetrics[item.name];
+        const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : qty;
+        closeItems[item.name] = {
+          beginning: m.beginning ?? 0, inQty: m.inQty, outQty: m.outQty,
+          expected, endCount: qty, variance: qty - expected,
+        };
+      }
+
+      await batch.commit();
+
+      const closeId = `${branch}__${department}__${submittedToday}`;
+      await saveDocById(COLS.dailyClose, closeId, {
+        id: closeId, branch, department, date: submittedToday,
+        countType: "manual", closedAt: new Date().toISOString(),
+        closedBy: loggedBy, isLocked: true, items: closeItems,
+      });
+
+      const tomorrow = addDays(submittedToday, 1);
+      const begBatch = writeBatch(db);
+      let begCount = 0;
+      for (const [itemName, data] of Object.entries(closeItems)) {
+        const begId = beginningDocId(branch, department, itemName, tomorrow);
+        begBatch.set(doc(db, COLS.dailyBeginning, begId), {
+          id: begId, branch, department, item: itemName, date: tomorrow,
+          qty: data.endCount, setBy: loggedBy, updatedAt: submittedToday,
+        });
+        begCount++;
+      }
+      if (begCount > 0) await begBatch.commit();
+
+      // Delete all draft docs for today
+      if (Object.keys(drafts).length > 0) {
+        const draftBatch = writeBatch(db);
+        for (const draft of Object.values(drafts)) {
+          draftBatch.delete(doc(db, COLS.stocktakeDrafts, draft.id));
+        }
+        await draftBatch.commit();
+      }
+
+      setEndCounts({});
+      setShowSubmitAll(false);
+    } finally {
+      setSubmitLoading(false);
+    }
   }
 
   if (!branch || !department) return null;
@@ -231,75 +332,22 @@ export default function StockPage() {
               items={filtered}
               metrics={dailyMetrics}
               endCounts={endCounts}
-              countedBy={countedBy}
+              drafts={drafts}
+              currentFilter={categoryFilter}
               onCountChange={(item, val) => setEndCounts(prev => ({ ...prev, [item]: val }))}
-              onReview={() => setShowReview(true)}
+              onSaveLocation={handleSaveLocation}
+              onSubmitAll={() => setShowSubmitAll(true)}
             />
       )}
+
       {/* ── Modals ── */}
-      {showReview && (
-        <ReviewModal
-          items={filtered}
-          metrics={dailyMetrics}
-          endCounts={endCounts}
-          countedBy={countedBy}
-          recountItems={recountItems}
-          onRecount={item => setRecountItems(prev => new Set([...prev, item]))}
-          onConfirm={async () => {
-            const batch = writeBatch(db);
-            const now = Date.now();
-            const closeItems: DailyClose["items"] = {};
-            const submittedToday = todayPHT();
-            const loggedBy = countedBy || BRANCH_LABELS[branch];
-            for (const item of filtered) {
-              if (recountItems.has(item.name)) continue;
-              const val = endCounts[item.name];
-              if (val === undefined || val === "") continue;
-              const qty = Number(val);
-              if (isNaN(qty) || qty < 0) continue;
-              const adjRef = doc(collection(db, COLS.adjustments));
-              batch.set(adjRef, { id: now + Math.random(), branch, department, date: submittedToday, item: item.name, type: "count", qty, loggedBy });
-              const stockId = stockDocId(branch, department, item.name);
-              batch.set(doc(db, COLS.branchStock, stockId), {
-                id: stockId, branch, department, item: item.name, category: item.category,
-                unit: item.unit, qty, reorderAt: item.reorderAt,
-                lastUpdated: submittedToday, lastUpdatedBy: loggedBy,
-              });
-              const m = dailyMetrics[item.name];
-              const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : qty;
-              closeItems[item.name] = {
-                beginning: m.beginning ?? 0, inQty: m.inQty, outQty: m.outQty,
-                expected, endCount: qty, variance: qty - expected,
-              };
-            }
-            await batch.commit();
-
-            const closeId = `${branch}__${department}__${submittedToday}`;
-            await saveDocById(COLS.dailyClose, closeId, {
-              id: closeId, branch, department, date: submittedToday,
-              countType: "manual", closedAt: new Date().toISOString(),
-              closedBy: loggedBy, isLocked: true, items: closeItems,
-            });
-
-            const tomorrow = addDays(submittedToday, 1);
-            const begBatch = writeBatch(db);
-            let begCount = 0;
-            for (const [itemName, data] of Object.entries(closeItems)) {
-              const begId = beginningDocId(branch, department, itemName, tomorrow);
-              begBatch.set(doc(db, COLS.dailyBeginning, begId), {
-                id: begId, branch, department, item: itemName, date: tomorrow,
-                qty: data.endCount, setBy: loggedBy, updatedAt: submittedToday,
-              });
-              begCount++;
-            }
-            if (begCount > 0) await begBatch.commit();
-
-            localStorage.removeItem(`counts_${branch}_${department}_${submittedToday}`);
-            setEndCounts({});
-            setRecountItems(new Set());
-            setShowReview(false);
-          }}
-          onClose={() => { setRecountItems(new Set()); setShowReview(false); }}
+      {showSubmitAll && (
+        <SubmitAllModal
+          drafts={drafts}
+          totalCounted={Object.values(endCounts).filter(v => v !== "").length}
+          onConfirm={handleSubmitAll}
+          onClose={() => setShowSubmitAll(false)}
+          loading={submitLoading}
         />
       )}
 

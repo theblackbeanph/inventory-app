@@ -184,6 +184,17 @@ export interface PortioningRun {
   notes?: string;
 }
 
+export interface StocktakeDraft {
+  id: string;         // `${branch}__${department}__${date}__${location}`
+  branch: Branch;
+  department: Department;
+  date: string;       // YYYY-MM-DD
+  location: string;   // LocationId
+  counts: Record<string, number>;
+  savedAt: string;    // ISO timestamp
+  savedBy: string;
+}
+
 export interface DailyBeginning {
   id: string;        // `${branch}__${department}__${item}__${date}`
   branch: Branch;
