@@ -1,27 +1,27 @@
 "use client";
 import { useEffect, useState } from "react";
 
-const CURRENT = process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA ?? "dev";
 const POLL_MS = 5 * 60 * 1000;
 
 export default function UpdateBanner() {
   const [outdated, setOutdated] = useState(false);
 
   useEffect(() => {
-    if (CURRENT === "dev") return;
+    let baseline: string | null = null;
 
     async function check() {
       try {
         const res = await fetch("/api/version", { cache: "no-store" });
         const { version } = await res.json();
-        console.debug("[UpdateBanner] client:", CURRENT, "server:", version);
-        if (version !== CURRENT) setOutdated(true);
+        if (version === "dev") return;
+        if (baseline === null) { baseline = version; return; }
+        if (version !== baseline) setOutdated(true);
       } catch {
         // silently ignore network errors
       }
     }
 
-    check(); // immediate check on mount
+    check(); // establish baseline on mount
     const id = setInterval(check, POLL_MS);
     return () => clearInterval(id);
   }, []);
