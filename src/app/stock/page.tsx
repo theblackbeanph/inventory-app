@@ -9,7 +9,7 @@ import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, 
 import BottomNav from "@/components/BottomNav";
 
 import {
-  todayPHT, syncDatePHT, addDays, computeMetrics, matchesFilter,
+  todayPHT, businessDatePHT, syncDatePHT, addDays, computeMetrics, matchesFilter,
   CATEGORY_FILTERS,
   type SubTab, type FilterTab,
 } from "./_lib/helpers";
@@ -23,7 +23,7 @@ import { ResetModal } from "./_components/ResetModal";
 
 export default function StockPage() {
   const router = useRouter();
-  const [today] = useState(todayPHT);
+  const [today] = useState(businessDatePHT);
   const [branch, setBranch] = useState<Branch | null>(null);
   const [department, setDept] = useState<Department | null>(null);
   const [stocks, setStocks] = useState<Record<string, BranchStock>>({});
@@ -35,7 +35,7 @@ export default function StockPage() {
   const [categoryFilter, setCategoryFilter] = useState<FilterTab>("all");
 
   // Daily tab
-  const [summaryDate, setSummaryDate] = useState(todayPHT);
+  const [summaryDate, setSummaryDate] = useState(businessDatePHT);
   const [summaryAdj, setSummaryAdj] = useState<StockAdjustment[]>([]);
   const [summaryBeg, setSummaryBeg] = useState<Record<string, number>>({});
   const [varOnly, setVarOnly] = useState(false);
@@ -68,22 +68,22 @@ export default function StockPage() {
       setStocks(map);
     });
 
-    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", b), where("department", "==", dept), where("date", "==", todayPHT()));
+    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", b), where("department", "==", dept), where("date", "==", businessDatePHT()));
     const unsubAdj = onSnapshot(adjQ, snap => setAdjustments(snap.docs.map(d => d.data() as StockAdjustment)));
 
-    const begQ = query(collection(db, COLS.dailyBeginning), where("branch", "==", b), where("department", "==", dept), where("date", "==", todayPHT()));
+    const begQ = query(collection(db, COLS.dailyBeginning), where("branch", "==", b), where("department", "==", dept), where("date", "==", businessDatePHT()));
     const unsubBeg = onSnapshot(begQ, snap => {
       const map: Record<string, number> = {};
       snap.docs.forEach(d => { const beg = d.data() as DailyBeginning; map[beg.item] = beg.qty; });
       setBeginnings(map);
     });
 
-    const closeQ = query(collection(db, COLS.dailyClose), where("branch", "==", b), where("department", "==", dept), where("date", "==", todayPHT()));
+    const closeQ = query(collection(db, COLS.dailyClose), where("branch", "==", b), where("department", "==", dept), where("date", "==", businessDatePHT()));
     const unsubClose = onSnapshot(closeQ, snap => {
       setDayClose(snap.empty ? null : snap.docs[0].data() as DailyClose);
     });
 
-    const draftQ = query(collection(db, COLS.stocktakeDrafts), where("branch", "==", b), where("department", "==", dept), where("date", "==", todayPHT()));
+    const draftQ = query(collection(db, COLS.stocktakeDrafts), where("branch", "==", b), where("department", "==", dept), where("date", "==", businessDatePHT()));
     const unsubDrafts = onSnapshot(draftQ, snap => {
       const map: Record<string, StocktakeDraft> = {};
       snap.docs.forEach(d => { const dr = d.data() as StocktakeDraft; map[dr.location] = dr; });
@@ -172,7 +172,7 @@ export default function StockPage() {
       const batch = writeBatch(db);
       const now = Date.now();
       const closeItems: DailyClose["items"] = {};
-      const submittedToday = todayPHT();
+      const submittedToday = businessDatePHT();
       const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
 
       for (const item of deptCatalog) {

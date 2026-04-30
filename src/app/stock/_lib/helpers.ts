@@ -26,6 +26,13 @@ export function todayPHT(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
+// Business date: before 2am PHT, the active business day is still yesterday (matches cron cutoff)
+export function businessDatePHT(): string {
+  const pht = new Date(Date.now() + 8 * 60 * 60 * 1000);
+  if (pht.getUTCHours() < 2) pht.setUTCDate(pht.getUTCDate() - 1);
+  return pht.toISOString().slice(0, 10);
+}
+
 // Business date for StoreHub sync: before 7 AM PHT, the active business day is still yesterday
 export function syncDatePHT(): string {
   const pht = new Date(Date.now() + 8 * 60 * 60 * 1000);
