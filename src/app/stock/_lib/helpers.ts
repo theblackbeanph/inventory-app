@@ -1,8 +1,8 @@
 import type { StockAdjustment } from "@/lib/types";
-import { CATALOG } from "@/lib/items";
+import { CATALOG, LOCATIONS } from "@/lib/items";
 
 export type SubTab = "daily" | "manualcount";
-export type FilterTab = "all" | "commissary_pc" | "commissary_loose" | "supplier";
+export type FilterTab = "all" | typeof LOCATIONS[number]["id"];
 
 export interface DailyMetrics {
   beginning: number | null;
@@ -13,18 +13,13 @@ export interface DailyMetrics {
 }
 
 export const CATEGORY_FILTERS: { id: FilterTab; label: string }[] = [
-  { id: "all",              label: "All" },
-  { id: "commissary_pc",    label: "Commissary (pc)" },
-  { id: "commissary_loose", label: "Commissary (loose)" },
-  { id: "supplier",         label: "Supplier" },
+  { id: "all", label: "All" },
+  ...LOCATIONS.map(l => ({ id: l.id as FilterTab, label: l.label })),
 ];
 
 export function matchesFilter(item: typeof CATALOG[number], filter: FilterTab): boolean {
   if (filter === "all") return true;
-  if (filter === "commissary_pc") return item.category === "portion" || item.category === "packed";
-  if (filter === "commissary_loose") return item.category === "loose";
-  if (filter === "supplier") return item.category === "supplier";
-  return true;
+  return item.location === filter;
 }
 
 export function todayPHT(): string {

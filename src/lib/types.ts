@@ -14,6 +14,7 @@ export interface CatalogItem {
   reorderAt: number;
   packSize: string;
   department: Department;
+  location: string;       // storage location — used for stocktake filters (e.g. "front_kitchen")
   ordersPerPack?: number; // loose items only — orders needed to consume 1 pack
   branches?: Branch[];    // if set, only these branches carry this item
 }
