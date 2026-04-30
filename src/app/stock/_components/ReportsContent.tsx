@@ -188,44 +188,22 @@ export function ReportsContent({ branch, department, items }: {
       {/* Unmatched SKUs — MKT only */}
       {branch === "MKT" && !loading && (
         <div style={{ marginTop: 24 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
-            <div style={{ fontSize: 13, fontWeight: 700 }}>Unmatched SKUs (StoreHub)</div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>Unmatched SKUs (StoreHub)</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+                {unmatchedDocs.length === 0 ? "No unmatched SKUs this week." : `${unmatchedDocs.reduce((n, d) => n + d.items.length, 0)} SKUs across ${unmatchedDocs.length} day(s)`}
+              </div>
+            </div>
             {unmatchedDocs.length > 0 && (
               <button
                 onClick={exportUnmatchedCSV}
-                style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid var(--border)", background: "#fff", fontSize: 12, fontWeight: 600, cursor: "pointer", color: "var(--text)" }}
+                style={{ padding: "8px 16px", borderRadius: 10, border: "1.5px solid var(--border)", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text)", whiteSpace: "nowrap" }}
               >
                 Export CSV
               </button>
             )}
           </div>
-          {unmatchedDocs.length === 0 ? (
-            <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: "20px 0", fontSize: 13 }}>No unmatched SKUs this week.</div>
-          ) : (
-            <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, background: "#fff", borderRadius: 12, overflow: "hidden" }}>
-                <thead>
-                  <tr style={{ background: "var(--bg)" }}>
-                    {["Date", "SKU", "Product Name", "Qty Sold"].map(h => (
-                      <th key={h} style={{ padding: "8px 10px", fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", color: "var(--text-secondary)", textTransform: "uppercase", textAlign: h === "Product Name" ? "left" : "center", whiteSpace: "nowrap", borderBottom: "1px solid var(--border)" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {unmatchedDocs.flatMap(doc =>
-                    doc.items.map((it, i) => (
-                      <tr key={`${doc.date}-${it.sku}-${i}`} style={{ borderBottom: "1px solid var(--border)" }}>
-                        <td style={{ padding: "9px 10px", textAlign: "center", color: "var(--text-secondary)", whiteSpace: "nowrap" }}>{formatDate(doc.date)}</td>
-                        <td style={{ padding: "9px 10px", textAlign: "center", fontFamily: "monospace", fontSize: 12, color: "var(--text-secondary)" }}>{it.sku}</td>
-                        <td style={{ padding: "9px 10px", fontWeight: 500 }}>{it.name}</td>
-                        <td style={{ padding: "9px 10px", textAlign: "center", fontWeight: 700, color: "#D97706" }}>{it.qty}</td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-          )}
         </div>
       )}
     </div>
