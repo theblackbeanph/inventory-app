@@ -8,6 +8,10 @@
       "schedule": "0 2 * * 6"
     },
     {
+      "path": "/api/cron/storehub-sync",
+      "schedule": "0 16 * * *"
+    },
+    {
       "path": "/api/cron/rollover",
       "schedule": "0 18 * * *"
     }
