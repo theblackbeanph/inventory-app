@@ -3,7 +3,7 @@ import type { CatalogItem } from "./types";
 export const CATALOG: CatalogItem[] = [
   // ── PORTIONS (pc) ────────────────────────────────────────────────────
   { name: "Cobbler",                 category: "portion", unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen" },
-  { name: "Salmon Slab",             category: "portion", unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen" },
+  { name: "Salmon Fillet",            category: "portion", unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen" },
   { name: "Smoked Salmon",           category: "portion", unit: "pc", reorderAt: 20, packSize: "1 pc",    department: "kitchen" },
   { name: "Aburi Salmon",            category: "portion", unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen" },
   { name: "Beef Tapa",               category: "portion", unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen" },
@@ -20,7 +20,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Bacon Cubes",             category: "portion", unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen" },
   { name: "Prosciutto",              category: "portion", unit: "pc", reorderAt: 20, packSize: "1 pc",    department: "kitchen" },
   // ── PACKED (pc) ──────────────────────────────────────────────────────
-  { name: "Tomahawk Porkchops",      category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen" },
+  { name: "Tomahawk Porkchop",       category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen" },
   { name: "Miso Butter Paste",       category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen" },
   { name: "Au Jus",                  category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen" },
   { name: "Bacon Jam",               category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen" },

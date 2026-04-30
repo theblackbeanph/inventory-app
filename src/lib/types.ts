@@ -38,7 +38,8 @@ export interface StockAdjustment {
   date: string;
   item: string;
   type: AdjustmentType;
-  qty: number;
+  qty: number;           // pack count for loose items, unit count for portions/packed
+  rawOrders?: number;    // loose sales_import only — raw POS order count, for display/validation
   note?: string;
   loggedBy: string;
   source?: "csv" | "storehub";

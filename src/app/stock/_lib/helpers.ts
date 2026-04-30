@@ -7,7 +7,8 @@ export type FilterTab = "all" | "commissary_pc" | "commissary_loose" | "supplier
 export interface DailyMetrics {
   beginning: number | null;
   inQty: number;
-  outQty: number;
+  outQty: number;      // pack-based — used for EXP formula
+  salesOrders: number; // raw POS order count from sales_import — display only, does not feed EXP
   endCount: number | null;
 }
 
@@ -64,7 +65,7 @@ export function computeMetrics(
 ): Record<string, DailyMetrics> {
   const metrics: Record<string, DailyMetrics> = {};
   for (const item of catalog) {
-    metrics[item.name] = { beginning: beginnings[item.name] ?? null, inQty: 0, outQty: 0, endCount: null };
+    metrics[item.name] = { beginning: beginnings[item.name] ?? null, inQty: 0, outQty: 0, salesOrders: 0, endCount: null };
   }
   const latestCount: Record<string, { qty: number; id: number }> = {};
   for (const adj of adjustments) {
@@ -72,8 +73,11 @@ export function computeMetrics(
     const m = metrics[adj.item];
     if (adj.type === "in") {
       m.inQty += adj.qty;
-    } else if (adj.type === "out" || adj.type === "waste" || adj.type === "sales_import") {
+    } else if (adj.type === "out" || adj.type === "waste") {
       m.outQty += adj.qty;
+    } else if (adj.type === "sales_import") {
+      m.outQty += adj.qty; // qty is always pack-based
+      if (adj.rawOrders !== undefined) m.salesOrders += adj.rawOrders;
     } else if (adj.type === "count") {
       if (!latestCount[adj.item] || adj.id > latestCount[adj.item].id) {
         latestCount[adj.item] = { qty: adj.qty, id: adj.id };

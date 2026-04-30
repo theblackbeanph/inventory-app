@@ -1,6 +1,9 @@
 "use client";
 import { useState } from "react";
-import type { Branch, Department } from "@/lib/types";
+import { auth, db, COLS, writeBatch, doc, setDoc } from "@/lib/firebase";
+import { CATALOG_MAP, stockDocId, itemSlug } from "@/lib/items";
+import { BRANCH_LABELS } from "@/lib/auth";
+import type { Branch, Department, StockAdjustment } from "@/lib/types";
 
 export function StoreHubSyncModal({ branch, department, today, onClose, onComplete }: {
   branch: Branch;
@@ -25,17 +28,39 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
       const salesData = await salesRes.json();
       if (!salesRes.ok) throw new Error(salesData.error ?? "Failed to fetch sales");
 
-      const matched: { item: string; qty: number }[] = salesData.matched;
+      const matched: { item: string; qty: number; rawOrders?: number }[] = salesData.matched;
       const unmatched: { sku: string; name: string; qty: number }[] = salesData.unmatchedSkus ?? [];
 
-      // Save to inventory
-      const syncRes = await fetch("/api/storehub/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ branch, department, today, matched, unmatched }),
+      // Wait for Firebase Auth session restore before writing
+      await auth.authStateReady();
+      const batch = writeBatch(db);
+      const now = Date.now();
+      for (const { item, qty, rawOrders } of matched) {
+        const catalogItem = CATALOG_MAP.get(item);
+        if (!catalogItem) continue;
+        const adjId = `storehub__${branch}__${department}__${today}__${itemSlug(item)}`;
+        const adj: StockAdjustment = {
+          id: now, branch, department, date: today, item,
+          type: "sales_import", qty, loggedBy: BRANCH_LABELS[branch],
+          ...(rawOrders !== undefined && { rawOrders }),
+        };
+        batch.set(doc(db, COLS.adjustments, adjId), adj);
+        const sid = stockDocId(branch, department, item);
+        batch.set(doc(db, COLS.branchStock, sid), {
+          id: sid, branch, department, item, category: catalogItem.category,
+          unit: catalogItem.unit, qty: 0,
+          reorderAt: catalogItem.reorderAt,
+          lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],
+        });
+      }
+      await batch.commit();
+
+      const unmatchedDocId = `${branch}__${today}`;
+      await setDoc(doc(db, COLS.storehubUnmatched, unmatchedDocId), {
+        id: unmatchedDocId, branch, date: today,
+        syncedAt: new Date().toISOString(),
+        items: unmatched,
       });
-      const syncData = await syncRes.json();
-      if (!syncRes.ok) throw new Error(syncData.error ?? "Failed to save");
 
       setMatchedCount(matched.length);
       onComplete(matched.length, unmatched.length);

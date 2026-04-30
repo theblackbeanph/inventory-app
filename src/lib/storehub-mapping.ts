@@ -77,23 +77,26 @@ export function allMappedSkus(): Set<string> {
 // Apply mapping: soldBySkuMap is { sku → qty sold }
 export function applyStoreHubMapping(
   soldBySkuMap: Record<string, number>
-): { item: string; qty: number }[] {
-  const results: { item: string; qty: number }[] = [];
+): { item: string; qty: number; rawOrders?: number }[] {
+  const results: { item: string; qty: number; rawOrders?: number }[] = [];
   for (const entry of STOREHUB_MAPPING) {
-    let rawOrders = 0;
+    let orders = 0;
     for (const link of entry.linkedSkus) {
       const sku    = typeof link === "string" ? link : link.sku;
       const perQty = typeof link === "string" ? 1 : link.qty;
       const count  = soldBySkuMap[sku] ?? 0;
       if (!count) continue;
-      rawOrders += count * perQty;
+      orders += count * perQty;
     }
-    if (rawOrders <= 0) continue;
-    // Loose items: convert raw order count to packs consumed via SPP
-    const qty = entry.ordersPerPack
-      ? Math.floor(rawOrders / entry.ordersPerPack)
-      : rawOrders;
-    if (qty > 0) results.push({ item: entry.item, qty });
+    if (orders <= 0) continue;
+    if (entry.ordersPerPack) {
+      // Loose items: qty = packs consumed (for formula); rawOrders = order count (for display)
+      const qty = Math.ceil(orders / entry.ordersPerPack);
+      results.push({ item: entry.item, qty, rawOrders: orders });
+    } else {
+      // Portions/packed: 1 order = 1 unit, no rawOrders needed
+      results.push({ item: entry.item, qty: orders });
+    }
   }
   return results;
 }

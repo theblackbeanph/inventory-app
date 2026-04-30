@@ -40,6 +40,7 @@ After any session where a feature is completed, a bug is fixed, or the architect
 - Commissary uses: **email/password Firebase Auth**
 - Firestore security rules updated (`firestore.rules`) — branch collections open to any authenticated user, commissary writes restricted to known emails
 - Phase 2 can proceed: both apps use proper Firebase Auth, shared collections are accessible to both
+- **`auth` is exported from `src/lib/firebase.ts`** — any client component that writes to Firestore must `await auth.authStateReady()` before the write, otherwise Firebase Auth may not have restored its session yet and the write will be rejected with PERMISSION_DENIED
 
 ### Recipe Database (future 3rd app — not yet built)
 - Will share the same Firebase project (`commissary-dashboard-ccd7c`)

@@ -104,7 +104,16 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDa
                   </td>
                   <td style={tdStyle}>{m.beginning ?? "—"}</td>
                   <td style={{ ...tdStyle, color: m.inQty > 0 ? "#16A34A" : undefined }}>{m.inQty > 0 ? `+${m.inQty}` : "—"}</td>
-                  <td style={{ ...tdStyle, color: m.outQty > 0 ? "#DC2626" : undefined }}>{m.outQty > 0 ? `−${m.outQty}` : "—"}</td>
+                  <td style={{ ...tdStyle, color: m.outQty > 0 ? "#DC2626" : undefined }}>
+                    {m.outQty > 0 ? (
+                      <>
+                        <div>{`−${m.outQty}`}</div>
+                        {m.salesOrders > 0 && (
+                          <div style={{ fontSize: 10, color: "var(--text-secondary)", fontWeight: 400 }}>{m.salesOrders} orders</div>
+                        )}
+                      </>
+                    ) : "—"}
+                  </td>
                   <td style={tdStyle}>{expected ?? "—"}</td>
                   <td style={tdStyle}>{m.endCount ?? "—"}</td>
                   <td style={{ ...tdStyle, color: varColor, fontWeight: 700 }}>
