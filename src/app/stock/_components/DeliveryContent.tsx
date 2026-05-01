@@ -46,9 +46,13 @@ export function DeliveryContent({ items, stocks, deliveryCounts, deliveryDate, o
 
   async function handleSave() {
     setSaveStatus("saving");
-    await onSaveDelivery();
-    setSaveStatus("saved");
-    setTimeout(() => setSaveStatus("idle"), 2000);
+    try {
+      await onSaveDelivery();
+      setSaveStatus("saved");
+      setTimeout(() => setSaveStatus("idle"), 2000);
+    } catch {
+      setSaveStatus("idle");
+    }
   }
 
   return (
