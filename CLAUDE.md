@@ -35,6 +35,18 @@ After any session where a feature is completed, a bug is fixed, or the architect
 - **Discrepancy handling**: commissary adjusts their inventory + notifies branch; branch re-requests if replacement needed; no auto-replacement sends from commissary
 - **Cutover strategy**: 1-week shadow mode (Orders tab visible but old flow still active), then hard disable
 
+### Business Date vs. Calendar Date
+- **`businessDatePHT()`** in `src/app/stock/_lib/helpers.ts` — use this (not `todayPHT()`) for all stocktake writes and queries
+- Before 2am PHT, the active business day is still yesterday — matches the rollover cron schedule (`0 18 * * *` UTC = 02:00 PHT)
+- `todayPHT()` flips at midnight PHT; `businessDatePHT()` flips at 2am PHT
+- All stock page state, Firestore queries, and `handleSubmitAll` use `businessDatePHT()`
+
+### Update Banner
+- `src/components/UpdateBanner.tsx` — polls `/api/version` every 5 minutes
+- Compares `NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA` baked into the client bundle vs. the live server response
+- Shows a sticky "please refresh" banner when a new deployment is detected
+- Skipped entirely in local dev (SHA = `"dev"`)
+
 ### Auth — Resolved 2026-04-29
 - Branch now uses: **email/password Firebase Auth** — role system (superadmin/admin/linecook), `__identity` cookie, route-protection middleware
 - Commissary uses: **email/password Firebase Auth**
