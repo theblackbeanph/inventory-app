@@ -77,7 +77,7 @@ export function StocktakeContent({ items, metrics, endCounts, currentFilter, sto
           alignItems: "center", cursor: "pointer", textAlign: "left" as const,
         }}>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 13, color: "#92400E" }}>⏳ Pending Stocktake</div>
+            <div style={{ fontWeight: 700, fontSize: 13, color: "#92400E" }}>Pending Stocktake</div>
             <div style={{ fontSize: 11, color: "#B45309", marginTop: 2 }}>
               {totalEntered} of {items.length} items counted · tap to review
             </div>
