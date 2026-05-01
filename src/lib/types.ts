@@ -195,6 +195,16 @@ export interface StocktakeDraft {
   savedBy: string;
 }
 
+export interface DeliveryDraft {
+  id: string;         // `${branch}__${department}__${date}`
+  branch: Branch;
+  department: Department;
+  date: string;       // YYYY-MM-DD
+  counts: Record<string, number>;
+  savedAt: string;    // ISO timestamp
+  savedBy: string;
+}
+
 export interface DailyBeginning {
   id: string;        // `${branch}__${department}__${item}__${date}`
   branch: Branch;

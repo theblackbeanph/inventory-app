@@ -40,6 +40,7 @@ export const COLS = {
   portioningRuns:     "portioning_runs",
   storehubUnmatched:  "storehub_unmatched",
   stocktakeDrafts:    "stocktake_drafts",
+  deliveryDrafts:     "delivery_drafts",
   users:              "users",
 } as const;
 
