@@ -4,8 +4,8 @@ import { useRouter } from "next/navigation";
 import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
 import { auth, db, COLS, saveDocById } from "@/lib/firebase";
 import { CATALOG, stockDocId, beginningDocId } from "@/lib/items";
-import { collection, onSnapshot, query, where, getDocs, writeBatch, doc } from "@/lib/firebase";
-import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, DailyClose, StocktakeDraft } from "@/lib/types";
+import { collection, onSnapshot, query, where, getDocs, writeBatch, doc, deleteDoc } from "@/lib/firebase";
+import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, DailyClose, StocktakeDraft, DeliveryDraft } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 
 import {
@@ -17,6 +17,8 @@ import { DailyContent } from "./_components/DailyContent";
 import { StocktakeContent } from "./_components/StocktakeContent";
 import { StocktakeCompleted } from "./_components/StocktakeCompleted";
 import { StocktakeReviewSheet } from "./_components/StocktakeReviewSheet";
+import { DeliveryContent } from "./_components/DeliveryContent";
+import { DeliveryReviewSheet } from "./_components/DeliveryReviewSheet";
 import { StoreHubSyncModal } from "./_components/StoreHubSyncModal";
 import { CSVImportModal } from "./_components/CSVImportModal";
 import { ResetModal } from "./_components/ResetModal";
@@ -51,6 +53,13 @@ export default function StockPage() {
   const [showSubmitAll, setShowSubmitAll] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const draftsInitRef = useRef(false);
+
+  // Delivery tab
+  const [deliveryDate, setDeliveryDate] = useState(businessDatePHT);
+  const [deliveryCounts, setDeliveryCounts] = useState<Record<string, string>>({});
+  const [showDeliveryReview, setShowDeliveryReview] = useState(false);
+  const [deliverySubmitLoading, setDeliverySubmitLoading] = useState(false);
+  const deliveryDraftsInitRef = useRef(false);
 
   // Modals
   const [showReset, setShowReset] = useState(false);
@@ -130,6 +139,28 @@ export default function StockPage() {
     return () => { unsubAdj(); unsubBeg(); unsubClose(); unsubDrafts(); };
   }, [branch, department, stocktakeDate]);
 
+  useEffect(() => {
+    if (!branch || !department) return;
+    deliveryDraftsInitRef.current = false;
+
+    const draftId = `${branch}__${department}__${deliveryDate}`;
+    const draftRef = doc(db, COLS.deliveryDrafts, draftId);
+    const unsub = onSnapshot(draftRef, snap => {
+      if (!deliveryDraftsInitRef.current) {
+        deliveryDraftsInitRef.current = true;
+        if (snap.exists()) {
+          const draft = snap.data() as DeliveryDraft;
+          const counts: Record<string, string> = {};
+          for (const [item, qty] of Object.entries(draft.counts)) {
+            counts[item] = String(qty);
+          }
+          if (Object.keys(counts).length > 0) setDeliveryCounts(counts);
+        }
+      }
+    });
+    return () => unsub();
+  }, [branch, department, deliveryDate]);
+
 
   // Fetch Daily tab data when summaryDate changes
   useEffect(() => {
@@ -173,6 +204,61 @@ export default function StockPage() {
   function handleStocktakeDateChange(newDate: string) {
     setEndCounts({});
     setStocktakeDate(newDate);
+  }
+
+  function handleDeliveryDateChange(newDate: string) {
+    setDeliveryCounts({});
+    setDeliveryDate(newDate);
+  }
+
+  async function handleDeliverySave() {
+    if (!branch || !department) return;
+    const session = getSession();
+    const counts: Record<string, number> = {};
+    for (const [item, val] of Object.entries(deliveryCounts)) {
+      if (val !== "") {
+        const n = Number(val);
+        if (!isNaN(n) && n >= 0) counts[item] = n;
+      }
+    }
+    await auth.authStateReady();
+    const draftId = `${branch}__${department}__${deliveryDate}`;
+    await saveDocById(COLS.deliveryDrafts, draftId, {
+      id: draftId, branch, department, date: deliveryDate,
+      counts, savedAt: new Date().toISOString(),
+      savedBy: session?.displayName ?? BRANCH_LABELS[branch],
+    });
+  }
+
+  async function handleDeliverySubmit() {
+    if (!branch || !department) return;
+    setDeliverySubmitLoading(true);
+    try {
+      await auth.authStateReady();
+      const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
+      const batch = writeBatch(db);
+      const now = Date.now();
+      for (const item of deptCatalog) {
+        const val = deliveryCounts[item.name];
+        if (val === undefined || val === "") continue;
+        const qty = Number(val);
+        if (isNaN(qty) || qty <= 0) continue;
+        const adjRef = doc(collection(db, COLS.adjustments));
+        batch.set(adjRef, {
+          id: now + Math.random(), branch, department, date: deliveryDate,
+          item: item.name, type: "in", qty, loggedBy, note: "manual delivery",
+        });
+      }
+      await batch.commit();
+
+      const draftId = `${branch}__${department}__${deliveryDate}`;
+      await deleteDoc(doc(db, COLS.deliveryDrafts, draftId));
+
+      setDeliveryCounts({});
+      setShowDeliveryReview(false);
+    } finally {
+      setDeliverySubmitLoading(false);
+    }
   }
 
   async function handleSaveLocation(location: string) {
@@ -301,6 +387,7 @@ export default function StockPage() {
         <div style={{ display: "flex", gap: 2, marginBottom: 0 }}>
           {([
             { id: "daily",       label: "Daily" },
+            { id: "delivery",    label: "Delivery" },
             { id: "manualcount", label: "Stocktake" },
           ] as { id: SubTab; label: string }[]).map(tab => (
             <button key={tab.id} onClick={() => setSubTab(tab.id)} style={{
@@ -339,6 +426,18 @@ export default function StockPage() {
           branch={branch}
         />
       )}
+      {subTab === "delivery" && (
+        <DeliveryContent
+          items={filtered}
+          stocks={stocks}
+          deliveryCounts={deliveryCounts}
+          deliveryDate={deliveryDate}
+          onDateChange={handleDeliveryDateChange}
+          onCountChange={(item, val) => setDeliveryCounts(prev => ({ ...prev, [item]: val }))}
+          onSaveDelivery={handleDeliverySave}
+          onOpenReview={() => setShowDeliveryReview(true)}
+        />
+      )}
       {subTab === "manualcount" && (
         stocktakeDayClose?.isLocked
           ? <StocktakeCompleted dayClose={stocktakeDayClose} />
@@ -368,6 +467,21 @@ export default function StockPage() {
           }}
           onClose={() => setShowSubmitAll(false)}
           loading={submitLoading}
+        />
+      )}
+
+      {showDeliveryReview && (
+        <DeliveryReviewSheet
+          items={deptCatalog}
+          stocks={stocks}
+          deliveryCounts={deliveryCounts}
+          deliveryDate={deliveryDate}
+          onConfirm={handleDeliverySubmit}
+          onRecount={item => {
+            setDeliveryCounts(prev => { const n = { ...prev }; delete n[item]; return n; });
+          }}
+          onClose={() => setShowDeliveryReview(false)}
+          loading={deliverySubmitLoading}
         />
       )}
 
