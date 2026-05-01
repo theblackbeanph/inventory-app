@@ -16,7 +16,7 @@ import {
 import { DailyContent } from "./_components/DailyContent";
 import { StocktakeContent } from "./_components/StocktakeContent";
 import { StocktakeCompleted } from "./_components/StocktakeCompleted";
-import { SubmitAllModal } from "./_components/SubmitAllModal";
+import { StocktakeReviewSheet } from "./_components/StocktakeReviewSheet";
 import { StoreHubSyncModal } from "./_components/StoreHubSyncModal";
 import { CSVImportModal } from "./_components/CSVImportModal";
 import { ResetModal } from "./_components/ResetModal";
@@ -41,6 +41,10 @@ export default function StockPage() {
   const [varOnly, setVarOnly] = useState(false);
 
   // Stocktake tab
+  const [stocktakeDate, setStocktakeDate] = useState(businessDatePHT);
+  const [stocktakeAdjustments, setStocktakeAdjustments] = useState<StockAdjustment[]>([]);
+  const [stocktakeBeginnings, setStocktakeBeginnings] = useState<Record<string, number>>({});
+  const [stocktakeDayClose, setStocktakeDayClose] = useState<DailyClose | null>(null);
   const [endCounts, setEndCounts] = useState<Record<string, string>>({});
   const [drafts, setDrafts] = useState<Record<string, StocktakeDraft>>({});
   const [showSubmitAll, setShowSubmitAll] = useState(false);
@@ -83,11 +87,32 @@ export default function StockPage() {
       setDayClose(snap.empty ? null : snap.docs[0].data() as DailyClose);
     });
 
-    const draftQ = query(collection(db, COLS.stocktakeDrafts), where("branch", "==", b), where("department", "==", dept), where("date", "==", businessDatePHT()));
+    return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); };
+  }, [router]);
+
+  useEffect(() => {
+    if (!branch || !department) return;
+    draftsInitRef.current = false;
+
+    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", branch), where("department", "==", department), where("date", "==", stocktakeDate));
+    const unsubAdj = onSnapshot(adjQ, snap => setStocktakeAdjustments(snap.docs.map(d => d.data() as StockAdjustment)));
+
+    const begQ = query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("department", "==", department), where("date", "==", stocktakeDate));
+    const unsubBeg = onSnapshot(begQ, snap => {
+      const map: Record<string, number> = {};
+      snap.docs.forEach(d => { const beg = d.data() as DailyBeginning; map[beg.item] = beg.qty; });
+      setStocktakeBeginnings(map);
+    });
+
+    const closeQ = query(collection(db, COLS.dailyClose), where("branch", "==", branch), where("department", "==", department), where("date", "==", stocktakeDate));
+    const unsubClose = onSnapshot(closeQ, snap => {
+      setStocktakeDayClose(snap.empty ? null : snap.docs[0].data() as DailyClose);
+    });
+
+    const draftQ = query(collection(db, COLS.stocktakeDrafts), where("branch", "==", branch), where("department", "==", department), where("date", "==", stocktakeDate));
     const unsubDrafts = onSnapshot(draftQ, snap => {
       const map: Record<string, StocktakeDraft> = {};
       snap.docs.forEach(d => { const dr = d.data() as StocktakeDraft; map[dr.location] = dr; });
-      // Populate endCounts from drafts on first load only
       if (!draftsInitRef.current) {
         draftsInitRef.current = true;
         const counts: Record<string, string> = {};
@@ -101,8 +126,8 @@ export default function StockPage() {
       setDrafts(map);
     });
 
-    return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); unsubDrafts(); };
-  }, [router]);
+    return () => { unsubAdj(); unsubBeg(); unsubClose(); unsubDrafts(); };
+  }, [branch, department, stocktakeDate]);
 
 
   // Fetch Daily tab data when summaryDate changes
@@ -136,12 +161,19 @@ export default function StockPage() {
 
   const dailyMetrics = useMemo(() => computeMetrics(deptCatalog, adjustments, beginnings), [deptCatalog, adjustments, beginnings]);
   const summaryMetrics = useMemo(() => computeMetrics(deptCatalog, summaryAdj, summaryBeg), [deptCatalog, summaryAdj, summaryBeg]);
+  const stocktakeMetrics = useMemo(() => computeMetrics(deptCatalog, stocktakeAdjustments, stocktakeBeginnings), [deptCatalog, stocktakeAdjustments, stocktakeBeginnings]);
   const filtered = useMemo(() => deptCatalog.filter(item => matchesFilter(item, categoryFilter)), [deptCatalog, categoryFilter]);
 
   const lowCount  = deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).length;
   const critCount = deptCatalog.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).length;
   const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
+
+  function handleStocktakeDateChange(newDate: string) {
+    setEndCounts({});
+    draftsInitRef.current = false;
+    setStocktakeDate(newDate);
+  }
 
   async function handleSaveLocation(location: string) {
     if (!branch || !department) return;
@@ -156,9 +188,9 @@ export default function StockPage() {
       }
     }
     await auth.authStateReady();
-    const draftId = `${branch}__${department}__${today}__${location}`;
+    const draftId = `${branch}__${department}__${stocktakeDate}__${location}`;
     await saveDocById(COLS.stocktakeDrafts, draftId, {
-      id: draftId, branch, department, date: today, location,
+      id: draftId, branch, department, date: stocktakeDate, location,
       counts, savedAt: new Date().toISOString(),
       savedBy: session?.displayName ?? BRANCH_LABELS[branch],
     });
@@ -172,7 +204,7 @@ export default function StockPage() {
       const batch = writeBatch(db);
       const now = Date.now();
       const closeItems: DailyClose["items"] = {};
-      const submittedToday = businessDatePHT();
+      const submittedToday = stocktakeDate;
       const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
 
       for (const item of deptCatalog) {
@@ -189,7 +221,7 @@ export default function StockPage() {
           unit: item.unit, qty, reorderAt: item.reorderAt,
           lastUpdated: submittedToday, lastUpdatedBy: loggedBy,
         });
-        const m = dailyMetrics[item.name];
+        const m = stocktakeMetrics[item.name];
         const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : qty;
         closeItems[item.name] = {
           beginning: m.beginning ?? 0, inQty: m.inQty, outQty: m.outQty,
@@ -308,27 +340,28 @@ export default function StockPage() {
         />
       )}
       {subTab === "manualcount" && (
-        dayClose?.isLocked
-          ? <StocktakeCompleted dayClose={dayClose} />
+        stocktakeDayClose?.isLocked
+          ? <StocktakeCompleted dayClose={stocktakeDayClose} />
           : <StocktakeContent
               items={filtered}
-              metrics={dailyMetrics}
+              metrics={stocktakeMetrics}
               endCounts={endCounts}
-              drafts={drafts}
               currentFilter={categoryFilter}
+              stocktakeDate={stocktakeDate}
+              onDateChange={handleStocktakeDateChange}
               onCountChange={(item, val) => setEndCounts(prev => ({ ...prev, [item]: val }))}
               onSaveLocation={handleSaveLocation}
-              onSubmitAll={() => setShowSubmitAll(true)}
+              onOpenReview={() => setShowSubmitAll(true)}
             />
       )}
 
       {/* ── Modals ── */}
       {showSubmitAll && (
-        <SubmitAllModal
+        <StocktakeReviewSheet
           items={deptCatalog}
-          metrics={dailyMetrics}
+          metrics={stocktakeMetrics}
           endCounts={endCounts}
-          drafts={drafts}
+          stocktakeDate={stocktakeDate}
           onConfirm={handleSubmitAll}
           onRecount={item => {
             setEndCounts(prev => { const n = { ...prev }; delete n[item]; return n; });
