@@ -12,11 +12,12 @@ export function StocktakeContent({ items, metrics, endCounts, currentFilter, sto
   stocktakeDate: string;
   onDateChange: (date: string) => void;
   onCountChange: (item: string, val: string) => void;
-  onSaveLocation: (location: string) => void;
+  onSaveLocation: (location: string) => Promise<void>;
   onOpenReview: () => void;
 }) {
   const [pendingDate, setPendingDate] = useState<string | null>(null);
   const [showWarning, setShowWarning] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
 
   const today = businessDatePHT();
   const yesterday = addDays(today, -1);
@@ -37,6 +38,14 @@ export function StocktakeContent({ items, metrics, endCounts, currentFilter, sto
     } else {
       onDateChange(newDate);
     }
+  }
+
+  async function handleSave() {
+    if (!activeLocation) return;
+    setSaveStatus("saving");
+    await onSaveLocation(activeLocation.id);
+    setSaveStatus("saved");
+    setTimeout(() => setSaveStatus("idle"), 2000);
   }
 
   function confirmSwitch() {
@@ -127,17 +136,19 @@ export function StocktakeContent({ items, metrics, endCounts, currentFilter, sto
       {/* Bottom bar */}
       <div style={{ position: "fixed", bottom: "calc(var(--nav-h) + 12px)", left: 0, right: 0, padding: "0 16px", zIndex: 30, display: "flex", gap: 8 }}>
         <button
-          onClick={() => activeLocation && onSaveLocation(activeLocation.id)}
-          disabled={!canSave}
+          onClick={handleSave}
+          disabled={!canSave || saveStatus === "saving"}
           style={{
             flex: 1, padding: "15px 0", borderRadius: 14,
-            border: "1.5px solid var(--border)", fontWeight: 700, fontSize: 14,
-            cursor: canSave ? "pointer" : "not-allowed",
-            background: "#fff",
-            color: canSave ? "var(--text)" : "var(--text-secondary)",
+            border: `1.5px solid ${saveStatus === "saved" ? "#16A34A" : "var(--border)"}`,
+            fontWeight: 700, fontSize: 14,
+            cursor: canSave && saveStatus !== "saving" ? "pointer" : "not-allowed",
+            background: saveStatus === "saved" ? "#F0FDF4" : "#fff",
+            color: saveStatus === "saved" ? "#16A34A" : canSave ? "var(--text)" : "var(--text-secondary)",
+            transition: "background 0.2s, border-color 0.2s, color 0.2s",
           }}
         >
-          Save
+          {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save"}
         </button>
         <button
           onClick={onOpenReview}

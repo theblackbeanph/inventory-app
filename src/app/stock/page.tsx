@@ -365,7 +365,6 @@ export default function StockPage() {
           onConfirm={handleSubmitAll}
           onRecount={item => {
             setEndCounts(prev => { const n = { ...prev }; delete n[item]; return n; });
-            setShowSubmitAll(false);
           }}
           onClose={() => setShowSubmitAll(false)}
           loading={submitLoading}
