@@ -103,16 +103,12 @@ export function DeliveryContent({ items, stocks, deliveryCounts, deliveryDate, o
       {/* Item list */}
       <div style={{ display: "flex", flexDirection: "column", gap: 1 }}>
         {items.map(item => {
-          const currentStock = stocks[item.name]?.qty ?? null;
           const val = deliveryCounts[item.name] ?? "";
           return (
             <div key={item.name} style={{ background: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--border)" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-                  {item.packSize}
-                  {currentStock !== null && <span> · Stock: <strong>{currentStock}</strong></span>}
-                </div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{item.packSize}</div>
               </div>
               <input
                 type="number"
