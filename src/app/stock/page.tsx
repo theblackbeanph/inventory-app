@@ -46,6 +46,7 @@ export default function StockPage() {
   const [stocktakeBeginnings, setStocktakeBeginnings] = useState<Record<string, number>>({});
   const [stocktakeDayClose, setStocktakeDayClose] = useState<DailyClose | null>(null);
   const [endCounts, setEndCounts] = useState<Record<string, string>>({});
+  // not rendered — used only in handleSubmitAll to delete persisted draft docs after submit
   const [drafts, setDrafts] = useState<Record<string, StocktakeDraft>>({});
   const [showSubmitAll, setShowSubmitAll] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
@@ -171,7 +172,6 @@ export default function StockPage() {
 
   function handleStocktakeDateChange(newDate: string) {
     setEndCounts({});
-    draftsInitRef.current = false;
     setStocktakeDate(newDate);
   }
 
