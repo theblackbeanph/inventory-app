@@ -42,7 +42,7 @@ export function DeliveryReviewSheet({ items, stocks, deliveryCounts, deliveryDat
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ textAlign: "right" }}>
-                  <div style={{ fontSize: 18, fontWeight: 700, color: "#1D4ED8" }}>+{qty}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#1D4ED8" }}>{qty >= 0 ? `+${qty}` : String(qty)}</div>
                   <div style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600 }}>→ {newStock}</div>
                 </div>
                 <button
