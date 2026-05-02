@@ -2,13 +2,15 @@
 import { useState } from "react";
 import { CATALOG } from "@/lib/items";
 import type { BranchStock } from "@/lib/types";
+import type { FilterTab } from "../_lib/helpers";
 import { businessDatePHT, addDays } from "../_lib/helpers";
 
-export function DeliveryContent({ items, stocks, deliveryCounts, deliveryDate, onDateChange, onCountChange, onSaveDelivery, onOpenReview }: {
+export function DeliveryContent({ items, stocks, deliveryCounts, deliveryDate, currentFilter, onDateChange, onCountChange, onSaveDelivery, onOpenReview }: {
   items: typeof CATALOG;
   stocks: Record<string, BranchStock>;
   deliveryCounts: Record<string, string>;
   deliveryDate: string;
+  currentFilter: FilterTab;
   onDateChange: (date: string) => void;
   onCountChange: (item: string, val: string) => void;
   onSaveDelivery: () => Promise<void>;
@@ -131,21 +133,23 @@ export function DeliveryContent({ items, stocks, deliveryCounts, deliveryDate, o
 
       {/* Bottom bar */}
       <div style={{ position: "fixed", bottom: "calc(var(--nav-h) + 12px)", left: 0, right: 0, padding: "0 16px", zIndex: 30, display: "flex", gap: 8 }}>
-        <button
-          onClick={handleSave}
-          disabled={!canSave || saveStatus === "saving"}
-          style={{
-            flex: 1, padding: "15px 0", borderRadius: 14,
-            border: `1.5px solid ${saveStatus === "saved" ? "#16A34A" : "var(--border)"}`,
-            fontWeight: 700, fontSize: 14,
-            cursor: canSave && saveStatus !== "saving" ? "pointer" : "not-allowed",
-            background: saveStatus === "saved" ? "#F0FDF4" : "#fff",
-            color: saveStatus === "saved" ? "#16A34A" : canSave ? "var(--text)" : "var(--text-secondary)",
-            transition: "background 0.2s, border-color 0.2s, color 0.2s",
-          }}
-        >
-          {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save"}
-        </button>
+        {currentFilter !== "all" && (
+          <button
+            onClick={handleSave}
+            disabled={!canSave || saveStatus === "saving"}
+            style={{
+              flex: 1, padding: "15px 0", borderRadius: 14,
+              border: `1.5px solid ${saveStatus === "saved" ? "#16A34A" : "var(--border)"}`,
+              fontWeight: 700, fontSize: 14,
+              cursor: canSave && saveStatus !== "saving" ? "pointer" : "not-allowed",
+              background: saveStatus === "saved" ? "#F0FDF4" : "#fff",
+              color: saveStatus === "saved" ? "#16A34A" : canSave ? "var(--text)" : "var(--text-secondary)",
+              transition: "background 0.2s, border-color 0.2s, color 0.2s",
+            }}
+          >
+            {saveStatus === "saving" ? "Saving..." : saveStatus === "saved" ? "Saved" : "Save"}
+          </button>
+        )}
         <button
           onClick={onOpenReview}
           disabled={totalEntered === 0}

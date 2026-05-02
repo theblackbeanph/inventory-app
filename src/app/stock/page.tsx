@@ -432,6 +432,7 @@ export default function StockPage() {
           stocks={stocks}
           deliveryCounts={deliveryCounts}
           deliveryDate={deliveryDate}
+          currentFilter={categoryFilter}
           onDateChange={handleDeliveryDateChange}
           onCountChange={(item, val) => setDeliveryCounts(prev => ({ ...prev, [item]: val }))}
           onSaveDelivery={handleDeliverySave}
