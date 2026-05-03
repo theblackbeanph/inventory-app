@@ -4,18 +4,14 @@ import { CATALOG } from "@/lib/items";
 import { BRANCH_LABELS } from "@/lib/auth";
 import type { DailyMetrics } from "../_lib/helpers";
 
-export function DailyContent({ items, metrics, summaryDate, today, varOnly, lowOnly, oosOnly, onDateChange, onVarOnlyChange, onLowOnlyChange, onOosOnlyChange, lowItems, oosItems, branch }: {
+export function DailyContent({ items, metrics, summaryDate, today, activeFilter, onDateChange, onFilterChange, lowItems, oosItems, branch }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   summaryDate: string;
   today: string;
-  varOnly: boolean;
-  lowOnly: boolean;
-  oosOnly: boolean;
+  activeFilter: "variance" | "low" | "oos" | null;
   onDateChange: (d: string) => void;
-  onVarOnlyChange: (v: boolean) => void;
-  onLowOnlyChange: (v: boolean) => void;
-  onOosOnlyChange: (v: boolean) => void;
+  onFilterChange: (f: "variance" | "low" | "oos" | null) => void;
   lowItems: Set<string>;
   oosItems: Set<string>;
   branch: Branch;
@@ -26,12 +22,11 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, lowO
     const variance = m.endCount !== null && expected !== null ? m.endCount - expected : null;
     return { item, m, expected, variance };
   }).filter(r => {
-    const anyActive = varOnly || lowOnly || oosOnly;
-    if (!anyActive) return true;
-    if (varOnly && r.variance !== null && r.variance !== 0) return true;
-    if (lowOnly && lowItems.has(r.item.name)) return true;
-    if (oosOnly && oosItems.has(r.item.name)) return true;
-    return false;
+    if (!activeFilter) return true;
+    if (activeFilter === "variance") return r.variance !== null && r.variance !== 0;
+    if (activeFilter === "low") return lowItems.has(r.item.name);
+    if (activeFilter === "oos") return oosItems.has(r.item.name);
+    return true;
   });
 
   function exportCSV() {
@@ -66,22 +61,19 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, lowO
           onChange={e => onDateChange(e.target.value)}
           style={{ border: "1.5px solid var(--border)", borderRadius: 8, padding: "6px 10px", fontSize: 13, background: "#fff", color: "var(--text)", outline: "none" }}
         />
-        <button
-          onClick={() => onVarOnlyChange(!varOnly)}
-          style={{ padding: "5px 12px", borderRadius: 20, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: varOnly ? "#1A1A1A" : "var(--border)", background: varOnly ? "#1A1A1A" : "#fff", color: varOnly ? "#fff" : "var(--text-secondary)" }}
-        >Variance</button>
-        {(lowItems.size > 0 || lowOnly) && (
-          <button
-            onClick={() => onLowOnlyChange(!lowOnly)}
-            style={{ padding: "5px 12px", borderRadius: 20, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: lowOnly ? "#D97706" : "#D97706", background: lowOnly ? "#D97706" : "#fff", color: lowOnly ? "#fff" : "#D97706" }}
-          >{lowItems.size} Low</button>
-        )}
-        {(oosItems.size > 0 || oosOnly) && (
-          <button
-            onClick={() => onOosOnlyChange(!oosOnly)}
-            style={{ padding: "5px 12px", borderRadius: 20, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: oosOnly ? "#DC2626" : "#DC2626", background: oosOnly ? "#DC2626" : "#fff", color: oosOnly ? "#fff" : "#DC2626" }}
-          >{oosItems.size} OOS</button>
-        )}
+        {(["variance", "low", "oos"] as const).map(f => {
+          const label = f === "variance" ? "Variance" : f === "low" ? `${lowItems.size} Low` : `${oosItems.size} OOS`;
+          if (f === "low" && lowItems.size === 0 && activeFilter !== "low") return null;
+          if (f === "oos" && oosItems.size === 0 && activeFilter !== "oos") return null;
+          const active = activeFilter === f;
+          return (
+            <button
+              key={f}
+              onClick={() => onFilterChange(active ? null : f)}
+              style={{ padding: "5px 14px", borderRadius: 20, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: active ? "#1A1A1A" : "var(--border)", background: active ? "#1A1A1A" : "#fff", color: active ? "#fff" : "var(--text-secondary)" }}
+            >{label}</button>
+          );
+        })}
       </div>
 
 <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", background: "#fff" }}>

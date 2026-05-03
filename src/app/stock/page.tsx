@@ -40,9 +40,7 @@ export default function StockPage() {
   const [summaryDate, setSummaryDate] = useState(businessDatePHT);
   const [summaryAdj, setSummaryAdj] = useState<StockAdjustment[]>([]);
   const [summaryBeg, setSummaryBeg] = useState<Record<string, number>>({});
-  const [varOnly, setVarOnly] = useState(false);
-  const [lowOnly, setLowOnly] = useState(false);
-  const [oosOnly, setOosOnly] = useState(false);
+  const [activeFilter, setActiveFilter] = useState<"variance" | "low" | "oos" | null>(null);
 
   // Stocktake tab
   const [stocktakeDate, setStocktakeDate] = useState(businessDatePHT);
@@ -199,9 +197,9 @@ export default function StockPage() {
   const filtered = useMemo(() => deptCatalog.filter(item => matchesFilter(item, categoryFilter)), [deptCatalog, categoryFilter]);
 
   const lowCount  = deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).length;
-  const critCount = deptCatalog.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).length;
+  const critCount = deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= 0; }).length;
   const lowItems  = new Set(deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).map(i => i.name));
-  const oosItems  = new Set(deptCatalog.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).map(i => i.name));
+  const oosItems  = new Set(deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= 0; }).map(i => i.name));
   const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
 
@@ -422,13 +420,9 @@ export default function StockPage() {
           metrics={summaryMetrics}
           summaryDate={summaryDate}
           today={today}
-          varOnly={varOnly}
-          lowOnly={lowOnly}
-          oosOnly={oosOnly}
+          activeFilter={activeFilter}
           onDateChange={setSummaryDate}
-          onVarOnlyChange={setVarOnly}
-          onLowOnlyChange={setLowOnly}
-          onOosOnlyChange={setOosOnly}
+          onFilterChange={setActiveFilter}
           lowItems={lowItems}
           oosItems={oosItems}
           branch={branch}
