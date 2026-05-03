@@ -9,9 +9,7 @@ import {
   exportItemSummariesCsv,
   datesInRange,
   type ItemSummary,
-  type KpiSummary,
 } from "@/app/dashboard/_lib/variance";
-import type { Role } from "@/lib/roles";
 import { BRANCH_LABELS } from "@/lib/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -38,6 +36,26 @@ function formatBarDate(date: string): string {
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
   const [, m, d] = date.split("-");
   return `${months[parseInt(m, 10) - 1]}${parseInt(d, 10)}`;
+}
+
+function btnStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: "5px 12px", borderRadius: 6, border: "1px solid",
+    fontSize: 12, fontWeight: 500, cursor: "pointer",
+    background: active ? "#0f172a" : "#fff",
+    color: active ? "#fff" : "#475569",
+    borderColor: active ? "#0f172a" : "#cbd5e1",
+  };
+}
+
+function chipStyle(active: boolean): React.CSSProperties {
+  return {
+    padding: "4px 10px", borderRadius: 20, border: "1.5px solid",
+    fontSize: 12, fontWeight: 600, cursor: "pointer",
+    background: active ? "#0f172a" : "#fff",
+    color: active ? "#fff" : "#64748b",
+    borderColor: active ? "#0f172a" : "#e2e8f0",
+  };
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -78,7 +96,7 @@ function KpiStrip({ kpis, totalLoss, totalSurplus, netVariance, presetLabel }: {
           {netVariance > 0 ? `+${netVariance}` : netVariance}
         </div>
         <div style={{ marginTop: 5, display: "flex", flexDirection: "column", gap: 2 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626" }}>↘ {totalLoss} units lost</div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626" }}>↘ {Math.abs(totalLoss)} units lost</div>
           <div style={{ fontSize: 11, fontWeight: 600, color: "#d97706" }}>↗ +{totalSurplus} units surplus</div>
           <div style={{ fontSize: 11, color: "#64748b" }}>net {netVariance > 0 ? `+${netVariance}` : netVariance} · {presetLabel}</div>
         </div>
@@ -229,24 +247,18 @@ function DetailPanel({ item, dateRange, onClose }: {
 
           <div style={{ padding: "14px 16px" }}>
             {/* Period KPIs */}
-            {(() => {
-              const sign = item.periodVariance > 0 ? "+" : "";
-              const varColor = item.periodVariance < 0 ? "#dc2626" : "#d97706";
-              return (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-                  {[
-                    { label: "Period Var", value: `${sign}${item.periodVariance}`, color: varColor },
-                    { label: "Var %", value: `${sign}${Math.round(item.periodVarPct)}%`, color: varColor },
-                    { label: "Days w/ var", value: `${item.daysWithVariance} of ${item.totalDays}`, color: "#0f172a" },
-                  ].map(kpi => (
-                    <div key={kpi.label} style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 10px" }}>
-                      <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", marginBottom: 2 }}>{kpi.label}</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: kpi.color }}>{kpi.value}</div>
-                    </div>
-                  ))}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
+              {[
+                { label: "Period Var", value: `${item.periodVariance > 0 ? "+" : ""}${item.periodVariance}`, color: item.periodVariance < 0 ? "#dc2626" : "#d97706" },
+                { label: "Var %", value: `${item.periodVariance > 0 ? "+" : ""}${Math.round(item.periodVarPct)}%`, color: item.periodVariance < 0 ? "#dc2626" : "#d97706" },
+                { label: "Days w/ var", value: `${item.daysWithVariance} of ${item.totalDays}`, color: "#0f172a" },
+              ].map(kpi => (
+                <div key={kpi.label} style={{ background: "#f8fafc", borderRadius: 8, padding: "8px 10px" }}>
+                  <div style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", marginBottom: 2 }}>{kpi.label}</div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: kpi.color }}>{kpi.value}</div>
                 </div>
-              );
-            })()}
+              ))}
+            </div>
 
             {/* Bar chart */}
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.07em", color: "#94a3b8", marginBottom: 8 }}>Daily Variance</div>
@@ -335,7 +347,6 @@ function DetailPanel({ item, dateRange, onClose }: {
 export function VarianceReport({ branch, department }: {
   branch: Branch;
   department: Department;
-  role: Role;
 }) {
   const [preset, setPreset] = useState<Preset>(7);
   const [customStart, setCustomStart] = useState("");
@@ -411,6 +422,12 @@ export function VarianceReport({ branch, department }: {
     return filtered;
   }, [rawSummaries, threshold, direction]);
 
+  useEffect(() => {
+    if (selectedItem && !filteredSummaries.find(s => s.item === selectedItem.item)) {
+      setSelectedItem(null);
+    }
+  }, [filteredSummaries, selectedItem]);
+
   const criticalItems = filteredSummaries.filter(s => s.status === "critical");
   const watchItems = filteredSummaries.filter(s => s.status === "watch");
   const normalItems = filteredSummaries.filter(s => s.status === "normal");
@@ -436,22 +453,6 @@ export function VarianceReport({ branch, department }: {
   function handleSelectItem(s: ItemSummary) {
     setSelectedItem(prev => prev?.item === s.item ? null : s);
   }
-
-  const btnStyle = (active: boolean): React.CSSProperties => ({
-    padding: "5px 12px", borderRadius: 6, border: "1px solid",
-    fontSize: 12, fontWeight: 500, cursor: "pointer",
-    background: active ? "#0f172a" : "#fff",
-    color: active ? "#fff" : "#475569",
-    borderColor: active ? "#0f172a" : "#cbd5e1",
-  });
-
-  const chipStyle = (active: boolean): React.CSSProperties => ({
-    padding: "4px 10px", borderRadius: 20, border: "1.5px solid",
-    fontSize: 12, fontWeight: 600, cursor: "pointer",
-    background: active ? "#0f172a" : "#fff",
-    color: active ? "#fff" : "#64748b",
-    borderColor: active ? "#0f172a" : "#e2e8f0",
-  });
 
   return (
     <div style={{ display: "flex", position: "relative" }}>

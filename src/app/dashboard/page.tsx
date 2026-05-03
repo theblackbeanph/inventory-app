@@ -39,7 +39,7 @@ export default function DashboardPage() {
           Variance Report
         </div>
       </div>
-      <VarianceReport branch={branch} department={department} role={role} />
+      <VarianceReport branch={branch} department={department} />
 
       <BottomNav />
     </div>
