@@ -183,7 +183,7 @@ export function VarianceReport({ branch, department, role }: {
   const pendingRows = allRows.filter(r => !explanations.has(r.docId));
   const reviewedRows = allRows.filter(r => explanations.has(r.docId));
 
-  async function saveExplanation(docId: string, item: string, date: string, reason: ExplanationReason) {
+  const saveExplanation = useCallback(async (docId: string, item: string, date: string, reason: ExplanationReason) => {
     const uid = auth.currentUser?.uid ?? "";
     const explDoc: VarianceExplanation = {
       id: docId, branch, department, item, date,
@@ -191,8 +191,17 @@ export function VarianceReport({ branch, department, role }: {
       savedBy: uid, savedAt: new Date().toISOString(),
     };
     setExplanations(prev => new Map(prev).set(docId, explDoc)); // optimistic
-    await setDoc(doc(db, COLS.varianceExplanations, docId), explDoc);
-  }
+    try {
+      await setDoc(doc(db, COLS.varianceExplanations, docId), explDoc);
+    } catch (err) {
+      setExplanations(prev => {
+        const next = new Map(prev);
+        next.delete(docId);
+        return next;
+      });
+      console.error("Failed to save explanation:", err);
+    }
+  }, [branch, department]);
 
   const presetLabel = usingCustom
     ? `${startDate} to ${endDate}`
