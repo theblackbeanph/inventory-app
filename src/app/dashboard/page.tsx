@@ -3,27 +3,25 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, BRANCH_LABELS, DEPARTMENT_LABELS } from "@/lib/auth";
 import type { Branch, Department } from "@/lib/types";
+import type { Role } from "@/lib/roles";
 import BottomNav from "@/components/BottomNav";
-import { ReportsContent } from "@/app/stock/_components/ReportsContent";
-import { CATALOG } from "@/lib/items";
+import { VarianceReport } from "@/app/dashboard/_components/VarianceReport";
 
 export default function DashboardPage() {
   const router = useRouter();
   const [branch, setBranch] = useState<Branch | null>(null);
   const [department, setDept] = useState<Department | null>(null);
+  const [role, setRole] = useState<Role | null>(null);
 
   useEffect(() => {
     const session = getSession();
     if (!session) { router.replace("/login"); return; }
     setBranch(session.branch);
     setDept(session.department);
+    setRole(session.role);
   }, [router]);
 
-  if (!branch || !department) return null;
-
-  const deptCatalog = CATALOG.filter(i =>
-    i.department === department && (!i.branches || i.branches.includes(branch))
-  );
+  if (!branch || !department || !role) return null;
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 16px)" }}>
@@ -35,11 +33,13 @@ export default function DashboardPage() {
         <div style={{ fontSize: 20, fontWeight: 700 }}>Dashboard</div>
       </div>
 
-      {/* Weekly summary */}
+      {/* Variance Report */}
       <div style={{ padding: "16px 16px 8px" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>Weekly Stock Summary</div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 12 }}>
+          Variance Report
+        </div>
       </div>
-      <ReportsContent branch={branch} department={department} items={deptCatalog} />
+      <VarianceReport branch={branch} department={department} role={role} />
 
       <BottomNav />
     </div>
