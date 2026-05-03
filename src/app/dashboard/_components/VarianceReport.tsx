@@ -437,9 +437,22 @@ export function VarianceReport({ branch, department }: {
   const presetLabel = usingCustom ? `${startDate} to ${endDate}` : `Last ${preset} days`;
   const panelDateRange = `${presetLabel} · ${formatDate(startDate)} – ${formatDate(endDate)}`;
 
+  const uniqueUnmatchedSkus = useMemo(() => {
+    const seen = new Map<string, { sku: string; name: string; qty: number; lastDate: string }>();
+    for (const d of unmatchedDocs) {
+      for (const it of d.items) {
+        const existing = seen.get(it.sku);
+        if (!existing || d.date > existing.lastDate) {
+          seen.set(it.sku, { sku: it.sku, name: it.name, qty: it.qty, lastDate: d.date });
+        }
+      }
+    }
+    return Array.from(seen.values());
+  }, [unmatchedDocs]);
+
   function exportUnmatchedCSV() {
-    const header = ["Date", "SKU", "Product Name", "Qty Sold"];
-    const rows = unmatchedDocs.flatMap(d => d.items.map(it => [d.date, it.sku, it.name, it.qty]));
+    const header = ["SKU", "Product Name", "Qty Sold (latest)"];
+    const rows = uniqueUnmatchedSkus.map(it => [it.sku, it.name, it.qty]);
     const csv = [header, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -596,12 +609,12 @@ export function VarianceReport({ branch, department }: {
                   <div>
                     <div style={{ fontSize: 13, fontWeight: 700 }}>Unmatched SKUs (StoreHub)</div>
                     <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-                      {unmatchedDocs.length === 0
+                      {uniqueUnmatchedSkus.length === 0
                         ? "No unmatched SKUs for this period."
-                        : `${unmatchedDocs.reduce((n, d) => n + d.items.length, 0)} SKUs across ${unmatchedDocs.length} day(s)`}
+                        : `${uniqueUnmatchedSkus.length} unique SKU${uniqueUnmatchedSkus.length !== 1 ? "s" : ""} not mapped to inventory`}
                     </div>
                   </div>
-                  {unmatchedDocs.length > 0 && (
+                  {uniqueUnmatchedSkus.length > 0 && (
                     <button
                       onClick={exportUnmatchedCSV}
                       style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid var(--border)", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text)", whiteSpace: "nowrap" }}

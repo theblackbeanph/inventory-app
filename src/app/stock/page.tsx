@@ -28,6 +28,7 @@ export default function StockPage() {
   const [today] = useState(businessDatePHT);
   const [branch, setBranch] = useState<Branch | null>(null);
   const [department, setDept] = useState<Department | null>(null);
+  const [role, setRole] = useState<string | null>(null);
   const [stocks, setStocks] = useState<Record<string, BranchStock>>({});
   const [adjustments, setAdjustments] = useState<StockAdjustment[]>([]);
   const [beginnings, setBeginnings] = useState<Record<string, number>>({});
@@ -72,6 +73,7 @@ export default function StockPage() {
     if (!session) { router.replace("/login"); return; }
     setBranch(session.branch);
     setDept(session.department);
+    setRole(session.role);
     const b = session.branch;
     const dept = session.department;
 
@@ -378,7 +380,7 @@ export default function StockPage() {
                 Sync sales
               </button>
             )}
-            <button onClick={() => setShowReset(true)} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: 12, padding: "4px 8px", fontWeight: 500 }}>Reset</button>
+            {role === "superadmin" && <button onClick={() => setShowReset(true)} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: 12, padding: "4px 8px", fontWeight: 500 }}>Reset</button>}
             <button onClick={async () => { await logout(); router.replace("/login"); }} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13, padding: "4px 8px" }}>Log out</button>
           </div>
         </div>
