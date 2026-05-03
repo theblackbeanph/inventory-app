@@ -140,37 +140,42 @@ export function VarianceReport({ branch, department, role }: {
 
   const fetchData = useCallback(async () => {
     setLoading(true);
-    await auth.authStateReady();
-    const [adjSnap, begSnap, explSnap] = await Promise.all([
-      getDocs(query(
-        collection(db, COLS.adjustments),
-        where("branch", "==", branch),
-        where("department", "==", department),
-        where("date", ">=", startDate),
-        where("date", "<=", endDate),
-      )),
-      getDocs(query(
-        collection(db, COLS.dailyBeginning),
-        where("branch", "==", branch),
-        where("department", "==", department),
-        where("date", ">=", startDate),
-        where("date", "<=", endDate),
-      )),
-      getDocs(query(
-        collection(db, COLS.varianceExplanations),
-        where("branch", "==", branch),
-        where("department", "==", department),
-      )),
-    ]);
-    setAdjustments(adjSnap.docs.map(d => d.data() as StockAdjustment));
-    setBeginnings(begSnap.docs.map(d => d.data() as DailyBeginning));
-    const explMap = new Map<string, VarianceExplanation>();
-    explSnap.docs.forEach(d => {
-      const e = d.data() as VarianceExplanation;
-      if (e.date >= startDate && e.date <= endDate) explMap.set(e.id, e);
-    });
-    setExplanations(explMap);
-    setLoading(false);
+    try {
+      await auth.authStateReady();
+      const [adjSnap, begSnap, explSnap] = await Promise.all([
+        getDocs(query(
+          collection(db, COLS.adjustments),
+          where("branch", "==", branch),
+          where("department", "==", department),
+          where("date", ">=", startDate),
+          where("date", "<=", endDate),
+        )),
+        getDocs(query(
+          collection(db, COLS.dailyBeginning),
+          where("branch", "==", branch),
+          where("department", "==", department),
+          where("date", ">=", startDate),
+          where("date", "<=", endDate),
+        )),
+        getDocs(query(
+          collection(db, COLS.varianceExplanations),
+          where("branch", "==", branch),
+          where("department", "==", department),
+        )),
+      ]);
+      setAdjustments(adjSnap.docs.map(d => d.data() as StockAdjustment));
+      setBeginnings(begSnap.docs.map(d => d.data() as DailyBeginning));
+      const explMap = new Map<string, VarianceExplanation>();
+      explSnap.docs.forEach(d => {
+        const e = d.data() as VarianceExplanation;
+        if (e.date >= startDate && e.date <= endDate) explMap.set(e.id, e);
+      });
+      setExplanations(explMap);
+    } catch (err) {
+      console.error("Variance report fetch failed:", err);
+    } finally {
+      setLoading(false);
+    }
   }, [branch, department, startDate, endDate]);
 
   useEffect(() => { fetchData(); }, [fetchData]);

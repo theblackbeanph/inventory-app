@@ -4,7 +4,7 @@ import { CATALOG } from "@/lib/items";
 import { BRANCH_LABELS } from "@/lib/auth";
 import type { DailyMetrics } from "../_lib/helpers";
 
-export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDateChange, onVarOnlyChange, branch }: {
+export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDateChange, onVarOnlyChange, branch, lowCount, critCount }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   summaryDate: string;
@@ -13,6 +13,8 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDa
   onDateChange: (d: string) => void;
   onVarOnlyChange: (v: boolean) => void;
   branch: Branch;
+  lowCount?: number;
+  critCount?: number;
 }) {
   const rows = items.map(item => {
     const m = metrics[item.name];
@@ -57,6 +59,12 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDa
           <input type="checkbox" checked={varOnly} onChange={e => onVarOnlyChange(e.target.checked)} style={{ width: 15, height: 15 }} />
           Variances only
         </label>
+        {lowCount != null && lowCount > 0 && (
+          <span style={{ background: "#FEF3C7", color: "#D97706", borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{lowCount} Low</span>
+        )}
+        {critCount != null && critCount > 0 && (
+          <span style={{ background: "#FEE2E2", color: "#DC2626", borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{critCount} OOS</span>
+        )}
       </div>
 
 <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)", background: "#fff" }}>

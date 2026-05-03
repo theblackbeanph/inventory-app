@@ -366,8 +366,6 @@ export default function StockPage() {
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 1 }}>{today}</div>
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {lowCount > 0 && <div style={{ background: "#FEF3C7", color: "#D97706", borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{lowCount} low</div>}
-            {critCount > 0 && <div style={{ background: "#FEE2E2", color: "#DC2626", borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{critCount} out</div>}
             {posType === "csv" && (
               <button onClick={() => setShowCSVImport(true)} style={{ background: "#EFF6FF", border: "none", color: "#2563EB", cursor: "pointer", fontSize: 12, padding: "4px 10px", fontWeight: 600, borderRadius: 8 }}>
                 Import sales
@@ -424,6 +422,8 @@ export default function StockPage() {
           onDateChange={setSummaryDate}
           onVarOnlyChange={setVarOnly}
           branch={branch}
+          lowCount={lowCount}
+          critCount={critCount}
         />
       )}
       {subTab === "delivery" && (
