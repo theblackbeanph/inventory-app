@@ -107,10 +107,9 @@ savedAt      timestamp
 
 On mount and on every date range change:
 
-1. Query `branch_adjustments` where `branch == branch`, `department == dept`, `type == "count"`, `date >= startDate`, `date <= endDate`
-2. For each unique date in results, fetch all adjustments (all types) for that date to compute `expected`
-3. Query `variance_explanations` where `branch == branch`, `department == dept` — filter client-side by date range
-4. Compute variance per row; split into Pending vs. Reviewed
+1. Query `branch_adjustments` where `branch == branch`, `department == dept`, `date >= startDate`, `date <= endDate` — fetches all adjustment types in the range in one query
+2. Query `variance_explanations` where `branch == branch`, `department == dept` — filter client-side by date range
+3. Client-side: isolate count-type rows to get variance candidates; for each, sum in/out/waste/sales_import on the same date to compute `expected`; join with explanations to split Pending vs. Reviewed
 
 All fetches are one-shot (`getDocs`), not real-time listeners — the report is a review tool, not a live dashboard.
 
