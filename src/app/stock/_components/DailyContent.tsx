@@ -4,24 +4,35 @@ import { CATALOG } from "@/lib/items";
 import { BRANCH_LABELS } from "@/lib/auth";
 import type { DailyMetrics } from "../_lib/helpers";
 
-export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDateChange, onVarOnlyChange, branch, lowCount, critCount }: {
+export function DailyContent({ items, metrics, summaryDate, today, varOnly, lowOnly, oosOnly, onDateChange, onVarOnlyChange, onLowOnlyChange, onOosOnlyChange, lowItems, oosItems, branch }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   summaryDate: string;
   today: string;
   varOnly: boolean;
+  lowOnly: boolean;
+  oosOnly: boolean;
   onDateChange: (d: string) => void;
   onVarOnlyChange: (v: boolean) => void;
+  onLowOnlyChange: (v: boolean) => void;
+  onOosOnlyChange: (v: boolean) => void;
+  lowItems: Set<string>;
+  oosItems: Set<string>;
   branch: Branch;
-  lowCount?: number;
-  critCount?: number;
 }) {
   const rows = items.map(item => {
     const m = metrics[item.name];
     const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : null;
     const variance = m.endCount !== null && expected !== null ? m.endCount - expected : null;
     return { item, m, expected, variance };
-  }).filter(r => !varOnly || (r.variance !== null && r.variance !== 0));
+  }).filter(r => {
+    const anyActive = varOnly || lowOnly || oosOnly;
+    if (!anyActive) return true;
+    if (varOnly && r.variance !== null && r.variance !== 0) return true;
+    if (lowOnly && lowItems.has(r.item.name)) return true;
+    if (oosOnly && oosItems.has(r.item.name)) return true;
+    return false;
+  });
 
   function exportCSV() {
     const header = ["Item", "Pack Size", "Beginning", "IN", "OUT", "Expected", "End Count", "Variance"];
@@ -47,7 +58,7 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDa
 
   return (
     <div style={{ padding: "12px 16px" }}>
-      <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
+      <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
         <input
           type="date"
           value={summaryDate}
@@ -55,15 +66,21 @@ export function DailyContent({ items, metrics, summaryDate, today, varOnly, onDa
           onChange={e => onDateChange(e.target.value)}
           style={{ border: "1.5px solid var(--border)", borderRadius: 8, padding: "6px 10px", fontSize: 13, background: "#fff", color: "var(--text)", outline: "none" }}
         />
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, color: "var(--text-secondary)", cursor: "pointer" }}>
-          <input type="checkbox" checked={varOnly} onChange={e => onVarOnlyChange(e.target.checked)} style={{ width: 15, height: 15 }} />
-          Variances only
-        </label>
-        {lowCount != null && lowCount > 0 && (
-          <span style={{ background: "#FEF3C7", color: "#D97706", borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{lowCount} Low</span>
+        <button
+          onClick={() => onVarOnlyChange(!varOnly)}
+          style={{ padding: "5px 12px", borderRadius: 20, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: varOnly ? "#1A1A1A" : "var(--border)", background: varOnly ? "#1A1A1A" : "#fff", color: varOnly ? "#fff" : "var(--text-secondary)" }}
+        >Variance</button>
+        {(lowItems.size > 0 || lowOnly) && (
+          <button
+            onClick={() => onLowOnlyChange(!lowOnly)}
+            style={{ padding: "5px 12px", borderRadius: 20, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: lowOnly ? "#D97706" : "#D97706", background: lowOnly ? "#D97706" : "#fff", color: lowOnly ? "#fff" : "#D97706" }}
+          >{lowItems.size} Low</button>
         )}
-        {critCount != null && critCount > 0 && (
-          <span style={{ background: "#FEE2E2", color: "#DC2626", borderRadius: 20, padding: "3px 10px", fontSize: 12, fontWeight: 600 }}>{critCount} OOS</span>
+        {(oosItems.size > 0 || oosOnly) && (
+          <button
+            onClick={() => onOosOnlyChange(!oosOnly)}
+            style={{ padding: "5px 12px", borderRadius: 20, border: "1.5px solid", fontSize: 12, fontWeight: 600, cursor: "pointer", borderColor: oosOnly ? "#DC2626" : "#DC2626", background: oosOnly ? "#DC2626" : "#fff", color: oosOnly ? "#fff" : "#DC2626" }}
+          >{oosItems.size} OOS</button>
         )}
       </div>
 

@@ -41,6 +41,8 @@ export default function StockPage() {
   const [summaryAdj, setSummaryAdj] = useState<StockAdjustment[]>([]);
   const [summaryBeg, setSummaryBeg] = useState<Record<string, number>>({});
   const [varOnly, setVarOnly] = useState(false);
+  const [lowOnly, setLowOnly] = useState(false);
+  const [oosOnly, setOosOnly] = useState(false);
 
   // Stocktake tab
   const [stocktakeDate, setStocktakeDate] = useState(businessDatePHT);
@@ -198,6 +200,8 @@ export default function StockPage() {
 
   const lowCount  = deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).length;
   const critCount = deptCatalog.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).length;
+  const lowItems  = new Set(deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).map(i => i.name));
+  const oosItems  = new Set(deptCatalog.filter(i => { const s = stocks[i.name]; return !s || s.qty <= 0; }).map(i => i.name));
   const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
 
@@ -419,11 +423,15 @@ export default function StockPage() {
           summaryDate={summaryDate}
           today={today}
           varOnly={varOnly}
+          lowOnly={lowOnly}
+          oosOnly={oosOnly}
           onDateChange={setSummaryDate}
           onVarOnlyChange={setVarOnly}
+          onLowOnlyChange={setLowOnly}
+          onOosOnlyChange={setOosOnly}
+          lowItems={lowItems}
+          oosItems={oosItems}
           branch={branch}
-          lowCount={lowCount}
-          critCount={critCount}
         />
       )}
       {subTab === "delivery" && (
