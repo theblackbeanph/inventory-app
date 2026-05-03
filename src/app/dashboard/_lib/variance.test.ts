@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeVarianceRows, buildExplanationDocId } from "./variance";
+import { computeVarianceRows, buildExplanationDocId, computeItemSummaries, datesInRange } from "./variance";
 import type { StockAdjustment, DailyBeginning } from "@/lib/types";
 
 const BASE_ADJ: StockAdjustment = {
@@ -91,8 +91,6 @@ describe("buildExplanationDocId", () => {
       .toBe("BF__kitchen__Marinara_Sauce_Blend__2026-05-01");
   });
 });
-
-import { computeItemSummaries, datesInRange } from "./variance";
 
 describe("datesInRange", () => {
   it("returns single date when start equals end", () => {
