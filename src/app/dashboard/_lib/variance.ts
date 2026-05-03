@@ -1,6 +1,5 @@
 import type { Branch, Department, StockAdjustment, DailyBeginning, VarianceExplanation } from "@/lib/types";
 import { itemSlug } from "@/lib/items";
-import { BRANCH_LABELS } from "@/lib/auth";
 
 export interface VarianceRow {
   date: string;         // YYYY-MM-DD
@@ -116,6 +115,3 @@ export function exportVarianceCsv(
   a.click();
   URL.revokeObjectURL(url);
 }
-
-// Re-export BRANCH_LABELS for convenience (used by consumers of this module)
-export { BRANCH_LABELS };
