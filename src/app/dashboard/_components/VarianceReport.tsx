@@ -113,15 +113,11 @@ export function VarianceReport({ branch, department }: {
           collection(db, COLS.adjustments),
           where("branch", "==", branch),
           where("department", "==", department),
-          where("date", ">=", startDate),
-          where("date", "<=", endDate),
         )),
         getDocs(query(
           collection(db, COLS.dailyBeginning),
           where("branch", "==", branch),
           where("department", "==", department),
-          where("date", ">=", startDate),
-          where("date", "<=", endDate),
         )),
       ];
       if (branch === "MKT") {
@@ -131,8 +127,12 @@ export function VarianceReport({ branch, department }: {
         )));
       }
       const results = await Promise.all(queries);
-      setAdjustments(results[0].docs.map(d => d.data() as StockAdjustment));
-      setBeginnings(results[1].docs.map(d => d.data() as DailyBeginning));
+      setAdjustments(
+        results[0].docs.map(d => d.data() as StockAdjustment).filter(a => a.date >= startDate && a.date <= endDate)
+      );
+      setBeginnings(
+        results[1].docs.map(d => d.data() as DailyBeginning).filter(b => b.date >= startDate && b.date <= endDate)
+      );
       if (branch === "MKT" && results[2]) {
         const docs = results[2].docs
           .map(d => d.data() as UnmatchedDoc)

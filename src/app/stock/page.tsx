@@ -196,10 +196,10 @@ export default function StockPage() {
   const stocktakeMetrics = useMemo(() => computeMetrics(deptCatalog, stocktakeAdjustments, stocktakeBeginnings), [deptCatalog, stocktakeAdjustments, stocktakeBeginnings]);
   const filtered = useMemo(() => deptCatalog.filter(item => matchesFilter(item, categoryFilter)), [deptCatalog, categoryFilter]);
 
-  const lowCount  = deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).length;
-  const critCount = deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= 0; }).length;
-  const lowItems  = new Set(deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= i.reorderAt && s.qty > 0; }).map(i => i.name));
-  const oosItems  = new Set(deptCatalog.filter(i => { const s = stocks[i.name]; return s && s.qty <= 0; }).map(i => i.name));
+  const lowCount  = deptCatalog.filter(i => { const m = dailyMetrics[i.name]; if (!m || m.beginning === null) return false; const avail = m.endCount !== null ? m.endCount : (m.beginning + m.inQty - m.outQty); return avail > 0 && avail <= i.reorderAt; }).length;
+  const critCount = deptCatalog.filter(i => { const m = dailyMetrics[i.name]; if (!m || m.beginning === null) return false; const avail = m.endCount !== null ? m.endCount : (m.beginning + m.inQty - m.outQty); return avail <= 0; }).length;
+  const lowItems  = new Set(deptCatalog.filter(i => { const m = dailyMetrics[i.name]; if (!m || m.beginning === null) return false; const avail = m.endCount !== null ? m.endCount : (m.beginning + m.inQty - m.outQty); return avail > 0 && avail <= i.reorderAt; }).map(i => i.name));
+  const oosItems  = new Set(deptCatalog.filter(i => { const m = dailyMetrics[i.name]; if (!m || m.beginning === null) return false; const avail = m.endCount !== null ? m.endCount : (m.beginning + m.inQty - m.outQty); return avail <= 0; }).map(i => i.name));
   const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
 
