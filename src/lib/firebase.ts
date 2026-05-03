@@ -28,20 +28,21 @@ export const auth = getAuth(app);
 export const db = getFirestore(app);
 
 export const COLS = {
-  branchStock:        "branch_stock",
-  adjustments:        "branch_adjustments",
-  pulloutReqs:        "pullout_requests",
-  dailyBeginning:     "daily_beginning",
-  dailyClose:         "daily_close",
-  pullOuts:           "pull_outs",
-  deliveryNotes:      "delivery_notes",
-  invEntries:         "invEntries",
-  supplierDeliveries: "supplier_deliveries",
-  portioningRuns:     "portioning_runs",
-  storehubUnmatched:  "storehub_unmatched",
-  stocktakeDrafts:    "stocktake_drafts",
-  deliveryDrafts:     "delivery_drafts",
-  users:              "users",
+  branchStock:            "branch_stock",
+  adjustments:            "branch_adjustments",
+  pulloutReqs:            "pullout_requests",
+  dailyBeginning:         "daily_beginning",
+  dailyClose:             "daily_close",
+  pullOuts:               "pull_outs",
+  deliveryNotes:          "delivery_notes",
+  invEntries:             "invEntries",
+  supplierDeliveries:     "supplier_deliveries",
+  portioningRuns:         "portioning_runs",
+  storehubUnmatched:      "storehub_unmatched",
+  stocktakeDrafts:        "stocktake_drafts",
+  deliveryDrafts:         "delivery_drafts",
+  varianceExplanations:   "variance_explanations",
+  users:                  "users",
 } as const;
 
 export async function saveDoc(col: string, item: Record<string, unknown>) {

@@ -236,3 +236,17 @@ export interface DailyClose {
   isLocked: boolean;
   items: Record<string, DailyCloseItem>;
 }
+
+export type ExplanationReason = "Counting error" | "Waste" | "Data entry error" | "Unknown";
+
+export interface VarianceExplanation {
+  id: string;          // `${branch}__${department}__${itemSlug(item)}__${date}`
+  branch: Branch;
+  department: Department;
+  item: string;
+  date: string;        // YYYY-MM-DD
+  explanation: ExplanationReason;
+  notes: string;       // Phase 2 free-text — always "" for now
+  savedBy: string;     // Firebase Auth uid
+  savedAt: string;     // ISO timestamp
+}
