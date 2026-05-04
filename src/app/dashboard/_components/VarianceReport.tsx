@@ -14,7 +14,7 @@ import { BRANCH_LABELS } from "@/lib/auth";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-type Preset = 7 | 14 | 30;
+type Preset = 7 | "mtd";
 type Direction = "all" | "loss" | "surplus";
 
 interface UnmatchedDoc {
@@ -29,6 +29,10 @@ interface UnmatchedDoc {
 
 function presetRange(days: Preset): { start: string; end: string } {
   const end = todayPHT();
+  if (days === "mtd") {
+    const [y, m] = end.split("-");
+    return { start: `${y}-${m}-01`, end };
+  }
   return { start: addDays(end, -(days - 1)), end };
 }
 
@@ -66,44 +70,6 @@ const STATUS_COLORS = {
   normal: "#94a3b8",
 } as const;
 
-function KpiStrip({ kpis, totalLoss, totalSurplus, netVariance, presetLabel }: {
-  kpis: { criticalCount: number; watchCount: number; normalCount: number };
-  totalLoss: number;
-  totalSurplus: number;
-  netVariance: number;
-  presetLabel: string;
-}) {
-  return (
-    <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 10, marginBottom: 14 }}>
-      <div style={{ background: "#fff", borderRadius: 10, border: "1px solid var(--border)", padding: "12px 14px" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94a3b8", marginBottom: 4 }}>Critical</div>
-        <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: "#dc2626" }}>{kpis.criticalCount}</div>
-        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>items need attention</div>
-      </div>
-      <div style={{ background: "#fff", borderRadius: 10, border: "1px solid var(--border)", padding: "12px 14px" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94a3b8", marginBottom: 4 }}>Watch</div>
-        <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: "#d97706" }}>{kpis.watchCount}</div>
-        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>items to monitor</div>
-      </div>
-      <div style={{ background: "#fff", borderRadius: 10, border: "1px solid var(--border)", padding: "12px 14px" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94a3b8", marginBottom: 4 }}>Normal</div>
-        <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: "#16a34a" }}>{kpis.normalCount}</div>
-        <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 3 }}>within threshold</div>
-      </div>
-      <div style={{ background: "#fff", borderRadius: 10, border: "1px solid var(--border)", padding: "12px 14px" }}>
-        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#94a3b8", marginBottom: 4 }}>Total Variance</div>
-        <div style={{ fontSize: 22, fontWeight: 700, lineHeight: 1, color: "#0f172a" }}>
-          {netVariance > 0 ? `+${netVariance}` : netVariance}
-        </div>
-        <div style={{ marginTop: 5, display: "flex", flexDirection: "column", gap: 2 }}>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#dc2626" }}>↘ {Math.abs(totalLoss)} units lost</div>
-          <div style={{ fontSize: 11, fontWeight: 600, color: "#d97706" }}>↗ +{totalSurplus} units surplus</div>
-          <div style={{ fontSize: 11, color: "#64748b" }}>net {netVariance > 0 ? `+${netVariance}` : netVariance} · {presetLabel}</div>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const TABLE_COLS = [
   { label: "Item", align: "left" as const },
@@ -369,8 +335,6 @@ export function VarianceReport({ branch, department }: {
   const [direction, setDirection] = useState<Direction>("all");
   const [threshold, setThreshold] = useState(2);
   const [selectedItem, setSelectedItem] = useState<ItemSummary | null>(null);
-  const [watchOpen, setWatchOpen] = useState(false);
-  const [normalOpen, setNormalOpen] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -410,7 +374,7 @@ export function VarianceReport({ branch, department }: {
 
   const allDates = useMemo(() => datesInRange(startDate, endDate), [startDate, endDate]);
 
-  const { summaries: rawSummaries, kpis: rawKpis } = useMemo(
+  const { summaries: rawSummaries } = useMemo(
     () => computeItemSummaries(adjustments, beginnings, allDates),
     [adjustments, beginnings, allDates],
   );
@@ -428,13 +392,7 @@ export function VarianceReport({ branch, department }: {
     }
   }, [filteredSummaries, selectedItem]);
 
-  const criticalItems = filteredSummaries.filter(s => s.status === "critical");
-  const watchItems = filteredSummaries.filter(s => s.status === "watch");
-  const normalItems = filteredSummaries.filter(s => s.status === "normal");
-
-  const displayKpis = { criticalCount: criticalItems.length, watchCount: watchItems.length, normalCount: normalItems.length };
-
-  const presetLabel = usingCustom ? `${startDate} to ${endDate}` : `Last ${preset} days`;
+  const presetLabel = usingCustom ? `${startDate} to ${endDate}` : preset === 7 ? "Last 7 days" : "MTD";
   const panelDateRange = `${presetLabel} · ${formatDate(startDate)} – ${formatDate(endDate)}`;
 
   const uniqueUnmatchedSkus = useMemo(() => {
@@ -475,23 +433,15 @@ export function VarianceReport({ branch, department }: {
         marginRight: selectedItem ? 368 : 0,
         transition: "margin-right 0.25s ease",
       }}>
-        {/* KPI strip */}
-        <KpiStrip
-          kpis={displayKpis}
-          totalLoss={rawKpis.totalLoss}
-          totalSurplus={rawKpis.totalSurplus}
-          netVariance={rawKpis.netVariance}
-          presetLabel={presetLabel}
-        />
-
         {/* Filter bar */}
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: 10, padding: "10px 14px", marginBottom: 12 }}>
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-            {([7, 14, 30] as Preset[]).map(d => (
-              <button key={d} onClick={() => { setPreset(d); setUsingCustom(false); }} style={btnStyle(!usingCustom && preset === d)}>
-                Last {d} days
-              </button>
-            ))}
+            <button onClick={() => { setPreset(7); setUsingCustom(false); }} style={btnStyle(!usingCustom && preset === 7)}>
+              Last 7 days
+            </button>
+            <button onClick={() => { setPreset("mtd"); setUsingCustom(false); }} style={btnStyle(!usingCustom && preset === "mtd")}>
+              MTD
+            </button>
             <div style={{ width: 1, height: 22, background: "#e2e8f0", margin: "0 2px" }} />
             <span style={{ fontSize: 11, color: "#94a3b8" }}>From</span>
             <input
@@ -541,65 +491,18 @@ export function VarianceReport({ branch, department }: {
           <div style={{ textAlign: "center", color: "var(--text-secondary)", padding: "48px 0", fontSize: 14 }}>Loading…</div>
         ) : (
           <>
-            {/* Critical section */}
+            {/* All items — flat list sorted by |variance| */}
             <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 7px" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#dc2626" }}>● Critical</span>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 99, background: "#fee2e2", color: "#dc2626" }}>{criticalItems.length} items</span>
+              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>All Items</span>
+              <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 99, background: "#f1f5f9", color: "#64748b" }}>{filteredSummaries.length} items</span>
               <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 4 }}>sorted by |variance| ↓</span>
             </div>
-            {criticalItems.length === 0 ? (
+            {filteredSummaries.length === 0 ? (
               <div style={{ background: "#fff", borderRadius: 10, border: "1px dashed #e2e8f0", padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13, marginBottom: 6 }}>
-                No critical variances for this period.
+                No variances for this period.
               </div>
             ) : (
-              <SummaryTable summaries={criticalItems} selectedItem={selectedItem} onSelect={handleSelectItem} showInsights />
-            )}
-
-            {/* Watch section */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 7px" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#d97706" }}>● Watch</span>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 99, background: "#fef3c7", color: "#d97706" }}>{watchItems.length} items</span>
-              <button
-                onClick={() => setWatchOpen(o => !o)}
-                style={{ marginLeft: "auto", background: "none", border: "1px solid #e2e8f0", color: "#64748b", fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 4, cursor: "pointer" }}
-              >
-                {watchOpen ? "Hide ▴" : "Show ▾"}
-              </button>
-            </div>
-            {watchOpen && (
-              watchItems.length === 0 ? (
-                <div style={{ background: "#fff", borderRadius: 10, border: "1px dashed #e2e8f0", padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13, marginBottom: 6 }}>
-                  No watch-level variances for this period.
-                </div>
-              ) : (
-                <div style={{ opacity: 0.9 }}>
-                  <SummaryTable summaries={watchItems} selectedItem={selectedItem} onSelect={handleSelectItem} />
-                </div>
-              )
-            )}
-
-            {/* Normal section */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8, margin: "14px 0 7px" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.08em", textTransform: "uppercase", color: "#64748b" }}>● Normal</span>
-              <span style={{ fontSize: 11, fontWeight: 700, padding: "1px 7px", borderRadius: 99, background: "#f1f5f9", color: "#64748b" }}>{normalItems.length} items</span>
-              <span style={{ fontSize: 11, color: "#94a3b8", marginLeft: 4 }}>Collapsed by default</span>
-              <button
-                onClick={() => setNormalOpen(o => !o)}
-                style={{ marginLeft: "auto", background: "none", border: "1px solid #e2e8f0", color: "#64748b", fontSize: 11, fontWeight: 500, padding: "2px 8px", borderRadius: 4, cursor: "pointer" }}
-              >
-                {normalOpen ? "Hide ▴" : "Show ▾"}
-              </button>
-            </div>
-            {normalOpen && (
-              normalItems.length === 0 ? (
-                <div style={{ background: "#fff", borderRadius: 10, border: "1px dashed #e2e8f0", padding: 20, textAlign: "center", color: "#94a3b8", fontSize: 13, marginBottom: 6 }}>
-                  No normal-level variances for this period.
-                </div>
-              ) : (
-                <div style={{ opacity: 0.85 }}>
-                  <SummaryTable summaries={normalItems} selectedItem={selectedItem} onSelect={handleSelectItem} />
-                </div>
-              )
+              <SummaryTable summaries={filteredSummaries} selectedItem={selectedItem} onSelect={handleSelectItem} showInsights />
             )}
 
             {/* Unmatched SKUs — MKT only */}
