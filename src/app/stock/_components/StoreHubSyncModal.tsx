@@ -108,7 +108,7 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
             <div style={{ textAlign: "center", padding: "12px 0 20px", fontSize: 32 }}>✓</div>
             <div style={{ textAlign: "center", fontWeight: 700, fontSize: 17, marginBottom: 6 }}>Sync complete</div>
             <div style={{ textAlign: "center", color: "var(--text-secondary)", fontSize: 13, marginBottom: 24 }}>
-              {matchedCount} {matchedCount !== 1 ? "items" : "item"} deducted from today&apos;s inventory.
+              {matchedCount}{" "}{matchedCount !== 1 ? "items" : "item"}{" "}deducted from today&apos;s inventory.
             </div>
             <button onClick={onClose} style={{ width: "100%", padding: "14px 0", borderRadius: 12, border: "none", background: "#1A1A1A", color: "#fff", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>Done</button>
           </>
