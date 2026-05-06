@@ -64,6 +64,8 @@ export default function StockPage() {
   const deliveryDraftsInitRef = useRef(false);
   const [deliveryClose, setDeliveryClose] = useState<DeliveryClose | null>(null);
   const [deliveryAdjClose, setDeliveryAdjClose] = useState<DeliveryClose | null>(null);
+  // Firestore doc IDs of delivery-related adjustments, keyed by item name
+  const [deliveryAdjDocIds, setDeliveryAdjDocIds] = useState<Record<string, string[]>>({});
 
   // Modals
   const [showReset, setShowReset] = useState(false);
@@ -149,6 +151,7 @@ export default function StockPage() {
     deliveryDraftsInitRef.current = false;
     setDeliveryClose(null);
     setDeliveryAdjClose(null);
+    setDeliveryAdjDocIds({});
 
     const closeId = `${branch}__${department}__${deliveryDate}`;
     const unsubClose = onSnapshot(doc(db, COLS.deliveryClose, closeId), snap => {
@@ -162,19 +165,29 @@ export default function StockPage() {
       where("date", "==", deliveryDate),
     );
     const unsubAdj = onSnapshot(adjQ, snap => {
-      const deliveryAdjs = snap.docs
-        .map(d => d.data() as StockAdjustment)
-        .filter(a => a.type === "in" && a.note === "manual delivery");
-      if (deliveryAdjs.length === 0) { setDeliveryAdjClose(null); return; }
+      const docIdsByItem: Record<string, string[]> = {};
       const items: Record<string, number> = {};
       let loggedBy = "";
       let closedAtMs = 0;
-      for (const adj of deliveryAdjs) {
-        items[adj.item] = (items[adj.item] ?? 0) + adj.qty;
-        if (!loggedBy) loggedBy = adj.loggedBy;
-        const ts = Math.floor(adj.id);
-        if (ts > closedAtMs) closedAtMs = ts;
+
+      for (const snapDoc of snap.docs) {
+        const adj = snapDoc.data() as StockAdjustment;
+        const isOriginal = adj.type === "in" && adj.note === "manual delivery";
+        const isCorrection = adj.note === "delivery correction";
+        if (isOriginal || isCorrection) {
+          if (!docIdsByItem[adj.item]) docIdsByItem[adj.item] = [];
+          docIdsByItem[adj.item].push(snapDoc.id);
+        }
+        if (isOriginal) {
+          items[adj.item] = (items[adj.item] ?? 0) + adj.qty;
+          if (!loggedBy) loggedBy = adj.loggedBy;
+          const ts = Math.floor(adj.id);
+          if (ts > closedAtMs) closedAtMs = ts;
+        }
       }
+
+      setDeliveryAdjDocIds(docIdsByItem);
+      if (Object.keys(items).length === 0) { setDeliveryAdjClose(null); return; }
       setDeliveryAdjClose({
         id: closeId, branch, department, date: deliveryDate,
         items, closedAt: new Date(closedAtMs).toISOString(), closedBy: loggedBy,
@@ -440,26 +453,39 @@ export default function StockPage() {
     if (!branch || !department) return;
     const effective = deliveryClose ?? deliveryAdjClose;
     if (!effective) return;
+    const currentQty = effective.items[item] ?? 0;
+    if (newQty === currentQty) return;
+
     await auth.authStateReady();
     const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
-    const currentQty = effective.items[item] ?? 0;
-    const delta = newQty - currentQty;
-    if (delta === 0) return;
-
     const batch = writeBatch(db);
 
-    const adjRef = doc(collection(db, COLS.adjustments));
-    batch.set(adjRef, {
-      id: adjRef.id, branch, department, date: deliveryDate,
-      item, type: delta > 0 ? "in" : "out", qty: Math.abs(delta), loggedBy,
-      note: "delivery correction",
-    });
+    // Delete all existing delivery-related adjustments for this item
+    // (covers both original "manual delivery" IN and any old "delivery correction" delta docs)
+    for (const docId of (deliveryAdjDocIds[item] ?? [])) {
+      batch.delete(doc(db, COLS.adjustments, docId));
+    }
 
+    // Recreate a clean "in" adjustment at the corrected qty (omit entirely if qty = 0)
+    if (newQty > 0) {
+      const adjRef = doc(collection(db, COLS.adjustments));
+      batch.set(adjRef, {
+        id: adjRef.id, branch, department, date: deliveryDate,
+        item, type: "in", qty: newQty, loggedBy, note: "manual delivery",
+      });
+    }
+
+    // Write/update the deliveryClose doc so the confirmed view reflects the correction
     const closeId = `${branch}__${department}__${deliveryDate}`;
+    const updatedItems = { ...effective.items };
+    if (newQty > 0) {
+      updatedItems[item] = newQty;
+    } else {
+      delete updatedItems[item];
+    }
     batch.set(doc(db, COLS.deliveryClose, closeId), {
       id: closeId, branch, department, date: effective.date,
-      items: { ...effective.items, [item]: newQty },
-      closedAt: effective.closedAt, closedBy: effective.closedBy,
+      items: updatedItems, closedAt: effective.closedAt, closedBy: effective.closedBy,
     });
 
     await batch.commit();
