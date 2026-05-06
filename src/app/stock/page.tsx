@@ -220,19 +220,15 @@ export default function StockPage() {
       setSummaryBeg(beginnings);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      const [adjSnap, begSnap] = await Promise.all([
-        getDocs(query(collection(db, COLS.adjustments), where("branch", "==", branch), where("department", "==", department), where("date", "==", summaryDate))),
-        getDocs(query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("department", "==", department), where("date", "==", summaryDate))),
-      ]);
-      if (cancelled) return;
-      setSummaryAdj(adjSnap.docs.map(d => d.data() as StockAdjustment));
+    const adjQ = query(collection(db, COLS.adjustments), where("branch", "==", branch), where("department", "==", department), where("date", "==", summaryDate));
+    const begQ = query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("department", "==", department), where("date", "==", summaryDate));
+    const unsubAdj = onSnapshot(adjQ, snap => setSummaryAdj(snap.docs.map(d => d.data() as StockAdjustment)));
+    const unsubBeg = onSnapshot(begQ, snap => {
       const map: Record<string, number> = {};
-      begSnap.docs.forEach(d => { const b = d.data() as DailyBeginning; map[b.item] = b.qty; });
+      snap.docs.forEach(d => { const b = d.data() as DailyBeginning; map[b.item] = b.qty; });
       setSummaryBeg(map);
-    })();
-    return () => { cancelled = true; };
+    });
+    return () => { unsubAdj(); unsubBeg(); };
   }, [branch, department, summaryDate, today, adjustments, beginnings]);
 
   const deptCatalog = useMemo(() =>
