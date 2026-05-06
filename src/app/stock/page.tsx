@@ -63,6 +63,7 @@ export default function StockPage() {
   const [deliverySubmitLoading, setDeliverySubmitLoading] = useState(false);
   const deliveryDraftsInitRef = useRef(false);
   const [deliveryClose, setDeliveryClose] = useState<DeliveryClose | null>(null);
+  const [deliveryAdjClose, setDeliveryAdjClose] = useState<DeliveryClose | null>(null);
 
   // Modals
   const [showReset, setShowReset] = useState(false);
@@ -147,10 +148,37 @@ export default function StockPage() {
     if (!branch || !department) return;
     deliveryDraftsInitRef.current = false;
     setDeliveryClose(null);
+    setDeliveryAdjClose(null);
 
     const closeId = `${branch}__${department}__${deliveryDate}`;
     const unsubClose = onSnapshot(doc(db, COLS.deliveryClose, closeId), snap => {
       setDeliveryClose(snap.exists() ? (snap.data() as DeliveryClose) : null);
+    });
+
+    const adjQ = query(
+      collection(db, COLS.adjustments),
+      where("branch", "==", branch),
+      where("department", "==", department),
+      where("date", "==", deliveryDate),
+    );
+    const unsubAdj = onSnapshot(adjQ, snap => {
+      const deliveryAdjs = snap.docs
+        .map(d => d.data() as StockAdjustment)
+        .filter(a => a.type === "in" && a.note === "manual delivery");
+      if (deliveryAdjs.length === 0) { setDeliveryAdjClose(null); return; }
+      const items: Record<string, number> = {};
+      let loggedBy = "";
+      let closedAtMs = 0;
+      for (const adj of deliveryAdjs) {
+        items[adj.item] = (items[adj.item] ?? 0) + adj.qty;
+        if (!loggedBy) loggedBy = adj.loggedBy;
+        const ts = Math.floor(adj.id);
+        if (ts > closedAtMs) closedAtMs = ts;
+      }
+      setDeliveryAdjClose({
+        id: closeId, branch, department, date: deliveryDate,
+        items, closedAt: new Date(closedAtMs).toISOString(), closedBy: loggedBy,
+      });
     });
 
     const draftRef = doc(db, COLS.deliveryDrafts, closeId);
@@ -167,7 +195,7 @@ export default function StockPage() {
         }
       }
     });
-    return () => { unsubClose(); unsubDraft(); };
+    return () => { unsubClose(); unsubAdj(); unsubDraft(); };
   }, [branch, department, deliveryDate]);
 
 
@@ -409,10 +437,12 @@ export default function StockPage() {
   }
 
   async function handleDeliveryCorrect(item: string, newQty: number) {
-    if (!branch || !department || !deliveryClose) return;
+    if (!branch || !department) return;
+    const effective = deliveryClose ?? deliveryAdjClose;
+    if (!effective) return;
     await auth.authStateReady();
     const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
-    const currentQty = deliveryClose.items[item] ?? 0;
+    const currentQty = effective.items[item] ?? 0;
     const delta = newQty - currentQty;
     if (delta === 0) return;
 
@@ -427,8 +457,10 @@ export default function StockPage() {
 
     const closeId = `${branch}__${department}__${deliveryDate}`;
     batch.set(doc(db, COLS.deliveryClose, closeId), {
-      items: { ...deliveryClose.items, [item]: newQty },
-    }, { merge: true });
+      id: closeId, branch, department, date: effective.date,
+      items: { ...effective.items, [item]: newQty },
+      closedAt: effective.closedAt, closedBy: effective.closedBy,
+    });
 
     await batch.commit();
   }
@@ -507,8 +539,8 @@ export default function StockPage() {
         />
       )}
       {subTab === "delivery" && (
-        deliveryClose
-          ? <DeliveryCompleted deliveryClose={deliveryClose} role={role} onCorrect={handleDeliveryCorrect} />
+        (deliveryClose ?? deliveryAdjClose)
+          ? <DeliveryCompleted deliveryClose={deliveryClose ?? deliveryAdjClose!} role={role} onCorrect={handleDeliveryCorrect} />
           : <DeliveryContent
               items={filtered}
               stocks={stocks}
