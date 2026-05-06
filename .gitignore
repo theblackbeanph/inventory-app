@@ -45,3 +45,4 @@ next-env.d.ts
 
 # brainstorming artifacts
 .superpowers/
+reorder-thresholds.csv
