@@ -41,6 +41,7 @@ export const COLS = {
   storehubUnmatched:      "storehub_unmatched",
   stocktakeDrafts:        "stocktake_drafts",
   deliveryDrafts:         "delivery_drafts",
+  deliveryClose:          "delivery_close",
   varianceExplanations:   "variance_explanations",
   users:                  "users",
 } as const;

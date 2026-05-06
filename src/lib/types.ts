@@ -3,7 +3,7 @@ import type { Role } from "./roles";
 export type Branch = "MKT" | "BF";
 export type Department = "kitchen" | "bar" | "cafe";
 export type ItemCategory = "portion" | "packed" | "loose" | "supplier";
-export type AdjustmentType = "in" | "out" | "waste" | "count" | "sales_import";
+export type AdjustmentType = "in" | "out" | "waste" | "count" | "sales_import" | "correction";
 export type PosType = "csv" | "storehub";
 export type RequestStatus = "pending" | "approved" | "in_transit" | "received";
 
@@ -203,6 +203,16 @@ export interface DeliveryDraft {
   counts: Record<string, number>;
   savedAt: string;    // ISO timestamp
   savedBy: string;
+}
+
+export interface DeliveryClose {
+  id: string;         // `${branch}__${department}__${date}`
+  branch: Branch;
+  department: Department;
+  date: string;       // YYYY-MM-DD
+  items: Record<string, number>;  // item → submitted qty
+  closedAt: string;               // ISO timestamp
+  closedBy: string;
 }
 
 export interface DailyBeginning {

@@ -5,7 +5,7 @@ import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE }
 import { auth, db, COLS, saveDocById } from "@/lib/firebase";
 import { CATALOG, stockDocId, beginningDocId } from "@/lib/items";
 import { collection, onSnapshot, query, where, getDocs, writeBatch, doc, deleteDoc } from "@/lib/firebase";
-import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, DailyClose, StocktakeDraft, DeliveryDraft } from "@/lib/types";
+import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, DailyClose, StocktakeDraft, DeliveryDraft, DeliveryClose } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
 
 import {
@@ -18,6 +18,7 @@ import { StocktakeContent } from "./_components/StocktakeContent";
 import { StocktakeCompleted } from "./_components/StocktakeCompleted";
 import { StocktakeReviewSheet } from "./_components/StocktakeReviewSheet";
 import { DeliveryContent } from "./_components/DeliveryContent";
+import { DeliveryCompleted } from "./_components/DeliveryCompleted";
 import { DeliveryReviewSheet } from "./_components/DeliveryReviewSheet";
 import { StoreHubSyncModal } from "./_components/StoreHubSyncModal";
 import { CSVImportModal } from "./_components/CSVImportModal";
@@ -61,6 +62,7 @@ export default function StockPage() {
   const [showDeliveryReview, setShowDeliveryReview] = useState(false);
   const [deliverySubmitLoading, setDeliverySubmitLoading] = useState(false);
   const deliveryDraftsInitRef = useRef(false);
+  const [deliveryClose, setDeliveryClose] = useState<DeliveryClose | null>(null);
 
   // Modals
   const [showReset, setShowReset] = useState(false);
@@ -144,10 +146,15 @@ export default function StockPage() {
   useEffect(() => {
     if (!branch || !department) return;
     deliveryDraftsInitRef.current = false;
+    setDeliveryClose(null);
 
-    const draftId = `${branch}__${department}__${deliveryDate}`;
-    const draftRef = doc(db, COLS.deliveryDrafts, draftId);
-    const unsub = onSnapshot(draftRef, snap => {
+    const closeId = `${branch}__${department}__${deliveryDate}`;
+    const unsubClose = onSnapshot(doc(db, COLS.deliveryClose, closeId), snap => {
+      setDeliveryClose(snap.exists() ? (snap.data() as DeliveryClose) : null);
+    });
+
+    const draftRef = doc(db, COLS.deliveryDrafts, closeId);
+    const unsubDraft = onSnapshot(draftRef, snap => {
       if (!deliveryDraftsInitRef.current) {
         deliveryDraftsInitRef.current = true;
         if (snap.exists()) {
@@ -160,7 +167,7 @@ export default function StockPage() {
         }
       }
     });
-    return () => unsub();
+    return () => { unsubClose(); unsubDraft(); };
   }, [branch, department, deliveryDate]);
 
 
@@ -255,8 +262,20 @@ export default function StockPage() {
       }
       await batch.commit();
 
-      const draftId = `${branch}__${department}__${deliveryDate}`;
-      await deleteDoc(doc(db, COLS.deliveryDrafts, draftId));
+      const closeId = `${branch}__${department}__${deliveryDate}`;
+      await deleteDoc(doc(db, COLS.deliveryDrafts, closeId));
+
+      const closeItems: Record<string, number> = {};
+      for (const item of deptCatalog) {
+        const val = deliveryCounts[item.name];
+        if (val === undefined || val === "") continue;
+        const qty = Number(val);
+        if (!isNaN(qty) && qty > 0) closeItems[item.name] = qty;
+      }
+      await saveDocById(COLS.deliveryClose, closeId, {
+        id: closeId, branch, department, date: deliveryDate,
+        items: closeItems, closedAt: new Date().toISOString(), closedBy: loggedBy,
+      });
 
       setDeliveryCounts({});
       setShowDeliveryReview(false);
@@ -389,6 +408,31 @@ export default function StockPage() {
     await batch.commit();
   }
 
+  async function handleDeliveryCorrect(item: string, newQty: number) {
+    if (!branch || !department || !deliveryClose) return;
+    await auth.authStateReady();
+    const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
+    const currentQty = deliveryClose.items[item] ?? 0;
+    const delta = newQty - currentQty;
+    if (delta === 0) return;
+
+    const batch = writeBatch(db);
+
+    const adjRef = doc(collection(db, COLS.adjustments));
+    batch.set(adjRef, {
+      id: adjRef.id, branch, department, date: deliveryDate,
+      item, type: delta > 0 ? "in" : "out", qty: Math.abs(delta), loggedBy,
+      note: "delivery correction",
+    });
+
+    const closeId = `${branch}__${department}__${deliveryDate}`;
+    batch.set(doc(db, COLS.deliveryClose, closeId), {
+      items: { ...deliveryClose.items, [item]: newQty },
+    }, { merge: true });
+
+    await batch.commit();
+  }
+
   if (!branch || !department) return null;
 
   return (
@@ -463,17 +507,19 @@ export default function StockPage() {
         />
       )}
       {subTab === "delivery" && (
-        <DeliveryContent
-          items={filtered}
-          stocks={stocks}
-          deliveryCounts={deliveryCounts}
-          deliveryDate={deliveryDate}
-          currentFilter={categoryFilter}
-          onDateChange={handleDeliveryDateChange}
-          onCountChange={(item, val) => setDeliveryCounts(prev => ({ ...prev, [item]: val }))}
-          onSaveDelivery={handleDeliverySave}
-          onOpenReview={() => setShowDeliveryReview(true)}
-        />
+        deliveryClose
+          ? <DeliveryCompleted deliveryClose={deliveryClose} role={role} onCorrect={handleDeliveryCorrect} />
+          : <DeliveryContent
+              items={filtered}
+              stocks={stocks}
+              deliveryCounts={deliveryCounts}
+              deliveryDate={deliveryDate}
+              currentFilter={categoryFilter}
+              onDateChange={handleDeliveryDateChange}
+              onCountChange={(item, val) => setDeliveryCounts(prev => ({ ...prev, [item]: val }))}
+              onSaveDelivery={handleDeliverySave}
+              onOpenReview={() => setShowDeliveryReview(true)}
+            />
       )}
       {subTab === "manualcount" && (
         stocktakeDayClose?.isLocked
