@@ -357,6 +357,38 @@ export default function StockPage() {
     }
   }
 
+  async function handleCorrectCount(item: string, newQty: number) {
+    if (!branch || !department || !stocktakeDayClose) return;
+    await auth.authStateReady();
+    const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
+    const closeId = `${branch}__${department}__${stocktakeDate}`;
+    const currentItem = stocktakeDayClose.items[item];
+    const batch = writeBatch(db);
+
+    batch.set(doc(db, COLS.branchStock, stockDocId(branch, department, item)), {
+      qty: newQty, lastUpdated: stocktakeDate, lastUpdatedBy: loggedBy,
+    }, { merge: true });
+
+    const updatedItems = {
+      ...stocktakeDayClose.items,
+      [item]: { ...currentItem, endCount: newQty, variance: newQty - currentItem.expected },
+    };
+    batch.set(doc(db, COLS.dailyClose, closeId), { items: updatedItems }, { merge: true });
+
+    const tomorrow = addDays(stocktakeDate, 1);
+    batch.set(doc(db, COLS.dailyBeginning, beginningDocId(branch, department, item, tomorrow)), {
+      qty: newQty, setBy: loggedBy, updatedAt: stocktakeDate,
+    }, { merge: true });
+
+    const adjRef = doc(collection(db, COLS.adjustments));
+    batch.set(adjRef, {
+      id: adjRef.id, branch, department, date: stocktakeDate,
+      item, type: "correction", qty: newQty, loggedBy,
+    });
+
+    await batch.commit();
+  }
+
   if (!branch || !department) return null;
 
   return (
@@ -445,7 +477,7 @@ export default function StockPage() {
       )}
       {subTab === "manualcount" && (
         stocktakeDayClose?.isLocked
-          ? <StocktakeCompleted dayClose={stocktakeDayClose} />
+          ? <StocktakeCompleted dayClose={stocktakeDayClose} role={role} onCorrect={handleCorrectCount} />
           : <StocktakeContent
               items={filtered}
               metrics={stocktakeMetrics}
