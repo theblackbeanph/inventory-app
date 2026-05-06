@@ -11,7 +11,6 @@ interface Props {
 
 export function DeliveryCompleted({ deliveryClose, role, onCorrect }: Props) {
   const rows = Object.entries(deliveryClose.items)
-    .filter(([, qty]) => qty > 0)
     .sort(([a], [b]) => a.localeCompare(b));
   const closedTime = new Date(deliveryClose.closedAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true });
 
@@ -71,9 +70,9 @@ export function DeliveryCompleted({ deliveryClose, role, onCorrect }: Props) {
             }}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item}</div>
+              <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis", color: qty === 0 ? "var(--text-secondary)" : "var(--text)", textDecoration: qty === 0 ? "line-through" : "none" }}>{item}</div>
             </div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#1D4ED8" }}>+{qty}</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: qty === 0 ? "var(--text-secondary)" : "#1D4ED8" }}>{qty === 0 ? "0" : `+${qty}`}</div>
           </div>
         ))}
       </div>
