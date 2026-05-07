@@ -445,6 +445,48 @@ export default function StockPage() {
     await batch.commit();
   }
 
+  async function handleAddMissingStocktakeItem(item: string, qty: number) {
+    if (!branch || !department || !stocktakeDayClose) return;
+    await auth.authStateReady();
+    const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
+    const closeId = `${branch}__${department}__${stocktakeDate}`;
+
+    const beginning = stocktakeBeginnings[item] ?? 0;
+    const inQty = stocktakeAdjustments
+      .filter(a => a.item === item && a.type === "in")
+      .reduce((sum, a) => sum + a.qty, 0);
+    const outQty = stocktakeAdjustments
+      .filter(a => a.item === item && (a.type === "out" || a.type === "waste"))
+      .reduce((sum, a) => sum + a.qty, 0);
+    const expected = beginning + inQty - outQty;
+    const variance = qty - expected;
+
+    const batch = writeBatch(db);
+
+    const adjRef = doc(collection(db, COLS.adjustments));
+    batch.set(adjRef, {
+      id: adjRef.id, branch, department, date: stocktakeDate,
+      item, type: "count", qty, loggedBy,
+    });
+
+    batch.set(doc(db, COLS.branchStock, stockDocId(branch, department, item)), {
+      qty, lastUpdated: stocktakeDate, lastUpdatedBy: loggedBy,
+    }, { merge: true });
+
+    const updatedItems = {
+      ...stocktakeDayClose.items,
+      [item]: { beginning, inQty, outQty, expected, endCount: qty, variance },
+    };
+    batch.set(doc(db, COLS.dailyClose, closeId), { items: updatedItems }, { merge: true });
+
+    const tomorrow = addDays(stocktakeDate, 1);
+    batch.set(doc(db, COLS.dailyBeginning, beginningDocId(branch, department, item, tomorrow)), {
+      qty, setBy: loggedBy, updatedAt: stocktakeDate,
+    }, { merge: true });
+
+    await batch.commit();
+  }
+
   async function handleDeliveryCorrect(item: string, newQty: number) {
     if (!branch || !department) return;
     const effective = deliveryClose ?? deliveryAdjClose;
@@ -486,6 +528,45 @@ export default function StockPage() {
 
     await batch.commit();
   }
+
+  async function handleAddMissingDeliveryItem(item: string, qty: number) {
+    if (!branch || !department) return;
+    const effective = deliveryClose ?? deliveryAdjClose;
+    if (!effective) return;
+    await auth.authStateReady();
+    const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
+    const closeId = `${branch}__${department}__${deliveryDate}`;
+
+    const currentQty = stocks[item]?.qty ?? 0;
+    const batch = writeBatch(db);
+
+    const adjRef = doc(collection(db, COLS.adjustments));
+    batch.set(adjRef, {
+      id: adjRef.id, branch, department, date: deliveryDate,
+      item, type: "in", qty, loggedBy, note: "manual delivery",
+    });
+
+    batch.set(doc(db, COLS.branchStock, stockDocId(branch, department, item)), {
+      qty: currentQty + qty, lastUpdated: deliveryDate, lastUpdatedBy: loggedBy,
+    }, { merge: true });
+
+    const updatedItems = { ...effective.items, [item]: qty };
+    batch.set(doc(db, COLS.deliveryClose, closeId), {
+      id: closeId, branch, department, date: effective.date,
+      items: updatedItems, closedAt: effective.closedAt, closedBy: effective.closedBy,
+    });
+
+    await batch.commit();
+  }
+
+  const missingStocktakeItems = stocktakeDayClose
+    ? Object.keys(stocks).filter(item => !(item in stocktakeDayClose.items)).sort()
+    : [];
+
+  const effectiveDelivery = deliveryClose ?? deliveryAdjClose;
+  const missingDeliveryItems = effectiveDelivery
+    ? Object.keys(stocks).filter(item => !(item in effectiveDelivery.items)).sort()
+    : [];
 
   if (!branch || !department) return null;
 
@@ -562,7 +643,13 @@ export default function StockPage() {
       )}
       {subTab === "delivery" && (
         (deliveryClose ?? deliveryAdjClose)
-          ? <DeliveryCompleted deliveryClose={deliveryClose ?? deliveryAdjClose!} role={role} onCorrect={handleDeliveryCorrect} />
+          ? <DeliveryCompleted
+              deliveryClose={deliveryClose ?? deliveryAdjClose!}
+              role={role}
+              onCorrect={handleDeliveryCorrect}
+              missingItems={missingDeliveryItems}
+              onAddMissing={handleAddMissingDeliveryItem}
+            />
           : <DeliveryContent
               items={filtered}
               stocks={stocks}
@@ -577,7 +664,13 @@ export default function StockPage() {
       )}
       {subTab === "manualcount" && (
         stocktakeDayClose?.isLocked
-          ? <StocktakeCompleted dayClose={stocktakeDayClose} role={role} onCorrect={handleCorrectCount} />
+          ? <StocktakeCompleted
+              dayClose={stocktakeDayClose}
+              role={role}
+              onCorrect={handleCorrectCount}
+              missingItems={missingStocktakeItems}
+              onAddMissing={handleAddMissingStocktakeItem}
+            />
           : <StocktakeContent
               items={filtered}
               metrics={stocktakeMetrics}
