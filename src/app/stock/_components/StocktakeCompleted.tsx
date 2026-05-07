@@ -52,7 +52,7 @@ export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [
   async function handleAddMissingSave() {
     if (!addSelected || !onAddMissing) return;
     const qty = Number(addQty);
-    if (isNaN(qty) || qty < 0 || addQty.trim() === "") return;
+    if (addQty.trim() === "" || isNaN(qty) || qty < 0) return;
     setAddSaving(true);
     try {
       await onAddMissing(addSelected, qty);
@@ -232,7 +232,7 @@ export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [
             ) : (
               <>
                 <button
-                  onClick={() => setAddSelected(null)}
+                  onClick={() => { setAddSelected(null); setAddQty(""); }}
                   style={{ alignSelf: "flex-start", background: "none", border: "none", color: "var(--text-secondary)", fontSize: 13, cursor: "pointer", padding: 0, marginBottom: 8 }}
                 >
                   ← Back
