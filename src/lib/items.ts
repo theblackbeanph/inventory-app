@@ -46,6 +46,8 @@ export const CATALOG: CatalogItem[] = [
   { name: "Salted Egg Sauce",        category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Salted Egg Custard",      category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Flatbread",               category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  { name: "Burrata",                 category: "packed",  unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  { name: "Clam Chowder",            category: "packed",  unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen", location: "back_kitchen"  },
   // ── LOOSE (sealed pack — count packs only, never weigh) ───────────────
   // ordersPerPack = SPP from Portion Guide (April 2026). branches omitted = all branches.
   { name: "Gyudon Sauce",            category: "loose",   unit: "pack", reorderAt: 1, packSize: "1,300g",  department: "kitchen", location: "back_kitchen", ordersPerPack: 18 },
@@ -64,6 +66,12 @@ export const CATALOG: CatalogItem[] = [
   { name: "Raspberry Dressing",      category: "loose",   unit: "pack", reorderAt: 1, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 10 },
   { name: "Candied Walnut",          category: "loose",   unit: "pack", reorderAt: 1, packSize: "200g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 5  },
   { name: "Kimchi",                  category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 16, branches: ["MKT"] },
+  // ── BREADS (count only — no sales deduction) ─────────────────────────
+  { name: "Sourdough",               category: "packed",  unit: "pc", reorderAt: 6,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  { name: "Focaccia",                category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  { name: "Pandesal",                category: "packed",  unit: "pc", reorderAt: 12, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  { name: "Potato Buns",             category: "packed",  unit: "pc", reorderAt: 12, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  { name: "Brioche Loaf",            category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
 ];
 
 export const CATALOG_MAP = new Map(CATALOG.map(i => [i.name, i]));

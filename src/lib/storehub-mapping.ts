@@ -47,6 +47,8 @@ const STOREHUB_MAPPING: StoreHubMappingEntry[] = [
   { item: "Salted Egg Sauce",        linkedSkus: ["75", { sku: "163", qty: 3 }] },
   { item: "Salted Egg Custard",      linkedSkus: ["C09"] },
   { item: "Flatbread",               linkedSkus: ["79", "B12", "P4"] },
+  { item: "Burrata",                 linkedSkus: ["P5", "P4"] },
+  { item: "Clam Chowder",            linkedSkus: ["49"] },
   // ── LOOSE — ordersPerPack from Portion Guide (April 2026) ────────────────
   { item: "Gyudon Sauce",            linkedSkus: ["52", { sku: "171", qty: 3 }, "B4"],                ordersPerPack: 18 },
   { item: "Tartar",                  linkedSkus: ["66", { sku: "156", qty: 3 }, "B5", "63"],          ordersPerPack: 33 },

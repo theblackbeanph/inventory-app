@@ -45,6 +45,8 @@ const CSV_MAPPING: CsvMappingEntry[] = [
   { item: "Salted Egg Sauce",        linkedPos: ["RED EGG CHILI", "RED EGG PASTA TRAY"] },
   { item: "Salted Egg Custard",      linkedPos: ["BIBINGKA FRENCH TOAST"] },
   { item: "Flatbread",               linkedPos: ["DEATH BY CHEESE"] },
+  { item: "Burrata",                 linkedPos: ["VODKA CON PROSCIUTTO BURRATA", "DEATH BY CHEESE BURRATA"] },
+  { item: "Clam Chowder",            linkedPos: ["CLAM CHOWDER"] },
 ];
 
 function norm(s: string): string {
