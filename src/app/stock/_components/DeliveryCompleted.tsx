@@ -18,7 +18,7 @@ export function DeliveryCompleted({ deliveryClose, role, onCorrect }: Props) {
   const [newCount, setNewCount] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const isSuperadmin = role === "superadmin";
+  const canEdit = role === "superadmin" || role === "admin";
 
   function openCorrection(item: string, currentQty: number) {
     setSelected(item);
@@ -58,7 +58,7 @@ export function DeliveryCompleted({ deliveryClose, role, onCorrect }: Props) {
         {rows.map(([item, qty]) => (
           <div
             key={item}
-            onClick={isSuperadmin ? () => openCorrection(item, qty) : undefined}
+            onClick={canEdit ? () => openCorrection(item, qty) : undefined}
             style={{
               background: "#fff",
               padding: "12px 16px",
@@ -66,7 +66,7 @@ export function DeliveryCompleted({ deliveryClose, role, onCorrect }: Props) {
               alignItems: "center",
               justifyContent: "space-between",
               borderBottom: "1px solid var(--border)",
-              cursor: isSuperadmin ? "pointer" : "default",
+              cursor: canEdit ? "pointer" : "default",
             }}
           >
             <div style={{ flex: 1, minWidth: 0 }}>
@@ -77,7 +77,7 @@ export function DeliveryCompleted({ deliveryClose, role, onCorrect }: Props) {
         ))}
       </div>
 
-      {isSuperadmin && (
+      {canEdit && (
         <div style={{ textAlign: "center", marginTop: 12, fontSize: 11, color: "var(--text-secondary)" }}>
           Tap any item to correct its quantity
         </div>
