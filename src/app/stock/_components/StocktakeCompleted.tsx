@@ -22,6 +22,7 @@ export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [
   const [addSelected, setAddSelected] = useState<string | null>(null);
   const [addQty, setAddQty] = useState("");
   const [addSaving, setAddSaving] = useState(false);
+  const [addError, setAddError] = useState<string | null>(null);
 
   const canEdit = role === "superadmin" || role === "admin";
 
@@ -54,9 +55,13 @@ export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [
     const qty = Number(addQty);
     if (addQty.trim() === "" || isNaN(qty) || qty < 0) return;
     setAddSaving(true);
+    setAddError(null);
     try {
       await onAddMissing(addSelected, qty);
       closeAddMissing();
+    } catch (err) {
+      console.error("[AddMissingStocktake] save failed:", err);
+      setAddError(err instanceof Error ? err.message : "Save failed. Please try again.");
     } finally {
       setAddSaving(false);
     }
@@ -250,6 +255,9 @@ export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [
                     style={{ width: "100%", fontSize: 22, fontWeight: 700, border: "2px solid #1A1A1A", borderRadius: 10, padding: "10px 14px", outline: "none", boxSizing: "border-box" }}
                   />
                 </div>
+                {addError && (
+                  <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8, textAlign: "center" }}>{addError}</div>
+                )}
                 <div style={{ display: "flex", gap: 8 }}>
                   <button
                     onClick={closeAddMissing}
