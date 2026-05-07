@@ -43,6 +43,7 @@ const CSV_MAPPING: CsvMappingEntry[] = [
   { item: "Tomato Soup",             linkedPos: [{ name: "GRILLED CHEESE", qty: 1 }, { name: "TOMATO SOUP", qty: 2 }] },
   { item: "Tuna Spread",             linkedPos: ["TUNA MELT"] },
   { item: "Salted Egg Sauce",        linkedPos: ["RED EGG CHILI", "RED EGG PASTA TRAY"] },
+  { item: "Salted Egg Custard",      linkedPos: ["BIBINGKA FRENCH TOAST"] },
   { item: "Flatbread",               linkedPos: ["DEATH BY CHEESE"] },
 ];
 

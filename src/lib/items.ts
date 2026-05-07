@@ -44,6 +44,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Tomato Soup",             category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Tuna Spread",             category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Salted Egg Sauce",        category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  { name: "Salted Egg Custard",      category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Flatbread",               category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   // ── LOOSE (sealed pack — count packs only, never weigh) ───────────────
   // ordersPerPack = SPP from Portion Guide (April 2026). branches omitted = all branches.
