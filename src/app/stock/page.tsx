@@ -560,12 +560,12 @@ export default function StockPage() {
   }
 
   const missingStocktakeItems = stocktakeDayClose
-    ? Object.keys(stocks).filter(item => !(item in stocktakeDayClose.items)).sort()
+    ? deptCatalog.filter(i => !(i.name in stocktakeDayClose.items)).map(i => i.name).sort()
     : [];
 
   const effectiveDelivery = deliveryClose ?? deliveryAdjClose;
   const missingDeliveryItems = effectiveDelivery
-    ? Object.keys(stocks).filter(item => !(item in effectiveDelivery.items)).sort()
+    ? deptCatalog.filter(i => !(i.name in effectiveDelivery.items)).map(i => i.name).sort()
     : [];
 
   if (!branch || !department) return null;
