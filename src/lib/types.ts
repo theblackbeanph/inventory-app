@@ -89,70 +89,71 @@ export interface UserDoc {
 
 // ── Pull-Out module ───────────────────────────────────────────────────────────
 
+// CANCELLED = branch self-cancelled before commissary reviewed; REJECTED = commissary refused
 export type PullOutStatus =
   | "PENDING_REVIEW"
-  | "CONFIRMED"
-  | "PREPARING"
   | "DISPATCHED"
-  | "COMPLETED"
-  | "CANCELLED";
+  | "RECEIVED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "DISCREPANCY"
+  | "DISPUTED"
+  | "DONE";
 
 export type PullOutType = "AUTO" | "MANUAL";
 
+// Matches commissary's PullOutItem exactly
 export interface PullOutItem {
-  item_name: string;
-  item_class: "A" | "B" | "C";
-  calculated_qty: number;   // system forecast (packs)
-  confirmed_qty: number;    // supervisor-adjusted (packs)
-  unit: "pc" | "g" | "pack";
+  item: string;
+  qty: number;
+  unit: "pc" | "pack";
 }
 
+// Matches commissary's PullOutRequest exactly (both apps read/write this)
 export interface PullOut {
   id: string;
-  po_number: string;         // PO-26-0428-BF001
-  type: PullOutType;
-  branch: Branch;
-  delivery_day: string;      // YYYY-MM-DD — the branch receives on this day
+  poRef: string;         // PO-26-0509-BF001
+  branch: string;
   status: PullOutStatus;
-  created_at: string;
-  confirmed_at?: string;
-  confirmed_by?: string;
-  notes?: string;
+  requestedAt: string;   // YYYY-MM-DD
+  requestedBy: string;
   items: PullOutItem[];
-  delivery_note_id?: string;
+  notes?: string;
 }
 
 // ── Delivery module ───────────────────────────────────────────────────────────
 
-export type DeliveryStatus =
-  | "PENDING"
-  | "IN_TRANSIT"
-  | "RECEIVED"
-  | "DISCREPANCY"
-  | "CANCELLED";
+// Matches commissary's DeliveryNoteStatus exactly
+export type DeliveryNoteStatus = "IN_TRANSIT" | "RECEIVED" | "DISCREPANCY";
 
 export interface DeliveryNoteItem {
-  item_name: string;
-  unit: "pc" | "g" | "pack";
-  dispatched_qty: number;
-  received_qty?: number;
-  discrepancy?: number;      // received_qty − dispatched_qty
+  item: string;
+  requestedQty: number;
+  dispatchedQty: number;
+  unit: string;
 }
 
+export interface ReceivedItem {
+  item: string;
+  dispatchedQty: number;
+  receivedQty: number;
+  unit: string;
+}
+
+// Matches commissary's DeliveryNote exactly (commissary creates, branch reads + updates)
 export interface DeliveryNote {
   id: string;
-  dn_number: string;         // DN-26-0428-BF001
-  pull_out_id: string;
-  po_number: string;
-  branch: Branch;
-  status: DeliveryStatus;
-  dispatched_at?: string;
-  received_at?: string;
-  received_by?: string;
+  dnRef: string;
+  poRef: string;
+  pullOutId: string;
+  branch: string;
+  dispatchedAt: string;
+  dispatchedBy: string;
   items: DeliveryNoteItem[];
-  has_discrepancy: boolean;
-  discrepancy_notes?: string;
-  commissary_notified: boolean;
+  status: DeliveryNoteStatus;
+  receivedItems?: ReceivedItem[];
+  receivedAt?: string;
+  receivedBy?: string;
 }
 
 // ── Production module ─────────────────────────────────────────────────────────
