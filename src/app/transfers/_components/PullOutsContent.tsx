@@ -1,47 +1,42 @@
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { BRANCH_LABELS } from "@/lib/auth";
-import { CATALOG_MAP } from "@/lib/items";
-import { db, COLS, saveDocById } from "@/lib/firebase";
-import { collection, onSnapshot, query, where, getDocs } from "@/lib/firebase";
-import type { Branch, PullOut, PullOutItem, PullOutStatus, DeliveryNote, StockAdjustment } from "@/lib/types";
-
-// Phase 2: Stub implementations for pullout-config functions (being refactored)
-interface PullOutConfigItem { name: string; itemClass: "A" | "B" | "C"; }
-const PULLOUT_ITEMS: PullOutConfigItem[] = []; // TODO(Phase 2): restore item catalog from commissary data
-const generatePoNumber = (branch: Branch, date: string, seq: number): string => `PO-${date.slice(2, 4)}-${date.slice(5, 7)}${date.slice(8, 10)}-${branch}${String(seq).padStart(3, "0")}`;
-const generateDnNumber = (branch: Branch, date: string, seq: number): string => `DN-${date.slice(2, 4)}-${date.slice(5, 7)}${date.slice(8, 10)}-${branch}${String(seq).padStart(3, "0")}`;
+import { CATALOG, CATALOG_MAP } from "@/lib/items";
+import { db, COLS, auth, saveDocById, collection, onSnapshot, query, where, getDocs } from "@/lib/firebase";
+import type { Branch, PullOut, PullOutItem, PullOutStatus } from "@/lib/types";
 
 type View = "list" | "detail" | "new";
 type FilterTab = "all" | "pending" | "active" | "done";
 
 const STATUS_LABEL: Record<PullOutStatus, string> = {
   PENDING_REVIEW: "Pending Review",
-  CONFIRMED:      "Confirmed",
-  PREPARING:      "Preparing",
   DISPATCHED:     "Dispatched",
-  COMPLETED:      "Completed",
+  RECEIVED:       "Received",
+  REJECTED:       "Rejected",
   CANCELLED:      "Cancelled",
+  DISCREPANCY:    "Discrepancy",
+  DISPUTED:       "Disputed",
+  DONE:           "Done",
 };
 const STATUS_COLOR: Record<PullOutStatus, { bg: string; text: string }> = {
   PENDING_REVIEW: { bg: "#FEF3C7", text: "#D97706" },
-  CONFIRMED:      { bg: "#DBEAFE", text: "#2563EB" },
-  PREPARING:      { bg: "#EDE9FE", text: "#7C3AED" },
   DISPATCHED:     { bg: "#E0E7FF", text: "#4338CA" },
-  COMPLETED:      { bg: "#D1FAE5", text: "#059669" },
+  RECEIVED:       { bg: "#D1FAE5", text: "#059669" },
+  REJECTED:       { bg: "#FEE2E2", text: "#DC2626" },
   CANCELLED:      { bg: "#F3F4F6", text: "#6B7280" },
+  DISCREPANCY:    { bg: "#FEF3C7", text: "#D97706" },
+  DISPUTED:       { bg: "#EDE9FE", text: "#7C3AED" },
+  DONE:           { bg: "#D1FAE5", text: "#059669" },
 };
 
 function todayPHT(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
-function addDays(date: string, days: number): string {
-  const d = new Date(date + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
 function formatDay(dateStr: string): string {
   return new Date(dateStr + "T00:00:00").toLocaleDateString("en-PH", { weekday: "short", month: "short", day: "numeric" });
+}
+function genPORef(branch: Branch, date: string, seq: number): string {
+  return `PO-${date.slice(2, 4)}-${date.slice(5, 7)}${date.slice(8, 10)}-${branch}${String(seq).padStart(3, "0")}`;
 }
 
 export function PullOutsContent({ branch }: { branch: Branch }) {
@@ -54,7 +49,7 @@ export function PullOutsContent({ branch }: { branch: Branch }) {
     const q = query(collection(db, COLS.pullOuts), where("branch", "==", branch));
     const unsub = onSnapshot(q, snap => {
       const list = snap.docs.map(d => d.data() as PullOut);
-      list.sort((a, b) => a.delivery_day < b.delivery_day ? 1 : -1);
+      list.sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
       setPullOuts(list);
     });
     return unsub;
@@ -62,8 +57,8 @@ export function PullOutsContent({ branch }: { branch: Branch }) {
 
   const filtered = useMemo(() => pullOuts.filter(po => {
     if (filter === "pending") return po.status === "PENDING_REVIEW";
-    if (filter === "active")  return ["CONFIRMED", "PREPARING", "DISPATCHED"].includes(po.status);
-    if (filter === "done")    return ["COMPLETED", "CANCELLED"].includes(po.status);
+    if (filter === "active")  return po.status === "DISPATCHED";
+    if (filter === "done")    return ["RECEIVED", "REJECTED", "CANCELLED", "DISCREPANCY", "DISPUTED", "DONE"].includes(po.status);
     return true;
   }), [pullOuts, filter]);
 
@@ -82,7 +77,6 @@ export function PullOutsContent({ branch }: { branch: Branch }) {
 
   return (
     <div>
-      {/* Sub-header */}
       <div style={{ background: "#FFFFFF", borderBottom: "1px solid var(--border)", padding: "10px 16px 0" }}>
         {pendingCount > 0 && (
           <div style={{ marginBottom: 10 }}>
@@ -112,28 +106,29 @@ export function PullOutsContent({ branch }: { branch: Branch }) {
         )}
         {filtered.map(po => {
           const sc = STATUS_COLOR[po.status];
+          const borderColor = po.status === "PENDING_REVIEW" ? "#D97706"
+            : po.status === "DISPATCHED" ? "#4338CA"
+            : po.status === "RECEIVED" || po.status === "DONE" ? "#059669"
+            : ["DISCREPANCY", "REJECTED", "DISPUTED"].includes(po.status) ? "#DC2626"
+            : "#D1D5DB";
           return (
             <div key={po.id} onClick={() => { setSelected(po); setView("detail"); }} style={{
               background: "#FFF", borderRadius: 14, padding: "14px 16px",
               boxShadow: "0 1px 3px rgba(0,0,0,0.06)", cursor: "pointer",
-              borderLeft: `4px solid ${po.status === "PENDING_REVIEW" ? "#D97706" : po.status === "COMPLETED" ? "#059669" : po.status === "CANCELLED" ? "#D1D5DB" : "#2563EB"}`,
+              borderLeft: `4px solid ${borderColor}`,
             }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
-                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                  <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", background: po.type === "AUTO" ? "#DBEAFE" : "#FFEDD5", color: po.type === "AUTO" ? "#1D4ED8" : "#C2410C", borderRadius: 6, padding: "2px 7px" }}>{po.type}</span>
-                  <span style={{ fontWeight: 700, fontSize: 14 }}>{po.po_number}</span>
-                </div>
+                <div style={{ fontWeight: 700, fontSize: 14 }}>{po.poRef}</div>
                 <span style={{ fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "3px 10px", background: sc.bg, color: sc.text }}>{STATUS_LABEL[po.status]}</span>
               </div>
               <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                {formatDay(po.delivery_day)} · {po.items.length} items · {po.items.reduce((s, i) => s + (i.confirmed_qty || i.calculated_qty), 0)} packs
+                {formatDay(po.requestedAt)} · {po.items.length} item{po.items.length !== 1 ? "s" : ""} · {po.items.reduce((s, i) => s + i.qty, 0)} packs
               </div>
             </div>
           );
         })}
       </div>
 
-      {/* FAB */}
       <button
         onClick={() => setView("new")}
         style={{
@@ -154,73 +149,23 @@ function PullOutDetail({ po, branch, onBack, onUpdated }: {
   onBack: () => void;
   onUpdated: (po: PullOut) => void;
 }) {
-  const [items, setItems] = useState<PullOutItem[]>(po.items.map(i => ({ ...i })));
-  const [notes, setNotes] = useState(po.notes ?? "");
   const [loading, setLoading] = useState(false);
-  const [usageData, setUsageData] = useState<Record<string, { total: number; avg: number }>>({});
-  const loggedBy = BRANCH_LABELS[branch];
-  const isReview = po.status === "PENDING_REVIEW";
+  const [error, setError]     = useState("");
+  const canCancel = po.status === "PENDING_REVIEW";
   const sc = STATUS_COLOR[po.status];
 
-  useEffect(() => {
-    const sevenDaysAgo = addDays(todayPHT(), -6);
-    getDocs(query(
-      collection(db, COLS.adjustments),
-      where("branch", "==", branch),
-      where("department", "==", "kitchen"),
-      where("type", "==", "sales_import"),
-    )).then(snap => {
-      const map: Record<string, number> = {};
-      snap.docs.forEach(d => {
-        const adj = d.data() as StockAdjustment;
-        if (adj.date < sevenDaysAgo) return;
-        map[adj.item] = (map[adj.item] ?? 0) + adj.qty;
-      });
-      const result: Record<string, { total: number; avg: number }> = {};
-      for (const [item, total] of Object.entries(map)) {
-        result[item] = { total, avg: Math.round((total / 7) * 10) / 10 };
-      }
-      setUsageData(result);
-    });
-  }, [branch]);
-
-  async function confirm() {
-    setLoading(true);
-    const now = todayPHT();
-    const confirmedItems = items.map(i => ({ ...i }));
-    const dnSnap = await getDocs(query(
-      collection(db, COLS.deliveryNotes),
-      where("branch", "==", branch),
-      where("dn_number", ">=", `DN-${now.slice(2, 4)}-${now.slice(5, 7)}${now.slice(8, 10)}-${branch === "BF" ? "BF" : "MKT"}`),
-    ));
-    const seq = dnSnap.size + 1;
-    const dnNumber = generateDnNumber(branch, po.delivery_day, seq);
-    const dnId = String(Date.now());
-    const dn: DeliveryNote = {
-      id: dnId, dn_number: dnNumber, pull_out_id: po.id, po_number: po.po_number,
-      branch, status: "PENDING",
-      items: confirmedItems.map(i => ({ item_name: i.item_name, unit: i.unit, dispatched_qty: i.confirmed_qty })),
-      has_discrepancy: false, commissary_notified: false,
-    };
-    const updatedPo: PullOut = {
-      ...po, status: "CONFIRMED", items: confirmedItems, confirmed_at: now,
-      confirmed_by: loggedBy, delivery_note_id: dnId, notes: notes || undefined,
-    };
-    await Promise.all([
-      saveDocById(COLS.pullOuts, po.id, updatedPo as unknown as Record<string, unknown>),
-      saveDocById(COLS.deliveryNotes, dnId, dn as unknown as Record<string, unknown>),
-    ]);
-    onUpdated(updatedPo);
+  async function cancelPO() {
+    setLoading(true); setError("");
+    try {
+      await auth.authStateReady();
+      const updated: PullOut = { ...po, status: "CANCELLED" };
+      await saveDocById(COLS.pullOuts, po.id, updated as unknown as Record<string, unknown>);
+      onUpdated(updated);
+      onBack();
+    } catch {
+      setError("Failed to cancel. Try again.");
+    }
     setLoading(false);
-  }
-
-  async function cancel() {
-    setLoading(true);
-    const updated: PullOut = { ...po, status: "CANCELLED" };
-    await saveDocById(COLS.pullOuts, po.id, updated as unknown as Record<string, unknown>);
-    onUpdated(updated);
-    setLoading(false);
-    onBack();
   }
 
   return (
@@ -228,70 +173,57 @@ function PullOutDetail({ po, branch, onBack, onUpdated }: {
       <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 12 }}>
         <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-secondary)", fontSize: 20, lineHeight: 1 }}>←</button>
         <div style={{ flex: 1 }}>
-          <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 2 }}>
-            <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.08em", background: po.type === "AUTO" ? "#DBEAFE" : "#FFEDD5", color: po.type === "AUTO" ? "#1D4ED8" : "#C2410C", borderRadius: 6, padding: "2px 7px" }}>{po.type}</span>
-            <span style={{ fontWeight: 700, fontSize: 16 }}>{po.po_number}</span>
-          </div>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{formatDay(po.delivery_day)}</div>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{po.poRef}</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{formatDay(po.requestedAt)} · by {po.requestedBy}</div>
         </div>
         <span style={{ fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "4px 10px", background: sc.bg, color: sc.text }}>{STATUS_LABEL[po.status]}</span>
       </div>
 
       <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-        {po.delivery_note_id && (
+        {error && (
+          <div style={{ background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>{error}</div>
+        )}
+        {po.status === "DISPATCHED" && (
           <div style={{ background: "#EFF6FF", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#1D4ED8" }}>
-            Delivery note created — see Deliveries tab for receipt confirmation.
+            Order dispatched — check the Deliveries tab to confirm receipt.
           </div>
         )}
-        {items.map((item, idx) => (
-          <div key={item.item_name} style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item_name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-                  {CATALOG_MAP.get(item.item_name)?.packSize ?? "1 pc"} · Baseline: {item.calculated_qty}
-                </div>
-                {usageData[item.item_name] && (
-                  <div style={{ fontSize: 11, color: "#2563EB", marginTop: 2 }}>
-                    Avg {usageData[item.item_name].avg}/day · {usageData[item.item_name].total} sold last 7 days
-                  </div>
-                )}
+        {["DISCREPANCY", "DISPUTED"].includes(po.status) && (
+          <div style={{ background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>
+            Discrepancy under review by commissary.
+          </div>
+        )}
+        {po.status === "REJECTED" && (
+          <div style={{ background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>
+            Order rejected by commissary.{po.notes ? ` Note: ${po.notes}` : ""}
+          </div>
+        )}
+
+        {po.items.map(item => (
+          <div key={item.item} style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item}</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                {CATALOG_MAP.get(item.item)?.packSize ?? "1 pc"}
               </div>
-              {isReview ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => setItems(prev => prev.map((it, i) => i === idx ? { ...it, confirmed_qty: Math.max(0, it.confirmed_qty - 1) } : it))} style={qtyBtnStyle}>−</button>
-                  <input type="number" value={item.confirmed_qty}
-                    onChange={e => setItems(prev => prev.map((it, i) => i === idx ? { ...it, confirmed_qty: Math.max(0, Number(e.target.value)) } : it))}
-                    style={{ width: 56, textAlign: "center", border: "1.5px solid var(--border)", borderRadius: 8, padding: "6px 4px", fontSize: 16, fontWeight: 700, background: "var(--bg)", color: "var(--text)" }}
-                  />
-                  <button onClick={() => setItems(prev => prev.map((it, i) => i === idx ? { ...it, confirmed_qty: it.confirmed_qty + 1 } : it))} style={qtyBtnStyle}>+</button>
-                </div>
-              ) : (
-                <div style={{ textAlign: "right" }}>
-                  <div style={{ fontWeight: 700, fontSize: 18 }}>{item.confirmed_qty}</div>
-                  <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>pc</div>
-                </div>
-              )}
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontWeight: 700, fontSize: 18 }}>{item.qty}</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{item.unit}</div>
             </div>
           </div>
         ))}
 
-        {isReview && (
-          <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="Notes for commissary (optional)" rows={2}
-            style={{ width: "100%", border: "1.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", fontSize: 14, resize: "none", outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box" }}
-          />
-        )}
-        {!isReview && po.notes && (
-          <div style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", fontSize: 13, color: "var(--text-secondary)" }}>Note: {po.notes}</div>
+        {po.notes && !["REJECTED"].includes(po.status) && (
+          <div style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", fontSize: 13, color: "var(--text-secondary)" }}>
+            Note: {po.notes}
+          </div>
         )}
 
-        {isReview && (
-          <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-            <button onClick={cancel} disabled={loading} style={{ flex: 1, padding: "14px 0", borderRadius: 12, border: "1.5px solid var(--border)", background: "#FFF", color: "var(--text-secondary)", fontWeight: 600, fontSize: 15, cursor: "pointer" }}>Cancel PO</button>
-            <button onClick={confirm} disabled={loading} style={{ flex: 2, padding: "14px 0", borderRadius: 12, border: "none", background: "#1A1A1A", color: "#FFF", fontWeight: 700, fontSize: 15, cursor: "pointer" }}>
-              {loading ? "Saving…" : "Confirm Pull-Out"}
-            </button>
-          </div>
+        {canCancel && (
+          <button onClick={cancelPO} disabled={loading} style={{ marginTop: 4, padding: "14px 0", borderRadius: 12, border: "1.5px solid #FCA5A5", background: "#FFF", color: "#DC2626", fontWeight: 600, fontSize: 15, cursor: "pointer", width: "100%" }}>
+            {loading ? "Cancelling…" : "Cancel Request"}
+          </button>
         )}
       </div>
     </div>
@@ -299,18 +231,28 @@ function PullOutDetail({ po, branch, onBack, onUpdated }: {
 }
 
 function NewManualPullOut({ branch, onBack }: { branch: Branch; onBack: () => void }) {
-  const [deliveryDay, setDeliveryDay] = useState(todayPHT());
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
   const [search, setSearch] = useState("");
   const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  const branchItems = useMemo(() =>
+    CATALOG.filter(i => !i.branches || i.branches.includes(branch)),
+    [branch]
+  );
 
   const availableItems = useMemo(() =>
-    PULLOUT_ITEMS.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase())),
-    [search]);
+    branchItems.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase())),
+    [branchItems, search]
+  );
 
   function toggleItem(name: string) {
-    setSelectedItems(prev => { const n = new Map(prev); if (n.has(name)) n.delete(name); else n.set(name, 1); return n; });
+    setSelectedItems(prev => {
+      const n = new Map(prev);
+      if (n.has(name)) n.delete(name); else n.set(name, 1);
+      return n;
+    });
   }
   function setQty(name: string, qty: number) {
     if (qty <= 0) setSelectedItems(prev => { const n = new Map(prev); n.delete(name); return n; });
@@ -319,23 +261,33 @@ function NewManualPullOut({ branch, onBack }: { branch: Branch; onBack: () => vo
 
   async function submit() {
     if (selectedItems.size === 0) return;
-    setLoading(true);
-    const now = Date.now();
-    const snap = await getDocs(query(collection(db, COLS.pullOuts), where("branch", "==", branch), where("delivery_day", "==", deliveryDay)));
-    const seq = snap.size + 1;
-    const poNumber = generatePoNumber(branch, deliveryDay, seq);
-    const items: PullOutItem[] = Array.from(selectedItems.entries()).map(([name, qty]) => {
-      const cfg = PULLOUT_ITEMS.find(i => i.name === name)!;
-      return { item_name: name, item_class: cfg.itemClass, calculated_qty: qty, confirmed_qty: qty, unit: "pc" as const };
-    });
-    const po: PullOut = {
-      id: String(now), po_number: poNumber, type: "MANUAL", branch,
-      delivery_day: deliveryDay, status: "PENDING_REVIEW", created_at: todayPHT(), items,
-      notes: notes || undefined,
-    };
-    await saveDocById(COLS.pullOuts, po.id, po as unknown as Record<string, unknown>);
+    setLoading(true); setError("");
+    try {
+      await auth.authStateReady();
+      const today = todayPHT();
+      const snap = await getDocs(query(
+        collection(db, COLS.pullOuts),
+        where("branch", "==", branch),
+        where("requestedAt", "==", today),
+      ));
+      const seq = snap.size + 1;
+      const poRef = genPORef(branch, today, seq);
+      const requestedBy = auth.currentUser?.displayName || BRANCH_LABELS[branch];
+      const items: PullOutItem[] = Array.from(selectedItems.entries()).map(([name, qty]) => {
+        const catalogItem = CATALOG_MAP.get(name);
+        return { item: name, qty, unit: (catalogItem?.unit === "pack" ? "pack" : "pc") as "pc" | "pack" };
+      });
+      const po: PullOut = {
+        id: String(Date.now()), poRef, branch, status: "PENDING_REVIEW",
+        requestedAt: today, requestedBy, items,
+        ...(notes ? { notes } : {}),
+      };
+      await saveDocById(COLS.pullOuts, po.id, po as unknown as Record<string, unknown>);
+      onBack();
+    } catch {
+      setError("Failed to submit. Try again.");
+    }
     setLoading(false);
-    onBack();
   }
 
   const hasSelection = selectedItems.size > 0;
@@ -346,15 +298,9 @@ function NewManualPullOut({ branch, onBack }: { branch: Branch; onBack: () => vo
         <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
           <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-secondary)", fontSize: 20 }}>←</button>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>New Manual Pull-Out</div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>New Pull-Out Request</div>
             <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{BRANCH_LABELS[branch]}</div>
           </div>
-        </div>
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ fontSize: 12, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>Delivery Date</label>
-          <input type="date" value={deliveryDay} onChange={e => setDeliveryDay(e.target.value)}
-            style={{ display: "block", width: "100%", marginTop: 4, border: "1.5px solid var(--border)", borderRadius: 10, padding: "10px 12px", fontSize: 15, background: "var(--bg)", color: "var(--text)", outline: "none", boxSizing: "border-box" }}
-          />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg)", borderRadius: 10, padding: "8px 12px" }}>
           <svg width={16} height={16} fill="none" stroke="var(--text-secondary)" strokeWidth={2} viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -363,6 +309,10 @@ function NewManualPullOut({ branch, onBack }: { branch: Branch; onBack: () => vo
           {search && <button onClick={() => setSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", padding: 0 }}>✕</button>}
         </div>
       </div>
+
+      {error && (
+        <div style={{ margin: "12px 16px 0", background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>{error}</div>
+      )}
 
       <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
         {availableItems.map(item => {
@@ -375,7 +325,10 @@ function NewManualPullOut({ branch, onBack }: { branch: Branch; onBack: () => vo
               </button>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{CATALOG_MAP.get(item.name)?.packSize ?? "1 pc"}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+                  {item.packSize}
+                  <span style={{ marginLeft: 6, background: item.category === "portion" ? "#EDE9FE" : item.category === "packed" ? "#DBEAFE" : "#D1FAE5", color: item.category === "portion" ? "#7C3AED" : item.category === "packed" ? "#2563EB" : "#059669", borderRadius: 4, padding: "1px 5px", fontSize: 10, fontWeight: 600 }}>{item.category}</span>
+                </div>
               </div>
               {isSelected && (
                 <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -396,7 +349,7 @@ function NewManualPullOut({ branch, onBack }: { branch: Branch; onBack: () => vo
           style={{ width: "100%", border: "1.5px solid var(--border)", borderRadius: 10, padding: "8px 12px", fontSize: 14, resize: "none", outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box", marginBottom: 8 }}
         />
         <button onClick={submit} disabled={!hasSelection || loading} style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: hasSelection ? "#1A1A1A" : "#E8E8E4", color: hasSelection ? "#FFF" : "var(--text-secondary)", fontWeight: 700, fontSize: 16, cursor: hasSelection ? "pointer" : "not-allowed" }}>
-          {loading ? "Saving…" : `Submit Pull-Out${hasSelection ? ` · ${selectedItems.size} items` : ""}`}
+          {loading ? "Saving…" : `Submit Request${hasSelection ? ` · ${selectedItems.size} item${selectedItems.size !== 1 ? "s" : ""}` : ""}`}
         </button>
       </div>
     </div>
