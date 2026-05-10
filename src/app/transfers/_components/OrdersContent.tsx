@@ -1,5 +1,5 @@
 "use client";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { BRANCH_LABELS } from "@/lib/auth";
 import { CATALOG, CATALOG_MAP } from "@/lib/items";
 import { db, COLS, auth, saveDocById, collection, query, where, getDocs, writeBatch, doc } from "@/lib/firebase";
@@ -206,9 +206,10 @@ function PendingDetail({ po, onBack, onUpdated }: {
     setLoading(true); setError("");
     try {
       await auth.authStateReady();
-      const updated: PullOut = { ...po, status: "CANCELLED" };
-      await saveDocById(COLS.pullOuts, po.id, updated as unknown as Record<string, unknown>);
-      onUpdated(updated);
+      const batch = writeBatch(db);
+      batch.update(doc(db, COLS.pullOuts, po.id), { status: "CANCELLED" });
+      await batch.commit();
+      onUpdated({ ...po, status: "CANCELLED" });
       onBack();
     } catch {
       setError("Failed to cancel. Try again.");
@@ -274,6 +275,11 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
   const [receivedQtys, setReceivedQtys] = useState<Record<string, number>>(
     dn ? Object.fromEntries(dn.items.map(i => [i.item, i.dispatchedQty])) : {}
   );
+  useEffect(() => {
+    if (dn) {
+      setReceivedQtys(Object.fromEntries(dn.items.map(i => [i.item, i.dispatchedQty])));
+    }
+  }, [dn?.id]);
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
 
