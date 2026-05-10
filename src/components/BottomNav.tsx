@@ -8,7 +8,7 @@ import type { Role } from "@/lib/roles";
 
 const ALL_TABS: { href: string; icon: React.FC<IconProps>; label: string; minRole: Role }[] = [
   { href: "/stock",      icon: StockIcon,      label: "Stock",      minRole: "linecook"   },
-  { href: "/transfers",  icon: TransfersIcon,  label: "Transfers",  minRole: "superadmin" },
+  { href: "/transfers",  icon: TransfersIcon,  label: "Orders",  minRole: "superadmin" },
   { href: "/production", icon: ProductionIcon, label: "Production", minRole: "superadmin" },
   { href: "/dashboard",  icon: DashboardIcon,  label: "Dashboard",  minRole: "linecook"   },
 ];
