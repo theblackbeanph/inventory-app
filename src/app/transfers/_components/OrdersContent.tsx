@@ -457,8 +457,166 @@ function HistoryDetail({ po, dn, onBack }: {
   );
 }
 
-// ── NewOrderForm stub — implemented in Task 5 ─────────────────────────────────
+// ── NewOrderForm ──────────────────────────────────────────────────────────────
 
-function NewOrderForm(_props: { branch: Branch; onBack: () => void }) {
-  return <div style={{ padding: 16 }}>NewOrderForm — coming in Task 5</div>;
+function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }) {
+  const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
+  const [search,  setSearch]  = useState("");
+  const [notes,   setNotes]   = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+
+  const branchItems = useMemo(
+    () => CATALOG.filter(i => !i.branches || i.branches.includes(branch)),
+    [branch]
+  );
+  const availableItems = useMemo(
+    () => branchItems.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase())),
+    [branchItems, search]
+  );
+
+  function toggleItem(name: string) {
+    setSelectedItems(prev => {
+      const n = new Map(prev);
+      if (n.has(name)) n.delete(name); else n.set(name, 1);
+      return n;
+    });
+  }
+  function setQty(name: string, qty: number) {
+    if (qty <= 0) {
+      setSelectedItems(prev => { const n = new Map(prev); n.delete(name); return n; });
+    } else {
+      setSelectedItems(prev => new Map(prev).set(name, qty));
+    }
+  }
+
+  async function submit() {
+    if (selectedItems.size === 0) return;
+    setLoading(true); setError("");
+    try {
+      await auth.authStateReady();
+      const today = todayPHT();
+      const snap = await getDocs(query(
+        collection(db, COLS.pullOuts),
+        where("branch", "==", branch),
+        where("requestedAt", "==", today),
+      ));
+      const seq = snap.size + 1;
+      const poRef = genPORef(branch, today, seq);
+      const requestedBy = auth.currentUser?.displayName || BRANCH_LABELS[branch];
+      const items: PullOutItem[] = Array.from(selectedItems.entries()).map(([name, qty]) => {
+        const catalogItem = CATALOG_MAP.get(name);
+        return { item: name, qty, unit: (catalogItem?.unit === "pack" ? "pack" : "pc") as "pc" | "pack" };
+      });
+      const po: PullOut = {
+        id: String(Date.now()), poRef, branch, status: "PENDING_REVIEW",
+        requestedAt: today, requestedBy, items,
+        ...(notes ? { notes } : {}),
+      };
+      await saveDocById(COLS.pullOuts, po.id, po as unknown as Record<string, unknown>);
+      onBack();
+    } catch {
+      setError("Failed to submit. Try again.");
+    }
+    setLoading(false);
+  }
+
+  const hasSelection = selectedItems.size > 0;
+
+  return (
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 90px)" }}>
+      <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-secondary)", fontSize: 20 }}>←</button>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>New Order Request</div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{BRANCH_LABELS[branch]}</div>
+          </div>
+        </div>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, background: "var(--bg)", borderRadius: 10, padding: "8px 12px" }}>
+          <svg width={16} height={16} fill="none" stroke="var(--text-secondary)" strokeWidth={2} viewBox="0 0 24 24">
+            <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+          </svg>
+          <input
+            value={search}
+            onChange={e => setSearch(e.target.value)}
+            placeholder="Search items…"
+            style={{ border: "none", background: "transparent", outline: "none", fontSize: 15, width: "100%", color: "var(--text)" }}
+          />
+          {search && (
+            <button onClick={() => setSearch("")} style={{ background: "none", border: "none", cursor: "pointer", color: "var(--text-secondary)", padding: 0 }}>✕</button>
+          )}
+        </div>
+      </div>
+
+      {error && (
+        <div style={{ margin: "12px 16px 0", background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>{error}</div>
+      )}
+
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {availableItems.map(item => {
+          const qty        = selectedItems.get(item.name);
+          const isSelected = qty !== undefined;
+          return (
+            <div
+              key={item.name}
+              style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", borderLeft: isSelected ? "4px solid #1A1A1A" : "4px solid transparent", display: "flex", alignItems: "center", gap: 12 }}
+            >
+              <button
+                onClick={() => toggleItem(item.name)}
+                style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isSelected ? "#1A1A1A" : "#D1D5DB"}`, background: isSelected ? "#1A1A1A" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+              >
+                {isSelected && (
+                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth={3}>
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                )}
+              </button>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
+                  {item.packSize}
+                  <span style={{
+                    marginLeft: 6,
+                    background:  item.category === "portion" ? "#EDE9FE" : item.category === "packed" ? "#DBEAFE" : "#D1FAE5",
+                    color:       item.category === "portion" ? "#7C3AED" : item.category === "packed" ? "#2563EB" : "#059669",
+                    borderRadius: 4, padding: "1px 5px", fontSize: 10, fontWeight: 600,
+                  }}>{item.category}</span>
+                </div>
+              </div>
+              {isSelected && (
+                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <button onClick={() => setQty(item.name, (qty ?? 1) - 1)} style={qtyBtnStyle}>−</button>
+                  <input
+                    type="number"
+                    value={qty}
+                    onChange={e => setQty(item.name, Math.max(0, Number(e.target.value)))}
+                    style={{ width: 50, textAlign: "center", border: "1.5px solid var(--border)", borderRadius: 8, padding: "6px 4px", fontSize: 16, fontWeight: 700, background: "var(--bg)", color: "var(--text)" }}
+                  />
+                  <button onClick={() => setQty(item.name, (qty ?? 0) + 1)} style={qtyBtnStyle}>+</button>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ position: "fixed", bottom: "var(--nav-h)", left: 0, right: 0, background: "#FFF", borderTop: "1px solid var(--border)", padding: "12px 16px" }}>
+        <textarea
+          value={notes}
+          onChange={e => setNotes(e.target.value)}
+          placeholder="Notes for commissary (optional)"
+          rows={1}
+          style={{ width: "100%", border: "1.5px solid var(--border)", borderRadius: 10, padding: "8px 12px", fontSize: 14, resize: "none", outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box", marginBottom: 8 }}
+        />
+        <button
+          onClick={submit}
+          disabled={!hasSelection || loading}
+          style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: hasSelection ? "#1A1A1A" : "#E8E8E4", color: hasSelection ? "#FFF" : "var(--text-secondary)", fontWeight: 700, fontSize: 16, cursor: hasSelection ? "pointer" : "not-allowed" }}
+        >
+          {loading ? "Saving…" : `Submit Request${hasSelection ? ` · ${selectedItems.size} item${selectedItems.size !== 1 ? "s" : ""}` : ""}`}
+        </button>
+      </div>
+    </div>
+  );
 }
