@@ -38,7 +38,7 @@ function statusBadgeStyle(status: string): React.CSSProperties {
     DISPATCHED:     { bg: "#E0E7FF", text: "#4338CA" },
     RECEIVED:       { bg: "#D1FAE5", text: "#059669" },
     DONE:           { bg: "#D1FAE5", text: "#059669" },
-    REJECTED:       { bg: "#F3F4F6", text: "#6B7280" },
+    REJECTED:       { bg: "#FEE2E2", text: "#DC2626" },
     CANCELLED:      { bg: "#F3F4F6", text: "#6B7280" },
     DISCREPANCY:    { bg: "#FEF3C7", text: "#D97706" },
     DISPUTED:       { bg: "#EDE9FE", text: "#7C3AED" },
