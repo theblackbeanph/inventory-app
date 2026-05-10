@@ -192,18 +192,267 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch }: Props) {
   );
 }
 
-// ── PendingDetail, ActiveDetail, HistoryDetail, NewOrderForm ──────────────────
-// Stubs — implemented in Task 4 and Task 5
+// ── PendingDetail ─────────────────────────────────────────────────────────────
 
-function PendingDetail(_props: { po: PullOut; onBack: () => void; onUpdated: (po: PullOut) => void }) {
-  return <div style={{ padding: 16 }}>PendingDetail — coming in Task 4</div>;
+function PendingDetail({ po, onBack, onUpdated }: {
+  po: PullOut;
+  onBack: () => void;
+  onUpdated: (po: PullOut) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+
+  async function cancelPO() {
+    setLoading(true); setError("");
+    try {
+      await auth.authStateReady();
+      const updated: PullOut = { ...po, status: "CANCELLED" };
+      await saveDocById(COLS.pullOuts, po.id, updated as unknown as Record<string, unknown>);
+      onUpdated(updated);
+      onBack();
+    } catch {
+      setError("Failed to cancel. Try again.");
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 24px)" }}>
+      <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-secondary)", fontSize: 20, lineHeight: 1 }}>←</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{po.poRef}</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{formatDay(po.requestedAt)} · by {po.requestedBy}</div>
+        </div>
+        <span style={statusBadgeStyle(po.status)}>{STATUS_LABEL[po.status]}</span>
+      </div>
+
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {error && (
+          <div style={{ background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>{error}</div>
+        )}
+        {po.items.map(item => (
+          <div key={item.item} style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item}</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                {CATALOG_MAP.get(item.item)?.packSize ?? "1 pc"}
+              </div>
+            </div>
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontWeight: 700, fontSize: 18 }}>{item.qty}</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{item.unit}</div>
+            </div>
+          </div>
+        ))}
+        {po.notes && (
+          <div style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", fontSize: 13, color: "var(--text-secondary)" }}>
+            Note: {po.notes}
+          </div>
+        )}
+        <button
+          onClick={cancelPO}
+          disabled={loading}
+          style={{ marginTop: 4, padding: "14px 0", borderRadius: 12, border: "1.5px solid #FCA5A5", background: "#FFF", color: "#DC2626", fontWeight: 600, fontSize: 15, cursor: "pointer", width: "100%" }}
+        >
+          {loading ? "Cancelling…" : "Cancel Request"}
+        </button>
+      </div>
+    </div>
+  );
 }
-function ActiveDetail(_props: { po: PullOut; dn: DeliveryNote | null; branch: Branch; onBack: () => void; onUpdated: (po: PullOut) => void }) {
-  return <div style={{ padding: 16 }}>ActiveDetail — coming in Task 4</div>;
+
+// ── ActiveDetail ──────────────────────────────────────────────────────────────
+
+function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
+  po: PullOut;
+  dn: DeliveryNote | null;
+  branch: Branch;
+  onBack: () => void;
+  onUpdated: (po: PullOut) => void;
+}) {
+  const [receivedQtys, setReceivedQtys] = useState<Record<string, number>>(
+    dn ? Object.fromEntries(dn.items.map(i => [i.item, i.dispatchedQty])) : {}
+  );
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+
+  const itemsWithDiscrepancy = dn
+    ? dn.items.filter(i => receivedQtys[i.item] !== i.dispatchedQty)
+    : [];
+  const hasDiscrepancy = itemsWithDiscrepancy.length > 0;
+
+  async function confirmReceipt() {
+    if (!dn) return;
+    setLoading(true); setError("");
+    try {
+      await auth.authStateReady();
+      const receivedBy = auth.currentUser?.displayName || BRANCH_LABELS[branch];
+      const receivedAt = todayPHT();
+      const receivedItems: ReceivedItem[] = dn.items.map(i => ({
+        item:          i.item,
+        dispatchedQty: i.dispatchedQty,
+        receivedQty:   receivedQtys[i.item] ?? i.dispatchedQty,
+        unit:          i.unit,
+      }));
+      const newStatus = hasDiscrepancy ? "DISCREPANCY" : "RECEIVED";
+      const batch = writeBatch(db);
+      batch.update(doc(db, COLS.deliveryNotes, dn.id), { status: newStatus, receivedItems, receivedAt, receivedBy });
+      batch.update(doc(db, COLS.pullOuts, po.id), { status: newStatus });
+      await batch.commit();
+      onUpdated({ ...po, status: newStatus as PullOut["status"] });
+      onBack();
+    } catch {
+      setError("Failed to confirm receipt. Try again.");
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 100px)" }}>
+      <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-secondary)", fontSize: 20 }}>←</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{po.poRef}</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{dn?.dnRef ?? "Awaiting delivery note"}</div>
+        </div>
+        <span style={statusBadgeStyle(po.status)}>{STATUS_LABEL[po.status]}</span>
+      </div>
+
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {error && (
+          <div style={{ background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>{error}</div>
+        )}
+        {!dn && (
+          <div style={{ background: "#EFF6FF", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#1D4ED8" }}>
+            Delivery note not yet available. Check back shortly.
+          </div>
+        )}
+        {dn && (
+          <>
+            <div style={{ background: "#EFF6FF", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#1D4ED8" }}>
+              Verify each quantity received. Adjust if the actual count differs.
+            </div>
+            {dn.items.map(item => {
+              const received = receivedQtys[item.item] ?? item.dispatchedQty;
+              const isDiff   = received !== item.dispatchedQty;
+              return (
+                <div key={item.item} style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", borderLeft: isDiff ? "4px solid #DC2626" : "4px solid transparent" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item}</div>
+                      <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+                        {CATALOG_MAP.get(item.item)?.packSize ?? "1 pc"} · Dispatched: <strong>{item.dispatchedQty}</strong>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button
+                        onClick={() => setReceivedQtys(p => ({ ...p, [item.item]: Math.max(0, (p[item.item] ?? item.dispatchedQty) - 1) }))}
+                        style={qtyBtnStyle}
+                      >−</button>
+                      <input
+                        type="number"
+                        value={received}
+                        onChange={e => setReceivedQtys(p => ({ ...p, [item.item]: Math.max(0, Number(e.target.value)) }))}
+                        style={{ width: 56, textAlign: "center", border: `1.5px solid ${isDiff ? "#DC2626" : "var(--border)"}`, borderRadius: 8, padding: "6px 4px", fontSize: 16, fontWeight: 700, background: isDiff ? "#FEF2F2" : "var(--bg)", color: "var(--text)" }}
+                      />
+                      <button
+                        onClick={() => setReceivedQtys(p => ({ ...p, [item.item]: (p[item.item] ?? item.dispatchedQty) + 1 }))}
+                        style={qtyBtnStyle}
+                      >+</button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+
+      {dn && (
+        <div style={{ position: "fixed", bottom: "var(--nav-h)", left: 0, right: 0, background: "#FFF", borderTop: "1px solid var(--border)", padding: "12px 16px" }}>
+          {hasDiscrepancy && (
+            <div style={{ fontSize: 12, color: "#DC2626", fontWeight: 600, marginBottom: 8 }}>
+              {itemsWithDiscrepancy.length} item{itemsWithDiscrepancy.length > 1 ? "s" : ""} with discrepancy — commissary will be notified.
+            </div>
+          )}
+          <button
+            onClick={confirmReceipt}
+            disabled={loading}
+            style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: hasDiscrepancy ? "#DC2626" : "#059669", color: "#FFF", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
+          >
+            {loading ? "Saving…" : hasDiscrepancy ? "Confirm Receipt with Discrepancy" : "Confirm Receipt — All Good"}
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
-function HistoryDetail(_props: { po: PullOut; dn: DeliveryNote | null; onBack: () => void }) {
-  return <div style={{ padding: 16 }}>HistoryDetail — coming in Task 4</div>;
+
+// ── HistoryDetail ─────────────────────────────────────────────────────────────
+
+function HistoryDetail({ po, dn, onBack }: {
+  po: PullOut;
+  dn: DeliveryNote | null;
+  onBack: () => void;
+}) {
+  return (
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 24px)" }}>
+      <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-secondary)", fontSize: 20 }}>←</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{po.poRef}</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+            {formatDay(po.requestedAt)}{dn ? ` · ${dn.dnRef}` : ""}
+          </div>
+        </div>
+        <span style={statusBadgeStyle(po.status)}>{STATUS_LABEL[po.status]}</span>
+      </div>
+
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {["DISCREPANCY", "DISPUTED"].includes(po.status) && (
+          <div style={{ background: "#FEF3C7", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#D97706" }}>
+            Discrepancy on file — place a new order if replacement is needed.
+          </div>
+        )}
+        {po.items.map(item => {
+          const ri            = dn?.receivedItems?.find(r => r.item === item.item);
+          const dispatchedQty = dn?.items.find(i => i.item === item.item)?.dispatchedQty;
+          return (
+            <div key={item.item} style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item}</div>
+                {dispatchedQty !== undefined && (
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                    Dispatched: {dispatchedQty}
+                    {ri && ri.receivedQty !== dispatchedQty && (
+                      <span style={{ color: "#DC2626", marginLeft: 4 }}>· Received: {ri.receivedQty}</span>
+                    )}
+                    {ri && ri.receivedQty === dispatchedQty && (
+                      <span style={{ color: "#059669", marginLeft: 4 }}>· Received: {ri.receivedQty}</span>
+                    )}
+                  </div>
+                )}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{item.qty}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{item.unit}</div>
+              </div>
+            </div>
+          );
+        })}
+        {po.notes && (
+          <div style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", fontSize: 13, color: "var(--text-secondary)" }}>
+            Note: {po.notes}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 }
+
+// ── NewOrderForm stub — implemented in Task 5 ─────────────────────────────────
+
 function NewOrderForm(_props: { branch: Branch; onBack: () => void }) {
   return <div style={{ padding: 16 }}>NewOrderForm — coming in Task 5</div>;
 }
