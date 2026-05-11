@@ -22,7 +22,7 @@ function genPORef(branch: Branch, date: string, seq: number): string {
 // ── status helpers ────────────────────────────────────────────────────────────
 
 const STATUS_LABEL: Record<string, string> = {
-  PENDING_REVIEW: "Pending Review",
+  PENDING_REVIEW: "Submitted",
   DISPATCHED:     "Dispatched",
   RECEIVED:       "Received",
   REJECTED:       "Rejected",
@@ -479,9 +479,10 @@ function HistoryDetail({ po, dn, onBack }: {
 
 function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }) {
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
-  const [search,  setSearch]  = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
+  const [search,      setSearch]      = useState("");
+  const [showReview,  setShowReview]  = useState(false);
+  const [loading,     setLoading]     = useState(false);
+  const [error,       setError]       = useState("");
 
   const branchItems = useMemo(
     () => CATALOG.filter(i => i.commissary && (!i.branches || i.branches.includes(branch))),
@@ -619,13 +620,60 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
 
       <div style={{ position: "fixed", bottom: "var(--nav-h)", left: 0, right: 0, background: "#FFF", borderTop: "1px solid var(--border)", padding: "12px 16px" }}>
         <button
-          onClick={submit}
-          disabled={!hasSelection || loading}
+          onClick={() => setShowReview(true)}
+          disabled={!hasSelection}
           style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: hasSelection ? "#1A1A1A" : "#E8E8E4", color: hasSelection ? "#FFF" : "var(--text-secondary)", fontWeight: 700, fontSize: 16, cursor: hasSelection ? "pointer" : "not-allowed" }}
         >
-          {loading ? "Saving…" : `Submit Request${hasSelection ? ` · ${selectedItems.size} item${selectedItems.size !== 1 ? "s" : ""}` : ""}`}
+          {`Review Order${hasSelection ? ` · ${selectedItems.size} item${selectedItems.size !== 1 ? "s" : ""}` : ""}`}
         </button>
       </div>
+
+      {showReview && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "#fff", overflowY: "auto" }}>
+          <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center", position: "sticky", top: 0, background: "#fff", zIndex: 1 }}>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 18 }}>Order Summary</div>
+              <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>{selectedItems.size} item{selectedItems.size !== 1 ? "s" : ""} · {BRANCH_LABELS[branch]}</div>
+            </div>
+            <button onClick={() => setShowReview(false)} style={{ background: "none", border: "none", fontSize: 20, color: "var(--text-secondary)", cursor: "pointer", padding: "2px 6px" }}>✕</button>
+          </div>
+
+          <div>
+            {Array.from(selectedItems.entries()).map(([name, qty]) => {
+              const item = CATALOG_MAP.get(name);
+              return (
+                <div key={name} style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{item?.packSize}</div>
+                  </div>
+                  <div style={{ fontSize: 20, fontWeight: 700 }}>{qty} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--text-secondary)" }}>{item?.unit}</span></div>
+                </div>
+              );
+            })}
+          </div>
+
+          {error && (
+            <div style={{ margin: "12px 16px", background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>{error}</div>
+          )}
+
+          <div style={{ position: "sticky", bottom: 0, background: "#fff", borderTop: "1px solid var(--border)", padding: "12px 16px 32px", display: "flex", gap: 8 }}>
+            <button
+              onClick={() => setShowReview(false)}
+              style={{ flex: 1, padding: "14px 0", borderRadius: 14, border: "1.5px solid var(--border)", fontWeight: 700, fontSize: 14, background: "#fff", color: "var(--text)", cursor: "pointer" }}
+            >
+              Edit
+            </button>
+            <button
+              onClick={submit}
+              disabled={loading}
+              style={{ flex: 1, padding: "14px 0", borderRadius: 14, border: "none", fontWeight: 700, fontSize: 14, background: loading ? "#E8E8E4" : "#1A1A1A", color: loading ? "var(--text-secondary)" : "#fff", cursor: loading ? "not-allowed" : "pointer" }}
+            >
+              {loading ? "Submitting…" : "Confirm & Submit"}
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
