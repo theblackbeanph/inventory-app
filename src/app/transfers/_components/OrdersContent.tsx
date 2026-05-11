@@ -485,7 +485,7 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
   const [error,   setError]   = useState("");
 
   const branchItems = useMemo(
-    () => CATALOG.filter(i => !i.branches || i.branches.includes(branch)),
+    () => CATALOG.filter(i => i.commissary && (!i.branches || i.branches.includes(branch))),
     [branch]
   );
   const availableItems = useMemo(

@@ -17,6 +17,7 @@ export interface CatalogItem {
   location: string;       // storage location — used for stocktake filters (e.g. "front_kitchen")
   ordersPerPack?: number; // loose items only — orders needed to consume 1 pack
   branches?: Branch[];    // if set, only these branches carry this item
+  commissary?: true;      // if set, item is supplied by commissary and appears in pull-out requests
 }
 
 export interface BranchStock {
