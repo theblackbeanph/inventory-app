@@ -480,7 +480,6 @@ function HistoryDetail({ po, dn, onBack }: {
 function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }) {
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
   const [search,  setSearch]  = useState("");
-  const [notes,   setNotes]   = useState("");
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
 
@@ -529,7 +528,6 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
       const po: PullOut = {
         id: String(Date.now()), poRef, branch, status: "PENDING_REVIEW",
         requestedAt: today, requestedBy, items,
-        ...(notes ? { notes } : {}),
       };
       await saveDocById(COLS.pullOuts, po.id, po as unknown as Record<string, unknown>);
       onBack();
@@ -620,13 +618,6 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
       </div>
 
       <div style={{ position: "fixed", bottom: "var(--nav-h)", left: 0, right: 0, background: "#FFF", borderTop: "1px solid var(--border)", padding: "12px 16px" }}>
-        <textarea
-          value={notes}
-          onChange={e => setNotes(e.target.value)}
-          placeholder="Notes for commissary (optional)"
-          rows={1}
-          style={{ width: "100%", border: "1.5px solid var(--border)", borderRadius: 10, padding: "8px 12px", fontSize: 14, resize: "none", outline: "none", background: "var(--bg)", color: "var(--text)", boxSizing: "border-box", marginBottom: 8 }}
-        />
         <button
           onClick={submit}
           disabled={!hasSelection || loading}
