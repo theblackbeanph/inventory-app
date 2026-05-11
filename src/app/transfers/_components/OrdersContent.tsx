@@ -1,8 +1,8 @@
 "use client";
 import { useState, useMemo, useEffect } from "react";
 import { BRANCH_LABELS } from "@/lib/auth";
-import { CATALOG, CATALOG_MAP } from "@/lib/items";
-import { db, COLS, auth, saveDocById, collection, query, where, getDocs, writeBatch, doc } from "@/lib/firebase";
+import { CATALOG, CATALOG_MAP, stockDocId } from "@/lib/items";
+import { db, COLS, auth, saveDocById, collection, query, where, getDocs, writeBatch, doc, increment } from "@/lib/firebase";
 import type { Branch, PullOut, PullOutItem, DeliveryNote, ReceivedItem } from "@/lib/types";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
@@ -305,6 +305,24 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
       const batch = writeBatch(db);
       batch.update(doc(db, COLS.deliveryNotes, dn.id), { status: newStatus, receivedItems, receivedAt, receivedBy });
       batch.update(doc(db, COLS.pullOuts, po.id), { status: newStatus });
+
+      for (const ri of receivedItems) {
+        const catalogItem = CATALOG_MAP.get(ri.item);
+        if (!catalogItem || ri.receivedQty <= 0) continue;
+        const dept = catalogItem.department;
+        batch.set(
+          doc(db, COLS.branchStock, stockDocId(branch, dept, ri.item)),
+          { qty: increment(ri.receivedQty), lastUpdated: receivedAt, lastUpdatedBy: receivedBy },
+          { merge: true },
+        );
+        const adjRef = doc(collection(db, COLS.adjustments));
+        batch.set(adjRef, {
+          id: adjRef.id, branch, department: dept, date: receivedAt,
+          item: ri.item, type: "in", qty: ri.receivedQty, loggedBy: receivedBy,
+          note: "commissary transfer",
+        });
+      }
+
       await batch.commit();
       onUpdated({ ...po, status: newStatus as PullOut["status"] });
       onBack();

@@ -12,6 +12,7 @@ import {
   where,
   orderBy,
   writeBatch,
+  increment,
 } from "firebase/firestore";
 
 const firebaseConfig = {
@@ -71,5 +72,5 @@ export async function saveBatch(col: string, items: Record<string, unknown>[]) {
 
 export {
   collection, doc, onSnapshot, setDoc, getDocs,
-  deleteDoc, query, where, orderBy, writeBatch,
+  deleteDoc, query, where, orderBy, writeBatch, increment,
 };
