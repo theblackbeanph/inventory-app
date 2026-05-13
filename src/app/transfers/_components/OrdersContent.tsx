@@ -4,6 +4,7 @@ import { BRANCH_LABELS } from "@/lib/auth";
 import { CATALOG, CATALOG_MAP, stockDocId } from "@/lib/items";
 import { db, COLS, auth, saveDocById, collection, query, where, getDocs, writeBatch, doc, increment } from "@/lib/firebase";
 import type { Branch, PullOut, PullOutItem, DeliveryNote, ReceivedItem } from "@/lib/types";
+import { isIncomplete, fulfillmentPct } from "../_lib/helpers";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -133,9 +134,11 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch }: Props) {
           </div>
         )}
         {list.map(po => {
-          const dn = tab === "active"
-            ? deliveryNotes.find(d => d.pullOutId === po.id)
-            : undefined;
+          const dn = tab === "pending"
+            ? undefined
+            : deliveryNotes.find(d => d.pullOutId === po.id);
+          const incomplete = dn ? isIncomplete(dn) : false;
+          const pct        = dn && incomplete ? fulfillmentPct(dn) : 100;
           return (
             <div
               key={po.id}
@@ -148,10 +151,18 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch }: Props) {
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
                 <div style={{ fontWeight: 700, fontSize: 14 }}>{po.poRef}</div>
-                <span style={statusBadgeStyle(po.status)}>{STATUS_LABEL[po.status]}</span>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+                  {incomplete && (
+                    <span style={{ fontSize: 11, fontWeight: 600, borderRadius: 20, padding: "3px 10px", background: "#FEF3C7", color: "#D97706" }}>
+                      Incomplete
+                    </span>
+                  )}
+                  <span style={statusBadgeStyle(po.status)}>{STATUS_LABEL[po.status]}</span>
+                </div>
               </div>
               <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
                 {formatDay(po.requestedAt)} · {po.items.length} item{po.items.length !== 1 ? "s" : ""}
+                {incomplete ? ` · ${pct}% fulfilled` : ""}
               </div>
               {tab === "active" && (
                 <div style={{ marginTop: 6 }}>
