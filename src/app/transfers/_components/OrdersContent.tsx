@@ -5,6 +5,7 @@ import { CATALOG, CATALOG_MAP, stockDocId } from "@/lib/items";
 import { db, COLS, auth, saveDocById, collection, query, where, getDocs, writeBatch, doc, increment } from "@/lib/firebase";
 import type { Branch, PullOut, PullOutItem, DeliveryNote, ReceivedItem } from "@/lib/types";
 import { isIncomplete, fulfillmentPct } from "../_lib/helpers";
+import { generateBranchDR } from "../_lib/print";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -500,6 +501,36 @@ function HistoryDetail({ po, dn, onBack }: {
           <div style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", fontSize: 13, color: "var(--text-secondary)" }}>
             Note: {po.notes}
           </div>
+        )}
+        {dn && (dn.status === "RECEIVED" || dn.status === "DISCREPANCY") && dn.receivedItems && (
+          <button
+            onClick={() => generateBranchDR({
+              poRef:         po.poRef,
+              dnRef:         dn.dnRef,
+              branch:        dn.branch,
+              dispatchedAt:  dn.dispatchedAt,
+              receivedAt:    dn.receivedAt ?? "",
+              dispatchedBy:  dn.dispatchedBy,
+              receivedBy:    dn.receivedBy ?? "",
+              items: dn.items.map(i => {
+                const ri = dn.receivedItems!.find(r => r.item === i.item);
+                return {
+                  item:          i.item,
+                  requestedQty:  i.requestedQty,
+                  dispatchedQty: i.dispatchedQty,
+                  receivedQty:   ri?.receivedQty ?? i.dispatchedQty,
+                  unit:          i.unit,
+                };
+              }),
+            })}
+            style={{
+              width: "100%", padding: "14px 0", borderRadius: 12,
+              border: "1.5px solid var(--border)", background: "#FFF",
+              color: "var(--text)", fontWeight: 600, fontSize: 15, cursor: "pointer",
+            }}
+          >
+            Reprint DR
+          </button>
         )}
       </div>
     </div>
