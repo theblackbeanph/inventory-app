@@ -377,7 +377,17 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item}</div>
                       <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
-                        {CATALOG_MAP.get(item.item)?.packSize ?? "1 pc"} · Dispatched: <strong>{item.dispatchedQty}</strong>
+                        {CATALOG_MAP.get(item.item)?.packSize ?? "1 pc"}
+                        {item.dispatchedQty < item.requestedQty ? (
+                          <>
+                            {" · "}
+                            <span>Ordered: {item.requestedQty}</span>
+                            {" "}
+                            <span style={{ color: "#D97706", fontWeight: 600 }}>→ Dispatched: {item.dispatchedQty}</span>
+                          </>
+                        ) : (
+                          <> · Dispatched: <strong>{item.dispatchedQty}</strong></>
+                        )}
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
