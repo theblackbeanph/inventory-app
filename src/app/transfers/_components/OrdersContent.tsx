@@ -461,19 +461,29 @@ function HistoryDetail({ po, dn, onBack }: {
           </div>
         )}
         {po.items.map(item => {
-          const ri            = dn?.receivedItems?.find(r => r.item === item.item);
-          const dispatchedQty = dn?.items.find(i => i.item === item.item)?.dispatchedQty;
+          const dnItem     = dn?.items.find(i => i.item === item.item);
+          const ri         = dn?.receivedItems?.find(r => r.item === item.item);
+          const dispatched = dnItem?.dispatchedQty;
+          const requested  = dnItem?.requestedQty;
+          const isShort    = dispatched !== undefined && requested !== undefined && dispatched < requested;
           return (
             <div key={item.item} style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item}</div>
-                {dispatchedQty !== undefined && (
+                {dispatched !== undefined && (
                   <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-                    Dispatched: {dispatchedQty}
-                    {ri && ri.receivedQty !== dispatchedQty && (
+                    {isShort ? (
+                      <>
+                        <span>Ordered: {requested}</span>
+                        <span style={{ color: "#D97706", fontWeight: 600, marginLeft: 4 }}>→ Dispatched: {dispatched}</span>
+                      </>
+                    ) : (
+                      <span>Dispatched: {dispatched}</span>
+                    )}
+                    {ri && ri.receivedQty !== dispatched && (
                       <span style={{ color: "#DC2626", marginLeft: 4 }}>· Received: {ri.receivedQty}</span>
                     )}
-                    {ri && ri.receivedQty === dispatchedQty && (
+                    {ri && ri.receivedQty === dispatched && (
                       <span style={{ color: "#059669", marginLeft: 4 }}>· Received: {ri.receivedQty}</span>
                     )}
                   </div>
