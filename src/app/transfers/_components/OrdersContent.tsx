@@ -491,7 +491,7 @@ function HistoryDetail({ po, dn, onBack }: {
                 )}
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontWeight: 700, fontSize: 18 }}>{item.qty}</div>
+                <div style={{ fontWeight: 700, fontSize: 18 }}>{ri?.receivedQty ?? dispatched ?? item.qty}</div>
                 <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{item.unit}</div>
               </div>
             </div>
@@ -525,8 +525,8 @@ function HistoryDetail({ po, dn, onBack }: {
             })}
             style={{
               width: "100%", padding: "14px 0", borderRadius: 12,
-              border: "1.5px solid var(--border)", background: "#FFF",
-              color: "var(--text)", fontWeight: 600, fontSize: 15, cursor: "pointer",
+              border: "none", background: "#1A1A1A",
+              color: "#FFF", fontWeight: 600, fontSize: 15, cursor: "pointer",
             }}
           >
             Reprint DR
