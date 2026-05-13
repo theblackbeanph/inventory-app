@@ -27,7 +27,7 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **Commissary fulfills only**: they review, confirm, dispatch — they cannot initiate sends
 - **On Phase 2 launch**: the commissary app's manual `pullOuts` creation flow will be DISABLED
 - **Discrepancy handling**: commissary adjusts their inventory + notifies branch; branch re-requests if replacement needed; no auto-replacement sends from commissary
-- **Cutover strategy**: 1-week shadow mode (Orders tab visible but old flow still active), then hard disable
+- **Cutover strategy**: cutover is complete — old commissary manual pull-out flow removed; ActionSheet Pull Out is now the only commissary entry point
 
 ### Business Date vs. Calendar Date
 - **`businessDatePHT()`** in `src/app/stock/_lib/helpers.ts` — use this (not `todayPHT()`) for all stocktake writes and queries
