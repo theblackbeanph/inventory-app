@@ -49,12 +49,17 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **`auth` is exported from `src/lib/firebase.ts`** — any client component that writes to Firestore must `await auth.authStateReady()` before the write, otherwise Firebase Auth may not have restored its session yet and the write will be rejected with PERMISSION_DENIED
 
 ### Role Permissions
-- **superadmin**: full access — all branches/departments, tap-to-correct confirmed stocktake counts, Reset button
-- **admin**: branch/department-scoped — daily inventory, stocktake submit/review, delivery entries, sales import (CSV/StoreHub), pull-out requests
+- **superadmin**: full access — all branches/departments, Reset button, access to `/orders` and `/production`
+- **admin**: branch/department-scoped — daily inventory, stocktake submit/review, delivery entries, sales import (CSV/StoreHub), pull-out requests, tap-to-correct confirmed stocktake/delivery counts, access to `/orders`
 - **linecook**: branch/department-scoped — view inventory, enter stocktake counts only; no admin controls
 
+### Route Access
+- `/orders` — min role: `admin` (renamed from `/transfers`)
+- `/production` — min role: `superadmin`
+- All other routes (`/stock`, `/history`, `/pullout`, `/delivery`, `/dashboard`) — min role: `linecook`
+
 ### Stocktake Count Correction (2026-05-06)
-- Superadmin can tap any item in a confirmed (`isLocked: true`) stocktake to correct its count
+- Admin and superadmin can tap any item in a confirmed (`isLocked: true`) stocktake to correct its count
 - Bottom sheet shows current vs new count; saving writes a single Firestore batch: `branchStock`, `dailyClose.items` (recalculates variance), `dailyBeginning` for tomorrow, new `adjustment` doc with `type: "correction"`
 - Scoped to today and yesterday only (inherits stocktake date picker limitation)
 - Component: `src/app/stock/_components/StocktakeCompleted.tsx`, handler: `handleCorrectCount` in `src/app/stock/page.tsx`
