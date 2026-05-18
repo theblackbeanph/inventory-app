@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { DailyClose } from "@/lib/types";
+import { hasMinRole, type Role } from "@/lib/roles";
 
 interface Props {
   dayClose: DailyClose;
@@ -24,7 +25,7 @@ export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [
   const [addSaving, setAddSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
 
-  const canEdit = role === "superadmin" || role === "admin";
+  const canEdit = !!role && hasMinRole(role as Role, "admin");
 
   function openCorrection(item: string, currentCount: number) {
     setSelected(item);

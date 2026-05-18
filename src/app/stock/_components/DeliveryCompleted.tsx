@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import type { DeliveryClose } from "@/lib/types";
+import { hasMinRole, type Role } from "@/lib/roles";
 import { formatDate } from "../_lib/helpers";
 
 interface Props {
@@ -19,12 +20,14 @@ export function DeliveryCompleted({ deliveryClose, role, onCorrect, missingItems
   const [selected, setSelected] = useState<string | null>(null);
   const [newCount, setNewCount] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-  const canEdit = role === "superadmin" || role === "admin";
+  const canEdit = !!role && hasMinRole(role as Role, "admin");
 
   function openCorrection(item: string, currentQty: number) {
     setSelected(item);
     setNewCount(String(currentQty));
+    setSaveError(null);
   }
 
   function closeSheet() {
@@ -79,9 +82,13 @@ export function DeliveryCompleted({ deliveryClose, role, onCorrect, missingItems
     const qty = Number(newCount);
     if (isNaN(qty) || qty < 0 || newCount.trim() === "") return;
     setSaving(true);
+    setSaveError(null);
     try {
       await onCorrect(selected, qty);
       closeSheet();
+    } catch (err) {
+      console.error("[DeliveryCorrect] save failed:", err);
+      setSaveError(err instanceof Error ? err.message : "Save failed. Please try again.");
     } finally {
       setSaving(false);
     }
@@ -176,6 +183,9 @@ export function DeliveryCompleted({ deliveryClose, role, onCorrect, missingItems
               </div>
             </div>
 
+            {saveError && (
+              <div style={{ color: "#DC2626", fontSize: 12, marginBottom: 8, textAlign: "center" }}>{saveError}</div>
+            )}
             <div style={{ display: "flex", gap: 8 }}>
               <button
                 onClick={closeSheet}
