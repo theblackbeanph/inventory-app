@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, BRANCH_LABELS } from "@/lib/auth";
+import { hasMinRole } from "@/lib/roles";
 import type { Branch, PullOut, DeliveryNote } from "@/lib/types";
 import { db, COLS, collection, onSnapshot, query, where } from "@/lib/firebase";
 import BottomNav from "@/components/BottomNav";
@@ -12,6 +13,7 @@ type Tab = "pending" | "active" | "history";
 export default function TransfersPage() {
   const router = useRouter();
   const [branch,        setBranch]        = useState<Branch | null>(null);
+  const [canOrder,      setCanOrder]      = useState(false);
   const [tab,           setTab]           = useState<Tab>("pending");
   const [pullOuts,      setPullOuts]      = useState<PullOut[]>([]);
   const [deliveryNotes, setDeliveryNotes] = useState<DeliveryNote[]>([]);
@@ -21,6 +23,7 @@ export default function TransfersPage() {
     if (!session) { router.replace("/login"); return; }
     if (session.department !== "kitchen") { router.replace("/stock"); return; }
     setBranch(session.branch);
+    setCanOrder(hasMinRole(session.role, "admin"));
   }, [router]);
 
   useEffect(() => {
@@ -77,7 +80,7 @@ export default function TransfersPage() {
         </div>
       </div>
 
-      <OrdersContent tab={tab} pullOuts={pullOuts} deliveryNotes={deliveryNotes} branch={branch} />
+      <OrdersContent tab={tab} pullOuts={pullOuts} deliveryNotes={deliveryNotes} branch={branch} canOrder={canOrder} />
 
       <BottomNav />
     </div>

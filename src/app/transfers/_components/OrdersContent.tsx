@@ -77,9 +77,10 @@ interface Props {
   pullOuts:      PullOut[];
   deliveryNotes: DeliveryNote[];
   branch:        Branch;
+  canOrder:      boolean;
 }
 
-export function OrdersContent({ tab, pullOuts, deliveryNotes, branch }: Props) {
+export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }: Props) {
   const [view,     setView]     = useState<View>("list");
   const [selected, setSelected] = useState<PullOut | null>(null);
 
@@ -192,7 +193,7 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch }: Props) {
         })}
       </div>
 
-      {tab !== "history" && (
+      {tab !== "history" && canOrder && (
         <button
           onClick={() => setView("new")}
           style={{

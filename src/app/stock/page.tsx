@@ -497,6 +497,7 @@ export default function StockPage() {
     // write one clean one), so re-running on an unchanged qty is safe and necessary to clean
     // up duplicate adjustment docs from a double-submit. Don't add it back as an optimization.
     await auth.authStateReady();
+    if (!auth.currentUser) throw new Error("Session expired — please log out and log back in.");
     const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
     const batch = writeBatch(db);
 

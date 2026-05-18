@@ -51,10 +51,10 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 ### Role Permissions
 - **superadmin**: full access — all branches/departments, access to `/orders` and `/production`
 - **admin**: branch/department-scoped — daily inventory, stocktake submit/review, delivery entries, sales import (CSV/StoreHub), pull-out requests, tap-to-correct confirmed stocktake/delivery counts, access to `/orders`
-- **linecook**: branch/department-scoped — view inventory, enter stocktake counts only; no admin controls
+- **linecook**: branch/department-scoped — view inventory, enter stocktake counts, view orders and receive stock; cannot create new orders
 
 ### Route Access
-- `/orders` — min role: `admin` (renamed from `/transfers`)
+- `/orders` — min role: `linecook` (all users can view/receive; creating new orders requires `admin+`)
 - `/production` — min role: `superadmin`
 - All other routes (`/stock`, `/history`, `/pullout`, `/delivery`, `/dashboard`) — min role: `linecook`
 
