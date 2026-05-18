@@ -493,6 +493,9 @@ export default function StockPage() {
     if (!branch || !department) return;
     const effective = deliveryClose ?? deliveryAdjClose;
     if (!effective) return;
+    // No newQty === currentQty early return here — handler is idempotent (delete all docs,
+    // write one clean one), so re-running on an unchanged qty is safe and necessary to clean
+    // up duplicate adjustment docs from a double-submit. Don't add it back as an optimization.
     await auth.authStateReady();
     const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
     const batch = writeBatch(db);
