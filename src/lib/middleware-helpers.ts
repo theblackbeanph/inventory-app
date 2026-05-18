@@ -8,7 +8,7 @@ interface MinimalSession {
 const PUBLIC_PATHS = ["/login"];
 
 const ROUTE_ROLES: { prefix: string; minRole: Role }[] = [
-  { prefix: "/transfers",  minRole: "admin"      },
+  { prefix: "/transfers",  minRole: "linecook"   },
   { prefix: "/production", minRole: "superadmin" },
   { prefix: "/stock",      minRole: "linecook"   },
   { prefix: "/history",    minRole: "linecook"   },
