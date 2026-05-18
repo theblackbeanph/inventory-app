@@ -49,7 +49,7 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **`auth` is exported from `src/lib/firebase.ts`** — any client component that writes to Firestore must `await auth.authStateReady()` before the write, otherwise Firebase Auth may not have restored its session yet and the write will be rejected with PERMISSION_DENIED
 
 ### Role Permissions
-- **superadmin**: full access — all branches/departments, Reset button, access to `/orders` and `/production`
+- **superadmin**: full access — all branches/departments, access to `/orders` and `/production`
 - **admin**: branch/department-scoped — daily inventory, stocktake submit/review, delivery entries, sales import (CSV/StoreHub), pull-out requests, tap-to-correct confirmed stocktake/delivery counts, access to `/orders`
 - **linecook**: branch/department-scoped — view inventory, enter stocktake counts only; no admin controls
 
@@ -63,6 +63,12 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - Bottom sheet shows current vs new count; saving writes a single Firestore batch: `branchStock`, `dailyClose.items` (recalculates variance), `dailyBeginning` for tomorrow, new `adjustment` doc with `type: "correction"`
 - Scoped to today and yesterday only (inherits stocktake date picker limitation)
 - Component: `src/app/stock/_components/StocktakeCompleted.tsx`, handler: `handleCorrectCount` in `src/app/stock/page.tsx`
+
+### Stock Page — UI Decisions (2026-05-18)
+- **Location filter pills removed**: Front Kitchen / Back Kitchen / Storage pills are hidden across all stock sub-tabs (Daily, Delivery, Stocktake). `categoryFilter` is permanently `"all"`. The location data on catalog items is preserved in case this is re-enabled later.
+- **Reset button removed**: no longer needed post-trial. `ResetModal` component still exists but is not imported or used.
+- **Delivery list excludes commissary items**: `commissary: true` items are filtered out of `DeliveryContent` via `deliveryItems` computed in `stock/page.tsx`. These items come in automatically via the Orders flow. Only non-commissary items remain: Burrata, Clam Chowder, Sourdough, Focaccia, Pandesal, Potato Buns, Brioche Loaf. The "missing items" list in `DeliveryCompleted` is filtered the same way.
+- **Orders tab auto-back**: switching tabs (Pending/Active/History) in `transfers/page.tsx` now resets `view` to `"list"` inside `OrdersContent` via a `useEffect` on the `tab` prop.
 
 ### Recipe Database (future 3rd app — not yet built)
 - Will share the same Firebase project (`commissary-dashboard-ccd7c`)
