@@ -59,6 +59,7 @@ export default function StockPage() {
   const [deliveryCounts, setDeliveryCounts] = useState<Record<string, string>>({});
   const [showDeliveryReview, setShowDeliveryReview] = useState(false);
   const [deliverySubmitLoading, setDeliverySubmitLoading] = useState(false);
+  const deliverySubmittingRef = useRef(false);
   const deliveryDraftsInitRef = useRef(false);
   const [deliveryClose, setDeliveryClose] = useState<DeliveryClose | null>(null);
   const [deliveryAdjClose, setDeliveryAdjClose] = useState<DeliveryClose | null>(null);
@@ -278,6 +279,8 @@ export default function StockPage() {
 
   async function handleDeliverySubmit() {
     if (!branch || !department) return;
+    if (deliverySubmittingRef.current) return;
+    deliverySubmittingRef.current = true;
     setDeliverySubmitLoading(true);
     try {
       await auth.authStateReady();
@@ -315,6 +318,7 @@ export default function StockPage() {
       setDeliveryCounts({});
       setShowDeliveryReview(false);
     } finally {
+      deliverySubmittingRef.current = false;
       setDeliverySubmitLoading(false);
     }
   }
@@ -489,9 +493,6 @@ export default function StockPage() {
     if (!branch || !department) return;
     const effective = deliveryClose ?? deliveryAdjClose;
     if (!effective) return;
-    const currentQty = effective.items[item] ?? 0;
-    if (newQty === currentQty) return;
-
     await auth.authStateReady();
     const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
     const batch = writeBatch(db);
