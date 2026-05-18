@@ -83,6 +83,11 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch }: Props) {
   const [view,     setView]     = useState<View>("list");
   const [selected, setSelected] = useState<PullOut | null>(null);
 
+  useEffect(() => {
+    setView("list");
+    setSelected(null);
+  }, [tab]);
+
   const pending = useMemo(() => pullOuts.filter(p => p.status === "PENDING_REVIEW"), [pullOuts]);
   const active  = useMemo(() => pullOuts.filter(p => p.status === "DISPATCHED"),     [pullOuts]);
   const history = useMemo(() => pullOuts.filter(p =>

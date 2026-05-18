@@ -10,7 +10,6 @@ import BottomNav from "@/components/BottomNav";
 
 import {
   todayPHT, businessDatePHT, syncDatePHT, addDays, computeMetrics, matchesFilter,
-  CATEGORY_FILTERS,
   type SubTab, type FilterTab,
 } from "./_lib/helpers";
 import { DailyContent } from "./_components/DailyContent";
@@ -22,7 +21,6 @@ import { DeliveryCompleted } from "./_components/DeliveryCompleted";
 import { DeliveryReviewSheet } from "./_components/DeliveryReviewSheet";
 import { StoreHubSyncModal } from "./_components/StoreHubSyncModal";
 import { CSVImportModal } from "./_components/CSVImportModal";
-import { ResetModal } from "./_components/ResetModal";
 
 export default function StockPage() {
   const router = useRouter();
@@ -36,7 +34,7 @@ export default function StockPage() {
   const [dayClose, setDayClose] = useState<DailyClose | null>(null);
 
   const [subTab, setSubTab] = useState<SubTab>("daily");
-  const [categoryFilter, setCategoryFilter] = useState<FilterTab>("all");
+  const [categoryFilter] = useState<FilterTab>("all");
 
   // Daily tab
   const [summaryDate, setSummaryDate] = useState(businessDatePHT);
@@ -68,7 +66,6 @@ export default function StockPage() {
   const [deliveryAdjDocIds, setDeliveryAdjDocIds] = useState<Record<string, string[]>>({});
 
   // Modals
-  const [showReset, setShowReset] = useState(false);
   const [showCSVImport, setShowCSVImport] = useState(false);
   const [showStoreHubSync, setShowStoreHubSync] = useState(false);
 
@@ -241,6 +238,7 @@ export default function StockPage() {
   const summaryMetrics = useMemo(() => computeMetrics(deptCatalog, summaryAdj, summaryBeg), [deptCatalog, summaryAdj, summaryBeg]);
   const stocktakeMetrics = useMemo(() => computeMetrics(deptCatalog, stocktakeAdjustments, stocktakeBeginnings), [deptCatalog, stocktakeAdjustments, stocktakeBeginnings]);
   const filtered = useMemo(() => deptCatalog.filter(item => matchesFilter(item, categoryFilter)), [deptCatalog, categoryFilter]);
+  const deliveryItems = useMemo(() => filtered.filter(i => !i.commissary), [filtered]);
 
   const lowCount  = deptCatalog.filter(i => { const m = dailyMetrics[i.name]; if (!m || m.beginning === null) return false; const avail = m.endCount !== null ? m.endCount : (m.beginning + m.inQty - m.outQty); return avail > 0 && avail <= i.reorderAt; }).length;
   const critCount = deptCatalog.filter(i => { const m = dailyMetrics[i.name]; if (!m || m.beginning === null) return false; const avail = m.endCount !== null ? m.endCount : (m.beginning + m.inQty - m.outQty); return avail <= 0; }).length;
@@ -565,7 +563,7 @@ export default function StockPage() {
 
   const effectiveDelivery = deliveryClose ?? deliveryAdjClose;
   const missingDeliveryItems = effectiveDelivery
-    ? deptCatalog.filter(i => !(i.name in effectiveDelivery.items)).map(i => i.name).sort()
+    ? deptCatalog.filter(i => !i.commissary && !(i.name in effectiveDelivery.items)).map(i => i.name).sort()
     : [];
 
   if (!branch || !department) return null;
@@ -591,7 +589,6 @@ export default function StockPage() {
                 Sync sales
               </button>
             )}
-            {role === "superadmin" && <button onClick={() => setShowReset(true)} style={{ background: "none", border: "none", color: "#DC2626", cursor: "pointer", fontSize: 12, padding: "4px 8px", fontWeight: 500 }}>Reset</button>}
             <button onClick={async () => { await logout(); router.replace("/login"); }} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13, padding: "4px 8px" }}>Log out</button>
           </div>
         </div>
@@ -613,18 +610,6 @@ export default function StockPage() {
         </div>
       </div>
 
-      {/* ── Category filter pills ── */}
-      <div style={{ background: "#fff", borderBottom: "1px solid var(--border)", padding: "8px 16px", display: "flex", gap: 6, overflowX: "auto", position: "sticky", top: 113, zIndex: 39 }}>
-        {CATEGORY_FILTERS.map(f => (
-          <button key={f.id} onClick={() => setCategoryFilter(f.id)} style={{
-            padding: "5px 14px", borderRadius: 20, border: "1.5px solid",
-            borderColor: categoryFilter === f.id ? "#1A1A1A" : "var(--border)",
-            background: categoryFilter === f.id ? "#1A1A1A" : "#fff",
-            color: categoryFilter === f.id ? "#fff" : "var(--text-secondary)",
-            fontWeight: 600, fontSize: 12, cursor: "pointer", whiteSpace: "nowrap",
-          }}>{f.label}</button>
-        ))}
-      </div>
 
       {/* ── Content ── */}
       {subTab === "daily" && (
@@ -651,7 +636,7 @@ export default function StockPage() {
               onAddMissing={handleAddMissingDeliveryItem}
             />
           : <DeliveryContent
-              items={filtered}
+              items={deliveryItems}
               stocks={stocks}
               deliveryCounts={deliveryCounts}
               deliveryDate={deliveryDate}
@@ -714,8 +699,6 @@ export default function StockPage() {
           loading={deliverySubmitLoading}
         />
       )}
-
-      {showReset && <ResetModal branch={branch} onClose={() => setShowReset(false)} />}
 
       {showStoreHubSync && (
         <StoreHubSyncModal
