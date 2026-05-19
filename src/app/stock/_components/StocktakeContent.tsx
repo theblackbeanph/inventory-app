@@ -128,7 +128,10 @@ export function StocktakeContent({ items, metrics, endCounts, currentFilter, sto
                   inputMode="numeric"
                   value={val}
                   placeholder="—"
-                  onChange={e => onCountChange(item.name, e.target.value)}
+                  onChange={e => {
+                    onCountChange(item.name, e.target.value);
+                    setTallyLog(prev => ({ ...prev, [item.name]: [] }));
+                  }}
                   style={{
                     width: 72, padding: "8px 10px", fontSize: 16, fontWeight: 700,
                     textAlign: "right", border: "1.5px solid",
