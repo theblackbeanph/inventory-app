@@ -213,10 +213,12 @@ export function StocktakeContent({ items, metrics, endCounts, currentFilter, sto
           onAdd={(qty) => {
             const current = parseInt(endCounts[tallyItem.name] ?? "0", 10) || 0;
             onCountChange(tallyItem.name, String(current + qty));
-            setTallyLog(prev => ({
-              ...prev,
-              [tallyItem.name]: [...(prev[tallyItem.name] ?? []), qty],
-            }));
+            setTallyLog(prev => {
+              const existing = prev[tallyItem.name] ?? [];
+              // First "+" tap on an item that already has a typed value — include it in the trail
+              const base = existing.length === 0 && current > 0 ? [current] : existing;
+              return { ...prev, [tallyItem.name]: [...base, qty] };
+            });
             setTallyItem(null);
           }}
           onClose={() => setTallyItem(null)}
