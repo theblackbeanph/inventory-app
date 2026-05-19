@@ -1,8 +1,9 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { CATALOG, LOCATIONS } from "@/lib/items";
 import type { DailyMetrics, FilterTab } from "../_lib/helpers";
 import { businessDatePHT, addDays } from "../_lib/helpers";
+import { TallyAddSheet } from "./TallyAddSheet";
 
 export function StocktakeContent({ items, metrics, endCounts, currentFilter, stocktakeDate, onDateChange, onCountChange, onSaveLocation, onOpenReview }: {
   items: typeof CATALOG;
@@ -18,6 +19,12 @@ export function StocktakeContent({ items, metrics, endCounts, currentFilter, sto
   const [pendingDate, setPendingDate] = useState<string | null>(null);
   const [showWarning, setShowWarning] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [tallyItem, setTallyItem] = useState<typeof CATALOG[number] | null>(null);
+  const [tallyLog, setTallyLog] = useState<Record<string, number[]>>({});
+
+  useEffect(() => {
+    setTallyLog({});
+  }, [stocktakeDate]);
 
   const today = businessDatePHT();
   const yesterday = addDays(today, -1);
@@ -105,29 +112,59 @@ export function StocktakeContent({ items, metrics, endCounts, currentFilter, sto
           const m = metrics[item.name];
           const expected = m.beginning !== null ? m.beginning + m.inQty - m.outQty : null;
           const val = endCounts[item.name] ?? "";
+          const log = tallyLog[item.name] ?? [];
           return (
-            <div key={item.name} style={{ background: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--border)" }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-                  {item.packSize}
-                  {expected !== null && <span> · Expected: <strong>{expected}</strong></span>}
+            <div key={item.name} style={{ background: "#fff", padding: "12px 16px", borderBottom: "1px solid var(--border)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                    {item.packSize}
+                    {expected !== null && <span> · Expected: <strong>{expected}</strong></span>}
+                  </div>
                 </div>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  value={val}
+                  placeholder="—"
+                  onChange={e => onCountChange(item.name, e.target.value)}
+                  style={{
+                    width: 72, padding: "8px 10px", fontSize: 16, fontWeight: 700,
+                    textAlign: "right", border: "1.5px solid",
+                    borderColor: val !== "" ? "#1A1A1A" : "var(--border)",
+                    borderRadius: 10, outline: "none",
+                    background: "var(--bg)", color: "var(--text)",
+                  }}
+                />
+                <button
+                  onClick={() => setTallyItem(item)}
+                  aria-label={`Add more ${item.name}`}
+                  style={{
+                    width: 40, height: 40, borderRadius: 10, border: "none",
+                    background: "#16A34A", color: "#fff",
+                    fontSize: 24, fontWeight: 300, lineHeight: 1,
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    cursor: "pointer", flexShrink: 0,
+                    boxShadow: "0 2px 6px rgba(22,163,74,0.25)",
+                  }}
+                >
+                  +
+                </button>
               </div>
-              <input
-                type="number"
-                inputMode="numeric"
-                value={val}
-                placeholder="—"
-                onChange={e => onCountChange(item.name, e.target.value)}
-                style={{
-                  width: 72, padding: "8px 10px", fontSize: 16, fontWeight: 700,
-                  textAlign: "right", border: "1.5px solid",
-                  borderColor: val !== "" ? "#1A1A1A" : "var(--border)",
-                  borderRadius: 10, outline: "none",
-                  background: "var(--bg)", color: "var(--text)",
-                }}
-              />
+              {log.length > 0 && (
+                <div style={{ display: "flex", gap: 4, flexWrap: "wrap", marginTop: 6 }}>
+                  {log.map((qty, i) => (
+                    <span key={i} style={{
+                      fontSize: 11, background: "#F0FDF4", color: "#166534",
+                      padding: "2px 7px", borderRadius: 20,
+                      border: "1px solid #BBF7D0", fontWeight: 600,
+                    }}>
+                      +{qty}
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}
@@ -166,6 +203,25 @@ export function StocktakeContent({ items, metrics, endCounts, currentFilter, sto
           Submit ({totalEntered})
         </button>
       </div>
+
+      {/* Tally add sheet */}
+      {tallyItem && (
+        <TallyAddSheet
+          itemName={tallyItem.name}
+          packSize={tallyItem.packSize}
+          currentCount={parseInt(endCounts[tallyItem.name] ?? "0", 10) || 0}
+          onAdd={(qty) => {
+            const current = parseInt(endCounts[tallyItem.name] ?? "0", 10) || 0;
+            onCountChange(tallyItem.name, String(current + qty));
+            setTallyLog(prev => ({
+              ...prev,
+              [tallyItem.name]: [...(prev[tallyItem.name] ?? []), qty],
+            }));
+            setTallyItem(null);
+          }}
+          onClose={() => setTallyItem(null)}
+        />
+      )}
 
       {/* Date-change warning sheet */}
       {showWarning && pendingDate && (
