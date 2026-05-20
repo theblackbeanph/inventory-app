@@ -391,11 +391,31 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
               </div>
             </div>
             {dn.items.map(item => {
-              const received = receivedQtys[item.item] ?? item.dispatchedQty;
-              const isDiff   = received !== item.dispatchedQty;
+              const received   = receivedQtys[item.item] ?? item.dispatchedQty;
+              const isDiff     = received !== item.dispatchedQty;
+              const isChecked  = checkedItems.has(item.item);
+              const rowBg      = isChecked && isDiff ? "#FFF5F5" : isChecked ? "#F0FDF4" : "#FFF";
+              const rowBorder  = isDiff ? "4px solid #DC2626" : isChecked ? "4px solid #059669" : "4px solid transparent";
               return (
-                <div key={item.item} style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", borderLeft: isDiff ? "4px solid #DC2626" : "4px solid transparent" }}>
+                <div key={item.item} style={{ background: rowBg, borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", borderLeft: rowBorder }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <button
+                      onClick={() => toggleChecked(item.item)}
+                      aria-label={isChecked ? "Uncheck item" : "Check item"}
+                      style={{
+                        width: 22, height: 22, borderRadius: 6, flexShrink: 0,
+                        border: `2px solid ${isChecked ? "#059669" : "#D1D5DB"}`,
+                        background: isChecked ? "#059669" : "transparent",
+                        cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                        padding: 0, marginRight: 10,
+                      }}
+                    >
+                      {isChecked && (
+                        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth={3}>
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      )}
+                    </button>
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item}</div>
                       <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
@@ -412,7 +432,7 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
                         )}
                       </div>
                     </div>
-                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, opacity: isChecked && !isDiff ? 0.45 : 1 }}>
                       <button
                         onClick={() => setReceivedQtys(p => ({ ...p, [item.item]: Math.max(0, (p[item.item] ?? item.dispatchedQty) - 1) }))}
                         style={qtyBtnStyle}
