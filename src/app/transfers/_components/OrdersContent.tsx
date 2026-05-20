@@ -472,6 +472,92 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
           </button>
         </div>
       )}
+
+      {showReview && dn && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 70, background: "#FFF", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+
+          <div style={{ padding: "16px 16px 12px", borderBottom: "1px solid var(--border)", background: "#FFF", position: "sticky", top: 0, zIndex: 1 }}>
+            <div style={{ fontWeight: 700, fontSize: 17 }}>Review & Confirm</div>
+          </div>
+
+          <div style={{ flex: 1, overflowY: "auto", padding: 16 }}>
+            <div style={{ background: "#FFF", borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.08)" }}>
+
+              <div style={{ background: hasDiscrepancy ? "#DC2626" : "#059669", padding: "14px 16px", color: "#FFF" }}>
+                <div style={{ fontSize: 12, opacity: 0.85, marginBottom: 2 }}>You are confirming receipt of</div>
+                <div style={{ fontWeight: 700, fontSize: 16 }}>{po.poRef}</div>
+                <div style={{ fontSize: 12, opacity: 0.85, marginTop: 2 }}>
+                  {dn.dnRef} · {dn.items.length} item{dn.items.length !== 1 ? "s" : ""}
+                  {hasDiscrepancy ? ` · ${itemsWithDiscrepancy.length} discrepancy` : ""}
+                </div>
+              </div>
+
+              <div style={{ padding: "4px 0" }}>
+                {dn.items.map((item, idx) => {
+                  const receivedQty = receivedQtys[item.item] ?? item.dispatchedQty;
+                  const isDisc      = receivedQty !== item.dispatchedQty;
+                  return (
+                    <div
+                      key={item.item}
+                      style={{
+                        background:   isDisc ? "#FEF2F2" : "#FFF",
+                        borderLeft:   isDisc ? "3px solid #DC2626" : "3px solid transparent",
+                        padding:      "11px 16px",
+                        borderBottom: idx < dn.items.length - 1 ? "1px solid #F3F3F0" : "none",
+                        display: "flex", justifyContent: "space-between", alignItems: "flex-start",
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: 14, fontWeight: 500 }}>{item.item}</div>
+                        {isDisc && (
+                          <div style={{ fontSize: 11, color: "#DC2626", fontWeight: 500, marginTop: 2 }}>
+                            Expected {item.dispatchedQty} · received {receivedQty}
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: isDisc ? "#DC2626" : "var(--text)" }}>
+                          {receivedQty}{" "}
+                          <span style={{ fontWeight: 400, fontSize: 12, color: isDisc ? "#DC2626" : "#888" }}>{item.unit}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ background: hasDiscrepancy ? "#FEF2F2" : "#F0FDF4", padding: "10px 16px", fontSize: 12, color: hasDiscrepancy ? "#DC2626" : "#059669", fontWeight: 500, borderTop: "1px solid var(--border)" }}>
+                {hasDiscrepancy ? "Commissary will be notified of the discrepancy." : "✓ All quantities match dispatch"}
+              </div>
+            </div>
+
+            <div style={{ fontSize: 12, color: "#9CA3AF", textAlign: "center", marginTop: 14 }}>
+              Stock will be added to your inventory once submitted.
+            </div>
+          </div>
+
+          <div style={{ padding: "12px 16px calc(var(--nav-h) + 12px)", background: "#FFF", borderTop: "1px solid var(--border)" }}>
+            {error && (
+              <div style={{ background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626", marginBottom: 8 }}>{error}</div>
+            )}
+            <div style={{ display: "flex", gap: 10 }}>
+              <button
+                onClick={() => setShowReview(false)}
+                style={{ flex: 1, padding: "15px 0", borderRadius: 14, border: "1.5px solid var(--border)", background: "#FFF", color: "var(--text)", fontWeight: 700, fontSize: 15, cursor: "pointer" }}
+              >
+                Back
+              </button>
+              <button
+                onClick={confirmReceipt}
+                disabled={loading}
+                style={{ flex: 2, padding: "15px 0", borderRadius: 14, border: "none", background: hasDiscrepancy ? "#DC2626" : "#059669", color: "#FFF", fontWeight: 700, fontSize: 15, cursor: loading ? "not-allowed" : "pointer" }}
+              >
+                {loading ? "Submitting…" : "Submit"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
