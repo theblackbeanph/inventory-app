@@ -301,6 +301,7 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState("");
   const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+  const [showReview,   setShowReview]   = useState(false);
 
   function toggleChecked(itemName: string) {
     setCheckedItems(prev => {
@@ -464,11 +465,10 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
             </div>
           )}
           <button
-            onClick={confirmReceipt}
-            disabled={loading}
+            onClick={() => setShowReview(true)}
             style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: hasDiscrepancy ? "#DC2626" : "#059669", color: "#FFF", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
           >
-            {loading ? "Saving…" : hasDiscrepancy ? "Confirm Receipt with Discrepancy" : "Confirm Receipt — All Good"}
+            {hasDiscrepancy ? "Confirm Receipt with Discrepancy" : "Confirm Receipt — All Good"}
           </button>
         </div>
       )}
