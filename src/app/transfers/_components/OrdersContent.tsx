@@ -384,6 +384,12 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
             <div style={{ background: "#EFF6FF", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#1D4ED8" }}>
               Verify each quantity received. Adjust if the actual count differs.
             </div>
+            <div style={{ background: "#FFF", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: 13, color: "#555", fontWeight: 500 }}>Items checked</div>
+              <div style={{ fontSize: 13, fontWeight: 700, color: "#1A1A1A" }}>
+                {checkedItems.size} <span style={{ color: "#888", fontWeight: 400 }}>of {dn.items.length}</span>
+              </div>
+            </div>
             {dn.items.map(item => {
               const received = receivedQtys[item.item] ?? item.dispatchedQty;
               const isDiff   = received !== item.dispatchedQty;
