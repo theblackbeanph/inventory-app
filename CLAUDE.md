@@ -70,6 +70,10 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **Delivery list excludes commissary items**: `commissary: true` items are filtered out of `DeliveryContent` via `deliveryItems` computed in `stock/page.tsx`. These items come in automatically via the Orders flow. Only non-commissary items remain: Burrata, Clam Chowder, Sourdough, Focaccia, Pandesal, Potato Buns, Brioche Loaf. The "missing items" list in `DeliveryCompleted` is filtered the same way.
 - **Orders tab auto-back**: switching tabs (Pending/Active/History) in `transfers/page.tsx` now resets `view` to `"list"` inside `OrdersContent` via a `useEffect` on the `tab` prop.
 
+### Active Order Detail — Receiving UX (2026-05-20)
+- **Per-item check button**: checkbox on the left of each item row in `ActiveDetail` (`OrdersContent.tsx`). Tapping toggles a green checked state. Checked + no discrepancy → green row, dimmed qty controls. Checked + discrepancy → light red row, red border stays dominant. Progress counter ("Items checked X of Y") shown between the info banner and item list. State is local (`useState<Set<string>>`) — resets if user navigates away. No Firestore writes.
+- **Confirm receipt summary**: tapping "Confirm Receipt" opens a full-screen overlay (`showReview` state) instead of immediately writing to Firestore. Overlay shows a receipt card with colored header (green = all good, red = discrepancy), read-only item list, discrepancy items highlighted with "Expected X · received Y", footer note, and **Back** / **Submit** buttons. Submit fires the existing `confirmReceipt()` unchanged.
+
 ### Recipe Database (future 3rd app — not yet built)
 - Will share the same Firebase project (`commissary-dashboard-ccd7c`)
 - First step before building: migrate hardcoded `RECIPES` array from commissary `src/data.ts` → Firestore `recipes` collection
