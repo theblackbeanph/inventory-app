@@ -298,8 +298,17 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
       setReceivedQtys(Object.fromEntries(dn.items.map(i => [i.item, i.dispatchedQty])));
     }
   }, [dn?.id]);
-  const [loading, setLoading] = useState(false);
-  const [error,   setError]   = useState("");
+  const [loading,      setLoading]      = useState(false);
+  const [error,        setError]        = useState("");
+  const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
+
+  function toggleChecked(itemName: string) {
+    setCheckedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemName)) next.delete(itemName); else next.add(itemName);
+      return next;
+    });
+  }
 
   const itemsWithDiscrepancy = dn
     ? dn.items.filter(i => receivedQtys[i.item] !== i.dispatchedQty)
