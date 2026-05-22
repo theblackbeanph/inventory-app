@@ -74,10 +74,10 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const matched = applyStoreHubMapping(soldBySkuMap);
+    const matched = applyStoreHubMapping(soldBySkuMap, "MKT");
 
     // Unmatched: sold SKUs not referenced in any mapping entry
-    const mappedSkus = allMappedSkus();
+    const mappedSkus = allMappedSkus("MKT");
     const unmatchedSkus = Object.entries(soldBySkuMap)
       .filter(([sku]) => !mappedSkus.has(sku))
       .map(([sku, qty]) => ({ sku, name: nameBySkuMap[sku] ?? sku, qty }));

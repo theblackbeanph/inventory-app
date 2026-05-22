@@ -1,4 +1,4 @@
-// MKT StoreHub SKU → commissary item mapping
+// StoreHub SKU → commissary item mapping
 // Each LinkedSku maps one StoreHub SKU to a deduction quantity.
 // Multiple commissary items can reference the same SKU (e.g. Fish & Chips → Cobbler + Tartar).
 // For loose items, ordersPerPack converts raw order count → packs consumed (floor division).
@@ -11,7 +11,8 @@ interface StoreHubMappingEntry {
   ordersPerPack?: number; // loose items only — from Portion Guide (April 2026)
 }
 
-const STOREHUB_MAPPING: StoreHubMappingEntry[] = [
+// Shared across all branches (90% of menu)
+const BASE_MAPPING: StoreHubMappingEntry[] = [
   // ── PORTIONS ─────────────────────────────────────────────────────────────
   { item: "Cobbler",                 linkedSkus: ["66", { sku: "156", qty: 3 }, "B5"] },
   { item: "Smoked Salmon",           linkedSkus: ["63", "175", "160"] },
@@ -67,10 +68,19 @@ const STOREHUB_MAPPING: StoreHubMappingEntry[] = [
   { item: "House Vinaigrette",       linkedSkus: ["62", "63", "64", "C24"],                           ordersPerPack: 25 },
 ];
 
-// All SKUs referenced in the mapping (for identifying unmatched sold items)
-export function allMappedSkus(): Set<string> {
+// Branch-exclusive items — add new branches here as they go live
+const BRANCH_OVERRIDES: Record<string, StoreHubMappingEntry[]> = {
+  BF: [],
+};
+
+function getMappingForBranch(branch: string): StoreHubMappingEntry[] {
+  return [...BASE_MAPPING, ...(BRANCH_OVERRIDES[branch] ?? [])];
+}
+
+// All SKUs referenced in the mapping for a given branch (for identifying unmatched sold items)
+export function allMappedSkus(branch: string): Set<string> {
   const skus = new Set<string>();
-  for (const entry of STOREHUB_MAPPING) {
+  for (const entry of getMappingForBranch(branch)) {
     for (const link of entry.linkedSkus) {
       skus.add(typeof link === "string" ? link : link.sku);
     }
@@ -80,10 +90,11 @@ export function allMappedSkus(): Set<string> {
 
 // Apply mapping: soldBySkuMap is { sku → qty sold }
 export function applyStoreHubMapping(
-  soldBySkuMap: Record<string, number>
+  soldBySkuMap: Record<string, number>,
+  branch: string
 ): { item: string; qty: number; rawOrders?: number }[] {
   const results: { item: string; qty: number; rawOrders?: number }[] = [];
-  for (const entry of STOREHUB_MAPPING) {
+  for (const entry of getMappingForBranch(branch)) {
     let orders = 0;
     for (const link of entry.linkedSkus) {
       const sku    = typeof link === "string" ? link : link.sku;
@@ -94,11 +105,9 @@ export function applyStoreHubMapping(
     }
     if (orders <= 0) continue;
     if (entry.ordersPerPack) {
-      // Loose items: qty = packs consumed (for formula); rawOrders = order count (for display)
       const qty = Math.ceil(orders / entry.ordersPerPack);
       results.push({ item: entry.item, qty, rawOrders: orders });
     } else {
-      // Portions/packed: 1 order = 1 unit, no rawOrders needed
       results.push({ item: entry.item, qty: orders });
     }
   }

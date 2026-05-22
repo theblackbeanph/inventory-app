@@ -87,9 +87,9 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const matched = applyStoreHubMapping(soldBySkuMap);
+    const matched = applyStoreHubMapping(soldBySkuMap, BRANCH);
     const unmatchedItems = Object.entries(soldBySkuMap)
-      .filter(([sku]) => !allMappedSkus().has(sku))
+      .filter(([sku]) => !allMappedSkus(BRANCH).has(sku))
       .map(([sku, qty]) => ({ sku, name: nameBySkuMap[sku] ?? sku, qty }));
 
     const batch = writeBatch(db);
