@@ -66,6 +66,7 @@ const BASE_MAPPING: StoreHubMappingEntry[] = [
   { item: "Marinara Sauce",          linkedSkus: ["79", "69"],                                        ordersPerPack: 10 },
   { item: "Marinara Sauce (Blend)",  linkedSkus: ["45", "B2"],                                        ordersPerPack: 10 },
   { item: "House Vinaigrette",       linkedSkus: ["62", "63", "64", "C24"],                           ordersPerPack: 25 },
+  { item: "Ube Halaya",              linkedSkus: ["S3", "70"],                                        ordersPerPack: 7  },
 ];
 
 // Branch-exclusive items — add new branches here as they go live

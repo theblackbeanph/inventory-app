@@ -66,6 +66,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Raspberry Dressing",      category: "loose",   unit: "pack", reorderAt: 1, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 10, commissary: true },
   { name: "Candied Walnut",          category: "loose",   unit: "pack", reorderAt: 1, packSize: "200g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 5,  commissary: true },
   { name: "Kimchi",                  category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 16, branches: ["MKT"], commissary: true },
+  { name: "Ube Halaya",              category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 7,  commissary: true },
   // ── BREADS (count only — no sales deduction) ─────────────────────────
   { name: "Sourdough",               category: "packed",  unit: "pc", reorderAt: 6,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Focaccia",                category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
