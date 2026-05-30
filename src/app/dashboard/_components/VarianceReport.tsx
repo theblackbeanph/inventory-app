@@ -7,6 +7,7 @@ import { addDays, todayPHT, formatDate } from "@/app/stock/_lib/helpers";
 import {
   computeItemSummaries,
   exportItemSummariesCsv,
+  exportLossSummaryCsv,
   datesInRange,
   type ItemSummary,
 } from "@/app/dashboard/_lib/variance";
@@ -504,6 +505,33 @@ export function VarianceReport({ branch, department }: {
             ) : (
               <SummaryTable summaries={filteredSummaries} selectedItem={selectedItem} onSelect={handleSelectItem} showInsights />
             )}
+
+            {/* Loss Summary — for month-end charges */}
+            {(() => {
+              const lossItems = rawSummaries.filter(s => s.periodVariance < 0);
+              return (
+                <div style={{ marginTop: 24 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 700 }}>Loss Summary (for charges)</div>
+                      <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+                        {lossItems.length === 0
+                          ? "No loss items for this period."
+                          : `${lossItems.length} item${lossItems.length !== 1 ? "s" : ""} with net loss · Add cost/unit in the spreadsheet`}
+                      </div>
+                    </div>
+                    {lossItems.length > 0 && (
+                      <button
+                        onClick={() => exportLossSummaryCsv(rawSummaries, startDate, endDate, BRANCH_LABELS[branch])}
+                        style={{ padding: "6px 14px", borderRadius: 8, border: "1.5px solid var(--border)", background: "#fff", fontSize: 13, fontWeight: 600, cursor: "pointer", color: "var(--text)", whiteSpace: "nowrap" }}
+                      >
+                        Export CSV
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Unmatched SKUs — MKT only */}
             {branch === "MKT" && (

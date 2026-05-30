@@ -338,3 +338,24 @@ export function exportItemSummariesCsv(
   a.click();
   URL.revokeObjectURL(url);
 }
+
+export function exportLossSummaryCsv(
+  summaries: ItemSummary[],
+  startDate: string,
+  endDate: string,
+  branchLabel: string,
+): void {
+  const losses = summaries.filter(s => s.periodVariance < 0);
+  const header = ["Item", "Net Variance (units)", "Cost / Unit", "Total Charge"];
+  const csvRows = losses.map(s => [s.item, s.periodVariance, "", ""]);
+  const csv = [header, ...csvRows]
+    .map(row => row.map(v => `"${v}"`).join(","))
+    .join("\n");
+  const blob = new Blob([csv], { type: "text/csv" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `loss-charges-${branchLabel}-${startDate}-to-${endDate}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
