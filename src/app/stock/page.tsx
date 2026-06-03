@@ -109,16 +109,24 @@ export default function StockPage() {
       setDayClose(snap.empty ? null : snap.docs[0].data() as DailyClose);
     });
 
-    const thirtyDaysAgo = (() => {
-      const d = new Date(); d.setDate(d.getDate() - 30);
-      return d.toISOString().slice(0, 10);
-    })();
-    const wasteQ = query(collection(db, COLS.adjustments), where("branch", "==", b), where("department", "==", dept), where("date", ">=", thirtyDaysAgo));
-    const unsubWaste = onSnapshot(wasteQ, snap => {
-      setWasteHistory(snap.docs.map(d => d.data() as StockAdjustment).filter(a => a.type === "waste"));
+    // Fetch waste history for the past 14 days using per-date equality queries
+    // (avoids range query which requires a composite index that doesn't exist)
+    const today = businessDatePHT();
+    const pastDates: string[] = [];
+    for (let i = 1; i <= 14; i++) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      pastDates.push(d.toISOString().slice(0, 10));
+    }
+    Promise.all(
+      pastDates.map(date =>
+        getDocs(query(collection(db, COLS.adjustments), where("branch", "==", b), where("department", "==", dept), where("date", "==", date)))
+      )
+    ).then(snaps => {
+      const past = snaps.flatMap(s => s.docs.map(d => d.data() as StockAdjustment)).filter(a => a.type === "waste");
+      setWasteHistory(past);
     });
 
-    return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); unsubWaste(); };
+    return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); };
   }, [router]);
 
   useEffect(() => {
@@ -717,7 +725,7 @@ export default function StockPage() {
         <WasteContent
           items={filtered}
           todayWaste={adjustments.filter(a => a.type === "waste")}
-          wasteHistory={wasteHistory}
+          wasteHistory={[...adjustments.filter(a => a.type === "waste"), ...wasteHistory]}
           onSubmit={handleSubmitWaste}
           today={today}
           loading={wasteLoading}
