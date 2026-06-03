@@ -4,7 +4,7 @@ import { CATALOG } from "@/lib/items";
 import { BRANCH_LABELS } from "@/lib/auth";
 import type { DailyMetrics } from "../_lib/helpers";
 
-export function DailyContent({ items, metrics, summaryDate, today, activeFilter, onDateChange, onFilterChange, lowItems, oosItems, branch, onWaste }: {
+export function DailyContent({ items, metrics, summaryDate, today, activeFilter, onDateChange, onFilterChange, lowItems, oosItems, branch }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   summaryDate: string;
@@ -15,7 +15,6 @@ export function DailyContent({ items, metrics, summaryDate, today, activeFilter,
   lowItems: Set<string>;
   oosItems: Set<string>;
   branch: Branch;
-  onWaste?: (item: string) => void;
 }) {
   const rows = items.map(item => {
     const m = metrics[item.name];
@@ -98,14 +97,6 @@ export function DailyContent({ items, metrics, summaryDate, today, activeFilter,
                   <td style={{ ...tdStyle, textAlign: "left", padding: "10px 12px", position: "sticky", left: 0, background: "#fff" }}>
                     <div style={{ fontWeight: 600, fontSize: 13 }}>{item.name}</div>
                     <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 1 }}>{item.packSize}</div>
-                    {onWaste && summaryDate === today && (
-                      <button
-                        onClick={() => onWaste(item.name)}
-                        style={{ marginTop: 4, padding: "2px 8px", fontSize: 10, fontWeight: 700, color: "#DC2626", background: "#FEF2F2", border: "1px solid #FECACA", borderRadius: 6, cursor: "pointer", letterSpacing: "0.04em" }}
-                      >
-                        + WASTE
-                      </button>
-                    )}
                   </td>
                   <td style={tdStyle}>{m.beginning ?? "—"}</td>
                   <td style={{ ...tdStyle, color: m.inQty > 0 ? "#16A34A" : undefined }}>{m.inQty > 0 ? `+${m.inQty}` : "—"}</td>

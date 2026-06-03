@@ -21,7 +21,8 @@ import { DeliveryCompleted } from "./_components/DeliveryCompleted";
 import { DeliveryReviewSheet } from "./_components/DeliveryReviewSheet";
 import { StoreHubSyncModal } from "./_components/StoreHubSyncModal";
 import { CSVImportModal } from "./_components/CSVImportModal";
-import { WasteEntrySheet, type WasteReason } from "./_components/WasteEntrySheet";
+import { WasteContent } from "./_components/WasteContent";
+import type { WasteReason } from "./_components/WasteEntrySheet";
 
 export default function StockPage() {
   const router = useRouter();
@@ -68,9 +69,9 @@ export default function StockPage() {
   const [deliveryAdjDocIds, setDeliveryAdjDocIds] = useState<Record<string, string[]>>({});
 
   // Waste
-  const [wasteItem, setWasteItem] = useState<string | null>(null);
   const [wasteLoading, setWasteLoading] = useState(false);
   const wasteSubmittingRef = useRef(false);
+  const [wasteHistory, setWasteHistory] = useState<StockAdjustment[]>([]);
 
   // Modals
   const [showCSVImport, setShowCSVImport] = useState(false);
@@ -108,7 +109,16 @@ export default function StockPage() {
       setDayClose(snap.empty ? null : snap.docs[0].data() as DailyClose);
     });
 
-    return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); };
+    const thirtyDaysAgo = (() => {
+      const d = new Date(); d.setDate(d.getDate() - 30);
+      return d.toISOString().slice(0, 10);
+    })();
+    const wasteQ = query(collection(db, COLS.adjustments), where("branch", "==", b), where("department", "==", dept), where("date", ">=", thirtyDaysAgo));
+    const unsubWaste = onSnapshot(wasteQ, snap => {
+      setWasteHistory(snap.docs.map(d => d.data() as StockAdjustment).filter(a => a.type === "waste"));
+    });
+
+    return () => { unsubStock(); unsubAdj(); unsubBeg(); unsubClose(); unsubWaste(); };
   }, [router]);
 
   useEffect(() => {
@@ -264,28 +274,23 @@ export default function StockPage() {
     setDeliveryDate(newDate);
   }
 
-  async function handleLogWaste(item: string, qty: number, reason: WasteReason) {
+  async function handleSubmitWaste(entries: { item: string; qty: number; reason: WasteReason }[]) {
     if (!branch || !department || wasteSubmittingRef.current) return;
     wasteSubmittingRef.current = true;
     setWasteLoading(true);
     try {
       await auth.authStateReady();
       const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
-      const currentQty = stocks[item]?.qty ?? 0;
       const batch = writeBatch(db);
-
-      const adjRef = doc(collection(db, COLS.adjustments));
-      batch.set(adjRef, {
-        id: adjRef.id, branch, department, date: today,
-        item, type: "waste", qty, loggedBy, note: reason,
-      });
-
-      batch.set(doc(db, COLS.branchStock, stockDocId(branch, department, item)), {
-        qty: Math.max(0, currentQty - qty), lastUpdated: today, lastUpdatedBy: loggedBy,
-      }, { merge: true });
-
+      for (const { item, qty, reason } of entries) {
+        const currentQty = stocks[item]?.qty ?? 0;
+        const adjRef = doc(collection(db, COLS.adjustments));
+        batch.set(adjRef, { id: adjRef.id, branch, department, date: today, item, type: "waste", qty, loggedBy, note: reason });
+        batch.set(doc(db, COLS.branchStock, stockDocId(branch, department, item)), {
+          qty: Math.max(0, currentQty - qty), lastUpdated: today, lastUpdatedBy: loggedBy,
+        }, { merge: true });
+      }
       await batch.commit();
-      setWasteItem(null);
     } finally {
       wasteSubmittingRef.current = false;
       setWasteLoading(false);
@@ -638,6 +643,7 @@ export default function StockPage() {
             { id: "daily",       label: "Daily" },
             { id: "delivery",    label: "Delivery" },
             { id: "manualcount", label: "Stocktake" },
+            { id: "waste",       label: "Waste" },
           ] as { id: SubTab; label: string }[]).map(tab => (
             <button key={tab.id} onClick={() => setSubTab(tab.id)} style={{
               flex: 1, padding: "9px 4px", border: "none", cursor: "pointer",
@@ -663,7 +669,6 @@ export default function StockPage() {
           lowItems={lowItems}
           oosItems={oosItems}
           branch={branch}
-          onWaste={setWasteItem}
         />
       )}
       {subTab === "delivery" && (
@@ -707,6 +712,16 @@ export default function StockPage() {
               onSaveLocation={handleSaveLocation}
               onOpenReview={() => setShowSubmitAll(true)}
             />
+      )}
+      {subTab === "waste" && (
+        <WasteContent
+          items={filtered}
+          todayWaste={adjustments.filter(a => a.type === "waste")}
+          wasteHistory={wasteHistory}
+          onSubmit={handleSubmitWaste}
+          today={today}
+          loading={wasteLoading}
+        />
       )}
 
       {/* ── Modals ── */}
@@ -760,15 +775,6 @@ export default function StockPage() {
         />
       )}
 
-      {wasteItem && (
-        <WasteEntrySheet
-          itemName={wasteItem}
-          packSize={deptCatalog.find(i => i.name === wasteItem)?.packSize ?? ""}
-          alreadyLoggedToday={adjustments.filter(a => a.item === wasteItem && a.type === "waste").reduce((sum, a) => sum + a.qty, 0)}
-          onLog={(qty, reason) => handleLogWaste(wasteItem, qty, reason)}
-          onClose={() => !wasteLoading && setWasteItem(null)}
-        />
-      )}
 
       <BottomNav />
     </div>

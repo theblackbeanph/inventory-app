@@ -1,7 +1,7 @@
 import type { StockAdjustment } from "@/lib/types";
 import { CATALOG, LOCATIONS } from "@/lib/items";
 
-export type SubTab = "daily" | "delivery" | "manualcount";
+export type SubTab = "daily" | "delivery" | "manualcount" | "waste";
 export type FilterTab = "all" | typeof LOCATIONS[number]["id"];
 
 export interface DailyMetrics {
