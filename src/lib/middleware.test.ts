@@ -8,8 +8,8 @@ describe("getRedirectPath", () => {
   it("allows linecook to access /stock", () => {
     expect(getRedirectPath({ role: "linecook" }, "/stock")).toBeNull();
   });
-  it("redirects linecook from /transfers to /stock", () => {
-    expect(getRedirectPath({ role: "linecook" }, "/transfers")).toBe("/stock");
+  it("allows linecook to access /transfers", () => {
+    expect(getRedirectPath({ role: "linecook" }, "/transfers")).toBeNull();
   });
   it("redirects admin from /production to /stock", () => {
     expect(getRedirectPath({ role: "admin" }, "/production")).toBe("/stock");

@@ -11,8 +11,8 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 
 ### Build Phase Priority (solo developer — sequential)
 1. **Phase 1 — MVP: Inventory only** — currently live (stock view, adjustments, StoreHub/CSV import, daily close/cron, dashboard)
-2. **Phase 2 — Transfers integration** — NEXT PRIORITY (branch pull-out requests ↔ commissary Orders tab)
-3. **Phase 3 — Production** (supplier deliveries, portioning — built but out of MVP scope)
+2. **Phase 2 — Transfers integration** — currently live (branch pull-out requests ↔ commissary Orders tab, live since 2026-05-09)
+3. **Phase 3 — Production** — NEXT PRIORITY (built but needs RAW_MATERIALS config before usable; supplier deliveries, portioning)
 4. **Phase 4 — Food Cost / GP Analysis** (depends on Recipe Database being built first)
 
 ### Sales Import — Both Branches Are LIVE
@@ -63,6 +63,21 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - Bottom sheet shows current vs new count; saving writes a single Firestore batch: `branchStock`, `dailyClose.items` (recalculates variance), `dailyBeginning` for tomorrow, new `adjustment` doc with `type: "correction"`
 - Scoped to today and yesterday only (inherits stocktake date picker limitation)
 - Component: `src/app/stock/_components/StocktakeCompleted.tsx`, handler: `handleCorrectCount` in `src/app/stock/page.tsx`
+
+### Stocktake Auto-Save (2026-06-11)
+- Counts are auto-saved to `localStorage` 800ms after each keystroke — device-local, no cross-user interference
+- Key: `stocktake_counts__${branch}__${department}__${date}`
+- On load, localStorage is merged with Firestore drafts (localStorage wins — it holds the most recent unsaved state)
+- A green **"Auto-saved"** badge appears in the header (beside Sync/Import buttons) for 2s after each save, only while on the Stocktake tab
+- localStorage key is cleared on successful final submit
+- Implementation: auto-save `useEffect` in `stock/page.tsx`; status prop passed to `StocktakeContent`
+
+### Delivery — Multiple Deliveries Per Day (2026-06-11)
+- Removed the one-per-day lock: a **"+ New Delivery"** button appears in `DeliveryCompleted`, allowing additional delivery entries
+- Each new delivery accumulates into the running total (`deliveryAdjClose` quantities sum across all submissions for the day)
+- `effectiveDelivery` now prefers `deliveryAdjClose` over `deliveryClose` — `deliveryAdjClose` is always live/accurate (computed from real adjustments), `deliveryClose` is a snapshot that can go stale after multiple submits
+- `handleDeliveryCorrect` and `handleAddMissingDeliveryItem` use the same `deliveryAdjClose ?? deliveryClose` priority
+- `deliveryClose` doc is written with merged (cumulative) items on each submit to stay roughly in sync
 
 ### Stock Page — UI Decisions (2026-05-18)
 - **Location filter pills removed**: Front Kitchen / Back Kitchen / Storage pills are hidden across all stock sub-tabs (Daily, Delivery, Stocktake). `categoryFilter` is permanently `"all"`. The location data on catalog items is preserved in case this is re-enabled later.

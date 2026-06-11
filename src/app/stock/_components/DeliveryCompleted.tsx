@@ -10,9 +10,10 @@ interface Props {
   onCorrect?: (item: string, newQty: number) => Promise<void>;
   missingItems?: string[];
   onAddMissing?: (item: string, qty: number) => Promise<void>;
+  onNewDelivery?: () => void;
 }
 
-export function DeliveryCompleted({ deliveryClose, role, onCorrect, missingItems = [], onAddMissing }: Props) {
+export function DeliveryCompleted({ deliveryClose, role, onCorrect, missingItems = [], onAddMissing, onNewDelivery }: Props) {
   const rows = Object.entries(deliveryClose.items)
     .sort(([a], [b]) => a.localeCompare(b));
   const closedTime = new Date(deliveryClose.closedAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true });
@@ -127,6 +128,21 @@ export function DeliveryCompleted({ deliveryClose, role, onCorrect, missingItems
           </div>
         ))}
       </div>
+
+      {onNewDelivery && (
+        <div style={{ padding: "12px 16px 0" }}>
+          <button
+            onClick={onNewDelivery}
+            style={{
+              width: "100%", padding: "12px 0", borderRadius: 12,
+              border: "1.5px solid #1A1A1A", background: "#fff",
+              color: "#1A1A1A", fontWeight: 600, fontSize: 14, cursor: "pointer",
+            }}
+          >
+            + New Delivery
+          </button>
+        </div>
+      )}
 
       {canEdit && missingItems.length > 0 && (
         <div style={{ padding: "12px 16px" }}>

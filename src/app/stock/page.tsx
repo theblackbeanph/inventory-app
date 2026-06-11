@@ -55,6 +55,9 @@ export default function StockPage() {
   const [showSubmitAll, setShowSubmitAll] = useState(false);
   const [submitLoading, setSubmitLoading] = useState(false);
   const draftsInitRef = useRef(false);
+  const stocktakeAutoSaveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [stocktakeAutoSaveStatus, setStocktakeAutoSaveStatus] = useState<"idle" | "saved">("idle");
+  const autoSaveFeedbackTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Delivery tab
   const [deliveryDate, setDeliveryDate] = useState(businessDatePHT);
@@ -63,6 +66,7 @@ export default function StockPage() {
   const [deliverySubmitLoading, setDeliverySubmitLoading] = useState(false);
   const deliverySubmittingRef = useRef(false);
   const deliveryDraftsInitRef = useRef(false);
+  const [newDelivery, setNewDelivery] = useState(false);
   const [deliveryClose, setDeliveryClose] = useState<DeliveryClose | null>(null);
   const [deliveryAdjClose, setDeliveryAdjClose] = useState<DeliveryClose | null>(null);
   // Firestore doc IDs of delivery-related adjustments, keyed by item name
@@ -154,19 +158,36 @@ export default function StockPage() {
       snap.docs.forEach(d => { const dr = d.data() as StocktakeDraft; map[dr.location] = dr; });
       if (!draftsInitRef.current) {
         draftsInitRef.current = true;
-        const counts: Record<string, string> = {};
+        const firestoreCounts: Record<string, string> = {};
         for (const dr of Object.values(map)) {
           for (const [item, qty] of Object.entries(dr.counts)) {
-            counts[item] = String(qty);
+            firestoreCounts[item] = String(qty);
           }
         }
-        if (Object.keys(counts).length > 0) setEndCounts(counts);
+        const lsRaw = localStorage.getItem(`stocktake_counts__${branch}__${department}__${stocktakeDate}`);
+        const localCounts: Record<string, string> = lsRaw ? JSON.parse(lsRaw) : {};
+        const merged = { ...firestoreCounts, ...localCounts };
+        if (Object.keys(merged).length > 0) setEndCounts(merged);
       }
       setDrafts(map);
     });
 
     return () => { unsubAdj(); unsubBeg(); unsubClose(); unsubDrafts(); };
   }, [branch, department, stocktakeDate]);
+
+  useEffect(() => {
+    if (!branch || !department || Object.keys(endCounts).length === 0) return;
+    if (stocktakeAutoSaveTimer.current) clearTimeout(stocktakeAutoSaveTimer.current);
+    stocktakeAutoSaveTimer.current = setTimeout(() => {
+      localStorage.setItem(`stocktake_counts__${branch}__${department}__${stocktakeDate}`, JSON.stringify(endCounts));
+      setStocktakeAutoSaveStatus("saved");
+      if (autoSaveFeedbackTimer.current) clearTimeout(autoSaveFeedbackTimer.current);
+      autoSaveFeedbackTimer.current = setTimeout(() => setStocktakeAutoSaveStatus("idle"), 2000);
+    }, 800);
+    return () => {
+      if (stocktakeAutoSaveTimer.current) clearTimeout(stocktakeAutoSaveTimer.current);
+    };
+  }, [endCounts, branch, department, stocktakeDate]);
 
   useEffect(() => {
     if (!branch || !department) return;
@@ -350,19 +371,25 @@ export default function StockPage() {
       const closeId = `${branch}__${department}__${deliveryDate}`;
       await deleteDoc(doc(db, COLS.deliveryDrafts, closeId));
 
-      const closeItems: Record<string, number> = {};
+      const newItems: Record<string, number> = {};
       for (const item of deptCatalog) {
         const val = deliveryCounts[item.name];
         if (val === undefined || val === "") continue;
         const qty = Number(val);
-        if (!isNaN(qty) && qty > 0) closeItems[item.name] = qty;
+        if (!isNaN(qty) && qty > 0) newItems[item.name] = qty;
+      }
+      const existingItems = (deliveryAdjClose ?? deliveryClose)?.items ?? {};
+      const mergedItems: Record<string, number> = { ...existingItems };
+      for (const [item, qty] of Object.entries(newItems)) {
+        mergedItems[item] = (mergedItems[item] ?? 0) + qty;
       }
       await saveDocById(COLS.deliveryClose, closeId, {
         id: closeId, branch, department, date: deliveryDate,
-        items: closeItems, closedAt: new Date().toISOString(), closedBy: loggedBy,
+        items: mergedItems, closedAt: new Date().toISOString(), closedBy: loggedBy,
       });
 
       setDeliveryCounts({});
+      setNewDelivery(false);
       setShowDeliveryReview(false);
     } finally {
       deliverySubmittingRef.current = false;
@@ -456,6 +483,7 @@ export default function StockPage() {
       }
 
       setEndCounts({});
+      localStorage.removeItem(`stocktake_counts__${branch}__${department}__${submittedToday}`);
       setShowSubmitAll(false);
     } finally {
       setSubmitLoading(false);
@@ -538,7 +566,7 @@ export default function StockPage() {
 
   async function handleDeliveryCorrect(item: string, newQty: number) {
     if (!branch || !department) return;
-    const effective = deliveryClose ?? deliveryAdjClose;
+    const effective = deliveryAdjClose ?? deliveryClose;
     if (!effective) return;
     // No newQty === currentQty early return here — handler is idempotent (delete all docs,
     // write one clean one), so re-running on an unchanged qty is safe and necessary to clean
@@ -581,7 +609,7 @@ export default function StockPage() {
 
   async function handleAddMissingDeliveryItem(item: string, qty: number) {
     if (!branch || !department) return;
-    const effective = deliveryClose ?? deliveryAdjClose;
+    const effective = deliveryAdjClose ?? deliveryClose;
     if (!effective) return;
     await auth.authStateReady();
     const loggedBy = getSession()?.displayName ?? BRANCH_LABELS[branch];
@@ -613,7 +641,7 @@ export default function StockPage() {
     ? deptCatalog.filter(i => !(i.name in stocktakeDayClose.items)).map(i => i.name).sort()
     : [];
 
-  const effectiveDelivery = deliveryClose ?? deliveryAdjClose;
+  const effectiveDelivery = deliveryAdjClose ?? deliveryClose;
   const missingDeliveryItems = effectiveDelivery
     ? deptCatalog.filter(i => !i.commissary && !(i.name in effectiveDelivery.items)).map(i => i.name).sort()
     : [];
@@ -631,6 +659,11 @@ export default function StockPage() {
             <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 1 }}>{today}</div>
           </div>
           <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {subTab === "manualcount" && stocktakeAutoSaveStatus === "saved" && (
+              <span style={{ fontSize: 11, fontWeight: 600, color: "#16A34A", background: "#F0FDF4", border: "1px solid #BBF7D0", borderRadius: 8, padding: "4px 10px" }}>
+                Auto-saved
+              </span>
+            )}
             {posType === "csv" && (
               <button onClick={() => setShowCSVImport(true)} style={{ background: "#EFF6FF", border: "none", color: "#2563EB", cursor: "pointer", fontSize: 12, padding: "4px 10px", fontWeight: 600, borderRadius: 8 }}>
                 Import sales
@@ -680,13 +713,14 @@ export default function StockPage() {
         />
       )}
       {subTab === "delivery" && (
-        (deliveryClose ?? deliveryAdjClose)
+        (effectiveDelivery && !newDelivery)
           ? <DeliveryCompleted
-              deliveryClose={deliveryClose ?? deliveryAdjClose!}
+              deliveryClose={effectiveDelivery}
               role={role}
               onCorrect={handleDeliveryCorrect}
               missingItems={missingDeliveryItems}
               onAddMissing={handleAddMissingDeliveryItem}
+              onNewDelivery={() => { setDeliveryCounts({}); setNewDelivery(true); }}
             />
           : <DeliveryContent
               items={deliveryItems}
@@ -715,6 +749,7 @@ export default function StockPage() {
               endCounts={endCounts}
               currentFilter={categoryFilter}
               stocktakeDate={stocktakeDate}
+              autoSaveStatus={stocktakeAutoSaveStatus}
               onDateChange={handleStocktakeDateChange}
               onCountChange={(item, val) => setEndCounts(prev => ({ ...prev, [item]: val }))}
               onSaveLocation={handleSaveLocation}

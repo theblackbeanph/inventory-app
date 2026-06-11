@@ -5,12 +5,13 @@ import type { DailyMetrics, FilterTab } from "../_lib/helpers";
 import { businessDatePHT, addDays } from "../_lib/helpers";
 import { TallyAddSheet } from "./TallyAddSheet";
 
-export function StocktakeContent({ items, metrics, endCounts, currentFilter, stocktakeDate, onDateChange, onCountChange, onSaveLocation, onOpenReview }: {
+export function StocktakeContent({ items, metrics, endCounts, currentFilter, stocktakeDate, autoSaveStatus = "idle", onDateChange, onCountChange, onSaveLocation, onOpenReview }: {
   items: typeof CATALOG;
   metrics: Record<string, DailyMetrics>;
   endCounts: Record<string, string>;
   currentFilter: FilterTab;
   stocktakeDate: string;
+  autoSaveStatus?: "idle" | "saved";
   onDateChange: (date: string) => void;
   onCountChange: (item: string, val: string) => void;
   onSaveLocation: (location: string) => Promise<void>;
