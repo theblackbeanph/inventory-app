@@ -11,13 +11,26 @@ export interface CatalogItem {
   name: string;
   category: ItemCategory;
   unit: "pc" | "g" | "pack";
-  reorderAt: number;
+  reorderAt: number;      // low stock alert threshold — shows LOW badge below this qty
+  parLevel?: number;      // order-up-to target — used for auto-order suggestion
   packSize: string;
   department: Department;
   location: string;       // storage location — used for stocktake filters (e.g. "front_kitchen")
   ordersPerPack?: number; // loose items only — orders needed to consume 1 pack
   branches?: Branch[];    // if set, only these branches carry this item
   commissary?: true;      // if set, item is supplied by commissary and appears in pull-out requests
+}
+
+export interface ParLevelItem {
+  parLevel: number;
+  alertAt: number;
+}
+
+export interface ParLevelSettings {
+  branch: Branch;
+  items: Record<string, ParLevelItem>;
+  updatedAt: string;
+  updatedBy: string;
 }
 
 export interface BranchStock {

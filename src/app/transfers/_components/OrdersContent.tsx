@@ -3,9 +3,11 @@ import { useState, useMemo, useEffect } from "react";
 import { BRANCH_LABELS } from "@/lib/auth";
 import { CATALOG, CATALOG_MAP, stockDocId } from "@/lib/items";
 import { db, COLS, auth, saveDocById, collection, query, where, getDocs, writeBatch, doc, increment } from "@/lib/firebase";
-import type { Branch, PullOut, PullOutItem, DeliveryNote, ReceivedItem } from "@/lib/types";
+import { getDoc } from "firebase/firestore";
+import type { Branch, PullOut, PullOutItem, DeliveryNote, ReceivedItem, ParLevelItem } from "@/lib/types";
 import { isIncomplete, fulfillmentPct } from "../_lib/helpers";
 import { generateBranchDR } from "../_lib/print";
+import { businessDatePHT } from "@/app/stock/_lib/helpers";
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -666,8 +668,16 @@ function HistoryDetail({ po, dn, onBack }: {
 
 // ── NewOrderForm ──────────────────────────────────────────────────────────────
 
+interface StockContext {
+  currentStock: number;
+  parLevel: number;
+  source: "count" | "expected" | "stock";
+}
+
 function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }) {
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
+  const [stockCtx,    setStockCtx]    = useState<Map<string, StockContext>>(new Map());
+  const [loadingStock, setLoadingStock] = useState(true);
   const [search,      setSearch]      = useState("");
   const [showReview,  setShowReview]  = useState(false);
   const [loading,     setLoading]     = useState(false);
@@ -682,10 +692,104 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
     [branchItems, search]
   );
 
+  // ── auto-fill on mount ──────────────────────────────────────────────────────
+  useEffect(() => {
+    async function prefill() {
+      const today = businessDatePHT();
+
+      // fetch par level overrides + stock data in parallel
+      const [parSnap, stockSnap, adjSnap] = await Promise.all([
+        getDoc(doc(db, "parLevelSettings", branch)),
+        getDocs(query(collection(db, COLS.branchStock), where("branch", "==", branch))),
+        getDocs(query(
+          collection(db, COLS.adjustments),
+          where("branch", "==", branch),
+          where("date", "==", today),
+        )),
+      ]);
+
+      const parOverrides: Record<string, ParLevelItem> = parSnap.exists()
+        ? (parSnap.data().items ?? {})
+        : {};
+
+      // build stock qty map (item → last committed qty)
+      const stockMap = new Map<string, number>();
+      stockSnap.forEach(d => {
+        const data = d.data();
+        stockMap.set(data.item as string, data.qty as number);
+      });
+
+      // build adjustment maps for today
+      const inMap    = new Map<string, number>();
+      const outMap   = new Map<string, number>();
+      const countMap = new Map<string, number>(); // item → endCount from today's stocktake
+      adjSnap.forEach(d => {
+        const data = d.data();
+        const name = data.item as string;
+        const qty  = data.qty  as number;
+        const type = data.type as string;
+        if (type === "count") {
+          countMap.set(name, qty);
+        } else if (type === "in") {
+          inMap.set(name, (inMap.get(name) ?? 0) + qty);
+        } else if (["out", "waste", "sales_import"].includes(type)) {
+          outMap.set(name, (outMap.get(name) ?? 0) + qty);
+        }
+      });
+
+      const autoSelected = new Map<string, number>();
+      const ctx          = new Map<string, StockContext>();
+
+      for (const item of branchItems) {
+        if (item.unit === "pack") continue;
+
+        // resolve current stock
+        let currentStock: number;
+        let source: StockContext["source"];
+        if (countMap.has(item.name)) {
+          // stocktake was done today — branchStock.qty already reflects endCount
+          currentStock = countMap.get(item.name)!;
+          source = "count";
+        } else {
+          const base   = stockMap.get(item.name) ?? 0;
+          const inQty  = inMap.get(item.name)    ?? 0;
+          const outQty = outMap.get(item.name)   ?? 0;
+          currentStock = base + inQty - outQty;
+          source = inQty > 0 || outQty > 0 ? "expected" : "stock";
+        }
+
+        // resolve par level: Firestore override → catalog parLevel → catalog reorderAt
+        const override = parOverrides[item.name];
+        const parLevel = override?.parLevel ?? item.parLevel ?? item.reorderAt;
+
+        ctx.set(item.name, { currentStock, parLevel, source });
+
+        const gap = parLevel - currentStock;
+        if (gap > 0) {
+          autoSelected.set(item.name, Math.ceil(gap / 5) * 5);
+        }
+      }
+
+      setStockCtx(ctx);
+      setSelectedItems(autoSelected);
+      setLoadingStock(false);
+    }
+
+    prefill();
+  }, [branch, branchItems]);
+
+  // ── selection helpers ───────────────────────────────────────────────────────
   function toggleItem(name: string) {
     setSelectedItems(prev => {
       const n = new Map(prev);
-      if (n.has(name)) n.delete(name); else n.set(name, 1);
+      if (n.has(name)) {
+        n.delete(name);
+      } else {
+        // default to suggested if available, else 1
+        const ctx = stockCtx.get(name);
+        const gap = ctx ? ctx.parLevel - ctx.currentStock : 0;
+        n.set(name, gap > 0 ? Math.ceil(gap / 5) * 5 : 1);
+      }
       return n;
     });
   }
@@ -729,6 +833,16 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
 
   const hasSelection = selectedItems.size > 0;
 
+  // source label for the info banner
+  const stockSources = Array.from(stockCtx.values());
+  const hasCount    = stockSources.some(s => s.source === "count");
+  const hasExpected = stockSources.some(s => s.source === "expected");
+  const sourceLabel = hasCount
+    ? "today's stocktake count"
+    : hasExpected
+    ? "latest expected (synced sales)"
+    : "last known stock";
+
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 90px)" }}>
       <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40 }}>
@@ -755,63 +869,93 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
         </div>
       </div>
 
+      {/* info banner */}
+      {!loadingStock && (
+        <div style={{ margin: "12px 16px 0", background: "#EFF6FF", borderRadius: 10, padding: "9px 13px", fontSize: 12, color: "#1D4ED8" }}>
+          Pre-filled based on {sourceLabel} vs. par level. Packs require manual entry.
+        </div>
+      )}
+
       {error && (
         <div style={{ margin: "12px 16px 0", background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>{error}</div>
       )}
 
-      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
-        {availableItems.map(item => {
-          const qty        = selectedItems.get(item.name);
-          const isSelected = qty !== undefined;
-          return (
-            <div
-              key={item.name}
-              style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", borderLeft: isSelected ? "4px solid #1A1A1A" : "4px solid transparent", display: "flex", alignItems: "center", gap: 12 }}
-            >
-              <button
-                onClick={() => toggleItem(item.name)}
-                style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isSelected ? "#1A1A1A" : "#D1D5DB"}`, background: isSelected ? "#1A1A1A" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
+      {loadingStock ? (
+        <div style={{ padding: "48px 16px", textAlign: "center", color: "var(--text-secondary)", fontSize: 14 }}>
+          Loading stock data…
+        </div>
+      ) : (
+        <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+          {availableItems.map(item => {
+            const qty        = selectedItems.get(item.name);
+            const isSelected = qty !== undefined;
+            const ctx        = stockCtx.get(item.name);
+            const isPack     = item.unit === "pack";
+
+            return (
+              <div
+                key={item.name}
+                style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", borderLeft: isSelected ? "4px solid #1A1A1A" : "4px solid transparent", display: "flex", alignItems: "center", gap: 12 }}
               >
+                <button
+                  onClick={() => !isPack && toggleItem(item.name)}
+                  disabled={isPack}
+                  style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isSelected ? "#1A1A1A" : "#D1D5DB"}`, background: isSelected ? "#1A1A1A" : "transparent", cursor: isPack ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: isPack ? 0.35 : 1 }}
+                >
+                  {isSelected && (
+                    <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth={3}>
+                      <polyline points="20 6 9 17 4 12"/>
+                    </svg>
+                  )}
+                </button>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", display: "flex", flexWrap: "wrap", gap: "0 6px", marginTop: 2 }}>
+                    <span>{item.packSize}</span>
+                    <span style={{
+                      background:  item.category === "portion" ? "#EDE9FE" : item.category === "packed" ? "#DBEAFE" : "#D1FAE5",
+                      color:       item.category === "portion" ? "#7C3AED" : item.category === "packed" ? "#2563EB" : "#059669",
+                      borderRadius: 4, padding: "1px 5px", fontSize: 10, fontWeight: 600,
+                    }}>{item.category}</span>
+                    {ctx && !isPack && (
+                      <span style={{ color: ctx.currentStock <= 0 ? "#DC2626" : "var(--text-secondary)" }}>
+                        Stock: {ctx.currentStock} · Par: {ctx.parLevel}
+                      </span>
+                    )}
+                    {isPack && <span style={{ color: "#9CA3AF" }}>Manual entry</span>}
+                  </div>
+                </div>
                 {isSelected && (
-                  <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth={3}>
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <button onClick={() => setQty(item.name, (qty ?? 1) - 1)} style={qtyBtnStyle}>−</button>
+                    <input
+                      type="number"
+                      value={qty}
+                      onChange={e => setQty(item.name, Math.max(0, Number(e.target.value)))}
+                      style={{ width: 50, textAlign: "center", border: "1.5px solid var(--border)", borderRadius: 8, padding: "6px 4px", fontSize: 16, fontWeight: 700, background: "var(--bg)", color: "var(--text)" }}
+                    />
+                    <button onClick={() => setQty(item.name, (qty ?? 0) + 1)} style={qtyBtnStyle}>+</button>
+                  </div>
                 )}
-              </button>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
-                  {item.packSize}
-                  <span style={{
-                    marginLeft: 6,
-                    background:  item.category === "portion" ? "#EDE9FE" : item.category === "packed" ? "#DBEAFE" : "#D1FAE5",
-                    color:       item.category === "portion" ? "#7C3AED" : item.category === "packed" ? "#2563EB" : "#059669",
-                    borderRadius: 4, padding: "1px 5px", fontSize: 10, fontWeight: 600,
-                  }}>{item.category}</span>
-                </div>
+                {!isSelected && !isPack && ctx && ctx.currentStock <= ctx.parLevel && (
+                  <button
+                    onClick={() => toggleItem(item.name)}
+                    style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "none", cursor: "pointer", color: "var(--text-secondary)", whiteSpace: "nowrap" }}
+                  >
+                    Add
+                  </button>
+                )}
               </div>
-              {isSelected && (
-                <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <button onClick={() => setQty(item.name, (qty ?? 1) - 1)} style={qtyBtnStyle}>−</button>
-                  <input
-                    type="number"
-                    value={qty}
-                    onChange={e => setQty(item.name, Math.max(0, Number(e.target.value)))}
-                    style={{ width: 50, textAlign: "center", border: "1.5px solid var(--border)", borderRadius: 8, padding: "6px 4px", fontSize: 16, fontWeight: 700, background: "var(--bg)", color: "var(--text)" }}
-                  />
-                  <button onClick={() => setQty(item.name, (qty ?? 0) + 1)} style={qtyBtnStyle}>+</button>
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{ position: "fixed", bottom: "var(--nav-h)", left: 0, right: 0, background: "#FFF", borderTop: "1px solid var(--border)", padding: "12px 16px" }}>
         <button
           onClick={() => setShowReview(true)}
-          disabled={!hasSelection}
-          style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: hasSelection ? "#1A1A1A" : "#E8E8E4", color: hasSelection ? "#FFF" : "var(--text-secondary)", fontWeight: 700, fontSize: 16, cursor: hasSelection ? "pointer" : "not-allowed" }}
+          disabled={!hasSelection || loadingStock}
+          style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: hasSelection && !loadingStock ? "#1A1A1A" : "#E8E8E4", color: hasSelection && !loadingStock ? "#FFF" : "var(--text-secondary)", fontWeight: 700, fontSize: 16, cursor: hasSelection && !loadingStock ? "pointer" : "not-allowed" }}
         >
           {`Review Order${hasSelection ? ` · ${selectedItems.size} item${selectedItems.size !== 1 ? "s" : ""}` : ""}`}
         </button>
@@ -830,11 +974,15 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
           <div>
             {Array.from(selectedItems.entries()).map(([name, qty]) => {
               const item = CATALOG_MAP.get(name);
+              const ctx  = stockCtx.get(name);
               return (
                 <div key={name} style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div>
                     <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
-                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{item?.packSize}</div>
+                    <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                      {item?.packSize}
+                      {ctx && <span style={{ marginLeft: 6 }}>Stock: {ctx.currentStock} · Par: {ctx.parLevel}</span>}
+                    </div>
                   </div>
                   <div style={{ fontSize: 20, fontWeight: 700 }}>{qty} <span style={{ fontSize: 13, fontWeight: 400, color: "var(--text-secondary)" }}>{item?.unit}</span></div>
                 </div>
