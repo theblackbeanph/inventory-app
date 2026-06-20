@@ -3,7 +3,7 @@ import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
 import { auth, db, COLS, saveDocById } from "@/lib/firebase";
-import { CATALOG, stockDocId, beginningDocId } from "@/lib/items";
+import { CATALOG, stockDocId, beginningDocId, catalogSort } from "@/lib/items";
 import { collection, onSnapshot, query, where, getDocs, writeBatch, doc, deleteDoc } from "@/lib/firebase";
 import type { Branch, Department, BranchStock, StockAdjustment, DailyBeginning, DailyClose, StocktakeDraft, DeliveryDraft, DeliveryClose } from "@/lib/types";
 import BottomNav from "@/components/BottomNav";
@@ -638,12 +638,12 @@ export default function StockPage() {
   }
 
   const missingStocktakeItems = stocktakeDayClose
-    ? deptCatalog.filter(i => !(i.name in stocktakeDayClose.items)).map(i => i.name).sort()
+    ? deptCatalog.filter(i => !(i.name in stocktakeDayClose.items)).map(i => i.name).sort(catalogSort)
     : [];
 
   const effectiveDelivery = deliveryAdjClose ?? deliveryClose;
   const missingDeliveryItems = effectiveDelivery
-    ? deptCatalog.filter(i => !i.commissary && !(i.name in effectiveDelivery.items)).map(i => i.name).sort()
+    ? deptCatalog.filter(i => !i.commissary && !(i.name in effectiveDelivery.items)).map(i => i.name).sort(catalogSort)
     : [];
 
   if (!branch || !department) return null;
