@@ -939,14 +939,6 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
                     <button onClick={() => setQty(item.name, (qty ?? 0) + 1)} style={qtyBtnStyle}>+</button>
                   </div>
                 )}
-                {!isSelected && !isPack && ctx && ctx.currentStock <= ctx.parLevel && (
-                  <button
-                    onClick={() => toggleItem(item.name)}
-                    style={{ fontSize: 11, fontWeight: 600, padding: "4px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "none", cursor: "pointer", color: "var(--text-secondary)", whiteSpace: "nowrap" }}
-                  >
-                    Add
-                  </button>
-                )}
               </div>
             );
           })}
