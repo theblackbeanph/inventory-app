@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { db } from "@/lib/firebase";
+import { db, auth } from "@/lib/firebase";
 import { doc, getDoc, setDoc } from "firebase/firestore";
 import { CATALOG } from "@/lib/items";
 import { todayPHT } from "@/app/stock/_lib/helpers";
@@ -25,20 +25,24 @@ export default function ParLevelSettings({ branch, updatedBy }: Props) {
 
   useEffect(() => {
     async function load() {
-      const snap = await getDoc(doc(db, "parLevelSettings", branch));
-      const firestoreItems: Record<string, ParLevelItem> = snap.exists() ? snap.data().items ?? {} : {};
+      try {
+        await auth.authStateReady();
+        const snap = await getDoc(doc(db, "parLevelSettings", branch));
+        const firestoreItems: Record<string, ParLevelItem> = snap.exists() ? snap.data().items ?? {} : {};
 
-      const initial: DraftMap = {};
-      for (const item of COMMISSARY_PC_ITEMS) {
-        const override = firestoreItems[item.name];
-        initial[item.name] = {
-          parLevel: String(override?.parLevel ?? item.parLevel ?? item.reorderAt),
-          alertAt:  String(override?.alertAt  ?? item.reorderAt),
-        };
+        const initial: DraftMap = {};
+        for (const item of COMMISSARY_PC_ITEMS) {
+          const override = firestoreItems[item.name];
+          initial[item.name] = {
+            parLevel: String(override?.parLevel ?? item.parLevel ?? item.reorderAt),
+            alertAt:  String(override?.alertAt  ?? item.reorderAt),
+          };
+        }
+        originalRef.current = initial;
+        setDraft(initial);
+      } finally {
+        setLoading(false);
       }
-      originalRef.current = initial;
-      setDraft(initial);
-      setLoading(false);
     }
     load();
   }, [branch]);

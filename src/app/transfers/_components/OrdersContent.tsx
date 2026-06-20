@@ -695,6 +695,8 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
   // ── auto-fill on mount ──────────────────────────────────────────────────────
   useEffect(() => {
     async function prefill() {
+      try {
+      await auth.authStateReady();
       const today = businessDatePHT();
 
       // fetch par level overrides + stock data in parallel
@@ -772,7 +774,9 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
 
       setStockCtx(ctx);
       setSelectedItems(autoSelected);
-      setLoadingStock(false);
+      } finally {
+        setLoadingStock(false);
+      }
     }
 
     prefill();
