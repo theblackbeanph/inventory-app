@@ -743,20 +743,16 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
       const ctx          = new Map<string, StockContext>();
 
       for (const item of branchItems) {
-        if (item.unit === "pack") continue;
-
-        // resolve current stock — mirrors the EXP formula used in the stock page
+        // resolve current stock for all items — mirrors the EXP formula used in the stock page
         let currentStock: number;
         let source: StockContext["source"];
         if (countMap.has(item.name)) {
-          // stocktake submitted today — use confirmed end count
           currentStock = countMap.get(item.name)!;
           source = "count";
         } else {
           const beginning = beginMap.get(item.name) ?? 0;
           const inQty     = inMap.get(item.name)    ?? 0;
           const outQty    = outMap.get(item.name)   ?? 0;
-          // EXP = beginning + in - out (same as stock page)
           currentStock = beginning + inQty - outQty;
           source = inQty > 0 || outQty > 0 ? "expected" : "stock";
         }
@@ -766,6 +762,9 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
         const parLevel = override?.parLevel ?? item.parLevel ?? item.reorderAt;
 
         ctx.set(item.name, { currentStock, parLevel, source });
+
+        // packs are never auto-selected — team fills manually
+        if (item.unit === "pack") continue;
 
         const gap = parLevel - currentStock;
         if (gap > 0) {
@@ -877,7 +876,7 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
       {/* info banner */}
       {!loadingStock && (
         <div style={{ margin: "12px 16px 0", background: "#EFF6FF", borderRadius: 10, padding: "9px 13px", fontSize: 12, color: "#1D4ED8" }}>
-          Pre-filled based on {sourceLabel} vs. par level. Packs require manual entry.
+          Pre-filled based on {sourceLabel} vs. par level. Packs are not pre-filled — add manually if needed.
         </div>
       )}
 
@@ -903,9 +902,8 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
                 style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", borderLeft: isSelected ? "4px solid #1A1A1A" : "4px solid transparent", display: "flex", alignItems: "center", gap: 12 }}
               >
                 <button
-                  onClick={() => !isPack && toggleItem(item.name)}
-                  disabled={isPack}
-                  style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isSelected ? "#1A1A1A" : "#D1D5DB"}`, background: isSelected ? "#1A1A1A" : "transparent", cursor: isPack ? "default" : "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, opacity: isPack ? 0.35 : 1 }}
+                  onClick={() => toggleItem(item.name)}
+                  style={{ width: 22, height: 22, borderRadius: 6, border: `2px solid ${isSelected ? "#1A1A1A" : "#D1D5DB"}`, background: isSelected ? "#1A1A1A" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}
                 >
                   {isSelected && (
                     <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="#FFF" strokeWidth={3}>
@@ -922,12 +920,11 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
                       color:       item.category === "portion" ? "#7C3AED" : item.category === "packed" ? "#2563EB" : "#059669",
                       borderRadius: 4, padding: "1px 5px", fontSize: 10, fontWeight: 600,
                     }}>{item.category}</span>
-                    {ctx && !isPack && (
+                    {ctx && (
                       <span style={{ color: ctx.currentStock <= 0 ? "#DC2626" : "var(--text-secondary)" }}>
-                        Stock: {ctx.currentStock} · Par: {ctx.parLevel}
+                        Stock: {ctx.currentStock}{!isPack && ` · Par: ${ctx.parLevel}`}
                       </span>
                     )}
-                    {isPack && <span style={{ color: "#9CA3AF" }}>Manual entry</span>}
                   </div>
                 </div>
                 {isSelected && (
