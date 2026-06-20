@@ -56,6 +56,7 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 ### Route Access
 - `/orders` — min role: `linecook` (all users can view/receive; creating new orders requires `admin+`)
 - `/production` — min role: `superadmin`
+- `/settings` — min role: `admin`
 - All other routes (`/stock`, `/history`, `/pullout`, `/delivery`, `/dashboard`) — min role: `linecook`
 
 ### Stocktake Count Correction (2026-05-06)
@@ -89,6 +90,21 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **Ube Halaya** — `loose`, 500g pack, `ordersPerPack: 7`, reorder at 2, back kitchen, commissary-supplied, all branches
 - MKT StoreHub mapping: SKUs `S3` (Ube Grilled Cheese) + `70` (Tomahawk Porkchop dish)
 - Reference: Portion Guide L-018, MKT Item Mapping #50
+
+### Par Levels & Settings (2026-06-20)
+- **Two distinct fields on `CatalogItem`**: `reorderAt` (low stock alert — shows LOW badge) and `parLevel` (order-up-to target — used for auto-fill)
+- **All 33 commissary pc items** updated in `src/lib/items.ts` with MKT values from CSV (previously all flat `10`)
+- **Firestore overrides**: `parLevelSettings/{branch}` — `{ items: Record<string, { parLevel, alertAt }>, updatedAt, updatedBy }`. Firestore values take precedence over catalog defaults. Rule: any authenticated user can read/write.
+- **Settings page**: `src/app/settings/page.tsx` + `src/app/settings/_components/ParLevelSettings.tsx`. Accessible via gear icon in Dashboard header (admin+ only). Per-branch — MKT and BF stored independently.
+- **BF par levels**: not yet set. BF admin should open Settings and save their values.
+
+### Auto-Fill Order Form (2026-06-20)
+- On `NewOrderForm` mount: fetches `parLevelSettings/{branch}`, `dailyBeginning` (today), and `branch_adjustments` (today) in parallel
+- **Stock formula**: `dailyBeginning + inQty - outQty` (mirrors EXP in stock page). If `count` adjustment exists today, uses that endCount instead. Do NOT use `branchStock.qty` as base — it is incremented by deliveries and would double-count.
+- **Auto-select logic**: pc items where `parLevel - currentStock > 0` → pre-checked with `ceil(gap / 5) * 5`
+- **Pack items**: stock is computed and displayed but never auto-selected — team selects manually
+- Source banner shown: "today's stocktake count" / "latest expected (synced sales)" / "last known stock"
+- All `auth.authStateReady()` calls must precede any Firestore read in this flow
 
 ### Active Order Detail — Receiving UX (2026-05-20)
 - **Per-item check button**: checkbox on the left of each item row in `ActiveDetail` (`OrdersContent.tsx`). Tapping toggles a green checked state. Checked + no discrepancy → green row, dimmed qty controls. Checked + discrepancy → light red row, red border stays dominant. Progress counter ("Items checked X of Y") shown between the info banner and item list. State is local (`useState<Set<string>>`) — resets if user navigates away. No Firestore writes.
