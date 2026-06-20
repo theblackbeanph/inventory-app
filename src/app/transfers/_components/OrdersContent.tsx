@@ -699,10 +699,10 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
       await auth.authStateReady();
       const today = businessDatePHT();
 
-      // fetch par level overrides + stock data in parallel
-      const [parSnap, stockSnap, adjSnap] = await Promise.all([
+      // fetch par level overrides, today's beginning stock, and today's adjustments in parallel
+      const [parSnap, beginSnap, adjSnap] = await Promise.all([
         getDoc(doc(db, "parLevelSettings", branch)),
-        getDocs(query(collection(db, COLS.branchStock), where("branch", "==", branch))),
+        getDocs(query(collection(db, COLS.dailyBeginning), where("branch", "==", branch), where("date", "==", today))),
         getDocs(query(
           collection(db, COLS.adjustments),
           where("branch", "==", branch),
@@ -714,11 +714,11 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
         ? (parSnap.data().items ?? {})
         : {};
 
-      // build stock qty map (item → last committed qty)
-      const stockMap = new Map<string, number>();
-      stockSnap.forEach(d => {
+      // dailyBeginning = yesterday's end, stable throughout the day (matches EXP calculation)
+      const beginMap = new Map<string, number>();
+      beginSnap.forEach(d => {
         const data = d.data();
-        stockMap.set(data.item as string, data.qty as number);
+        beginMap.set(data.item as string, data.qty as number);
       });
 
       // build adjustment maps for today
@@ -745,18 +745,19 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
       for (const item of branchItems) {
         if (item.unit === "pack") continue;
 
-        // resolve current stock
+        // resolve current stock — mirrors the EXP formula used in the stock page
         let currentStock: number;
         let source: StockContext["source"];
         if (countMap.has(item.name)) {
-          // stocktake was done today — branchStock.qty already reflects endCount
+          // stocktake submitted today — use confirmed end count
           currentStock = countMap.get(item.name)!;
           source = "count";
         } else {
-          const base   = stockMap.get(item.name) ?? 0;
-          const inQty  = inMap.get(item.name)    ?? 0;
-          const outQty = outMap.get(item.name)   ?? 0;
-          currentStock = base + inQty - outQty;
+          const beginning = beginMap.get(item.name) ?? 0;
+          const inQty     = inMap.get(item.name)    ?? 0;
+          const outQty    = outMap.get(item.name)   ?? 0;
+          // EXP = beginning + in - out (same as stock page)
+          currentStock = beginning + inQty - outQty;
           source = inQty > 0 || outQty > 0 ? "expected" : "stock";
         }
 
