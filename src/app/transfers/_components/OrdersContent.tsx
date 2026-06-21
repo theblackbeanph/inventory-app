@@ -34,6 +34,8 @@ const STATUS_LABEL: Record<string, string> = {
   DISCREPANCY:    "Discrepancy",
   DISPUTED:       "Disputed",
   DONE:           "Done",
+  SENT_BACK:      "Sent Back",
+  RESOLVED:       "Resolved",
 };
 
 function statusBadgeStyle(status: string): React.CSSProperties {
@@ -46,6 +48,8 @@ function statusBadgeStyle(status: string): React.CSSProperties {
     CANCELLED:      { bg: "#F3F4F6", text: "#6B7280" },
     DISCREPANCY:    { bg: "#FEF3C7", text: "#D97706" },
     DISPUTED:       { bg: "#EDE9FE", text: "#7C3AED" },
+    SENT_BACK:      { bg: "#FFF7ED", text: "#C2410C" },
+    RESOLVED:       { bg: "#D1FAE5", text: "#059669" },
   };
   const s = map[status] ?? { bg: "#F3F4F6", text: "#6B7280" };
   return {
@@ -58,7 +62,7 @@ function cardBorderColor(status: string): string {
   if (status === "PENDING_REVIEW") return "#D97706";
   if (status === "DISPATCHED")     return "#4338CA";
   if (status === "RECEIVED" || status === "DONE") return "#059669";
-  if (["DISCREPANCY", "REJECTED", "DISPUTED"].includes(status)) return "#DC2626";
+  if (["DISCREPANCY", "REJECTED", "DISPUTED", "SENT_BACK"].includes(status)) return "#DC2626";
   return "#D1D5DB";
 }
 
@@ -94,7 +98,7 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
   const pending = useMemo(() => pullOuts.filter(p => p.status === "PENDING_REVIEW"), [pullOuts]);
   const active  = useMemo(() => pullOuts.filter(p => p.status === "DISPATCHED"),     [pullOuts]);
   const history = useMemo(() => pullOuts.filter(p =>
-    ["RECEIVED", "DONE", "CANCELLED", "REJECTED", "DISCREPANCY", "DISPUTED"].includes(p.status)
+    ["RECEIVED", "DONE", "CANCELLED", "REJECTED", "DISCREPANCY", "DISPUTED", "SENT_BACK", "RESOLVED"].includes(p.status)
   ), [pullOuts]);
 
   const list = tab === "pending" ? pending : tab === "active" ? active : history;
@@ -116,7 +120,7 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
         />
       );
     }
-    if (selected.status === "DISPATCHED") {
+    if (selected.status === "DISPATCHED" || selected.status === "DISCREPANCY") {
       const dn = deliveryNotes.find(d => d.pullOutId === selected.id) ?? null;
       return (
         <ActiveDetail
@@ -185,7 +189,7 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
                   )}
                 </div>
               )}
-              {tab === "history" && ["DISCREPANCY", "DISPUTED"].includes(po.status) && (
+              {tab === "history" && ["DISCREPANCY", "DISPUTED", "RESOLVED"].includes(po.status) && (
                 <div style={{ marginTop: 6, fontSize: 12, color: "#D97706" }}>
                   Discrepancy on file — place a new order if needed
                 </div>
@@ -362,6 +366,78 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
     setLoading(false);
   }
 
+  async function cancelDispute() {
+    if (!dn) return;
+    setLoading(true); setError("");
+    try {
+      await auth.authStateReady();
+      const loggedBy  = auth.currentUser?.displayName || BRANCH_LABELS[branch];
+      const today     = todayPHT();
+      const now       = Date.now();
+      const poRef     = `${po.poRef} · ${dn.dnRef}`;
+      const batchW    = writeBatch(db);
+
+      // 1. Commissary invEntries — OUT using dispatchedQty for ALL items
+      dn.items.forEach((it, i) => {
+        batchW.set(doc(db, COLS.invEntries, String(now + i)), {
+          id:       now + i,
+          date:     today,
+          item:     it.item,
+          type:     "out",
+          qty:      it.dispatchedQty,
+          note:     `Transfer to ${po.branch} · ${poRef} · branch cancelled dispute`,
+          loggedBy,
+          poRef:    po.poRef,
+        });
+      });
+
+      // 2. Branch corrective adjustments for discrepancy items only
+      dn.items.forEach((it) => {
+        const ri    = dn.receivedItems?.find(r => r.item === it.item);
+        const recv  = ri?.receivedQty ?? it.dispatchedQty;
+        const delta = it.dispatchedQty - recv;
+        if (delta === 0) return;
+
+        const adjRef = doc(collection(db, COLS.adjustments));
+        batchW.set(adjRef, {
+          id:         adjRef.id,
+          branch,
+          department: "kitchen",
+          date:       today,
+          item:       it.item,
+          type:       delta > 0 ? "in" : "out",
+          qty:        Math.abs(delta),
+          loggedBy,
+          note:       `Dispute cancelled · ${po.poRef}`,
+        });
+
+        const catalogItem = CATALOG_MAP.get(it.item);
+        if (catalogItem) {
+          const dept    = catalogItem.department;
+          const stockId = `${branch}_${dept}_${it.item}`;
+          batchW.set(doc(db, COLS.branchStock, stockId),
+            { qty: increment(delta), lastUpdated: today, lastUpdatedBy: loggedBy },
+            { merge: true }
+          );
+        }
+      });
+
+      // 3. Update delivery note and pull out
+      batchW.update(doc(db, COLS.deliveryNotes, dn.id), { status: "RECEIVED" });
+      batchW.update(doc(db, COLS.pullOuts, po.id), {
+        status:               "DONE",
+        commissaryInvWritten: true,
+      });
+
+      await batchW.commit();
+      onUpdated({ ...po, status: "DONE" as PullOut["status"] });
+      onBack();
+    } catch {
+      setError("Failed to cancel dispute. Try again.");
+    }
+    setLoading(false);
+  }
+
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 100px)" }}>
       <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 12 }}>
@@ -472,6 +548,24 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
           >
             {hasDiscrepancy ? "Confirm Receipt with Discrepancy" : "Confirm Receipt — All Good"}
           </button>
+          {po.status === "DISCREPANCY" && (
+            <div style={{ marginTop: 16 }}>
+              <button
+                onClick={cancelDispute}
+                disabled={loading}
+                style={{
+                  width: "100%", padding: "13px 0", borderRadius: 14, border: "1px solid var(--border)",
+                  background: "transparent", color: "var(--text-secondary)", fontWeight: 600,
+                  fontSize: 14, cursor: loading ? "not-allowed" : "pointer",
+                }}
+              >
+                Cancel Dispute — Accept Dispatched Quantities
+              </button>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", textAlign: "center", marginTop: 6 }}>
+                Confirms commissary was correct. Adjusts your stock to match dispatched quantities.
+              </div>
+            </div>
+          )}
         </div>
       )}
 
