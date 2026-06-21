@@ -45,6 +45,7 @@ export const COLS = {
   deliveryClose:          "delivery_close",
   varianceExplanations:   "variance_explanations",
   users:                  "users",
+  disputeNotices:         "dispute_notices",
 } as const;
 
 export async function saveDoc(col: string, item: Record<string, unknown>) {
