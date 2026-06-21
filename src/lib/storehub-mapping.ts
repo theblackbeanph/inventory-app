@@ -11,8 +11,7 @@ interface StoreHubMappingEntry {
   ordersPerPack?: number; // loose items only — from Portion Guide (April 2026)
 }
 
-// Shared across all branches (90% of menu)
-const BASE_MAPPING: StoreHubMappingEntry[] = [
+const MKT_MAPPING: StoreHubMappingEntry[] = [
   // ── PORTIONS ─────────────────────────────────────────────────────────────
   { item: "Cobbler",                 linkedSkus: ["66", { sku: "156", qty: 3 }, "B5"] },
   { item: "Smoked Salmon",           linkedSkus: ["63", "175", "160"] },
@@ -69,13 +68,62 @@ const BASE_MAPPING: StoreHubMappingEntry[] = [
   { item: "Ube Halaya",              linkedSkus: ["S3", "70"],                                        ordersPerPack: 7  },
 ];
 
-// Branch-exclusive items — add new branches here as they go live
-const BRANCH_OVERRIDES: Record<string, StoreHubMappingEntry[]> = {
-  BF: [],
-};
+// BF SKUs are separate from MKT — unified SKU IDs are a future milestone.
+// Party trays deduct qty:3 per order; Breakfast Sampler (T03) deducts qty:2.
+const BF_MAPPING: StoreHubMappingEntry[] = [
+  // ── PORTIONS ─────────────────────────────────────────────────────────────
+  { item: "Cobbler",                 linkedSkus: ["M05", { sku: "T05", qty: 3 }] },
+  { item: "Salmon Fillet",           linkedSkus: ["M04"] },
+  { item: "Smoked Salmon",           linkedSkus: ["B13", "EX14", "B07"] },
+  { item: "Aburi Salmon",            linkedSkus: ["B01", { sku: "T01", qty: 3 }] },
+  { item: "Beef Tapa",               linkedSkus: ["B10", { sku: "T02", qty: 3 }, { sku: "T03", qty: 2 }] },
+  { item: "Beef Pares",              linkedSkus: ["B09", "PF06", { sku: "T06", qty: 3 }] },
+  { item: "Buttermilk Chicken 300g", linkedSkus: ["M01"] },
+  { item: "Buttermilk Chicken 150g", linkedSkus: ["M02", "S06", "M03"] },
+  { item: "Chicken BBQ",             linkedSkus: ["S01", "PF03"] },
+  { item: "Burger Patty",            linkedSkus: ["M07", "M06"] },
+  { item: "Adobo Flakes",            linkedSkus: ["B02", "B17"] },
+  { item: "Arroz ala Cubana",        linkedSkus: ["B03"] },
+  { item: "Roast Beef",              linkedSkus: ["S03"] },
+  { item: "Mozzarella Sticks",       linkedSkus: ["A02"] },
+  { item: "Scallops",                linkedSkus: ["PF08", { sku: "T09", qty: 3 }] },
+  { item: "Bacon Cubes",             linkedSkus: ["PF10", { sku: "T10", qty: 3 }] },
+  { item: "Prosciutto",              linkedSkus: ["PF12", "PF13"] },
+  // ── PACKED ───────────────────────────────────────────────────────────────
+  { item: "Porkchop",                linkedSkus: ["M08"] },
+  { item: "Miso Butter Paste",       linkedSkus: ["B01", { sku: "T01", qty: 3 }] },
+  { item: "Au Jus",                  linkedSkus: ["S03"] },
+  { item: "Bacon Jam",               linkedSkus: ["S03"] },
+  { item: "Caramelized Onion",       linkedSkus: ["M07", "S03"] },
+  { item: "Vodka Sauce",             linkedSkus: ["PF12", "PF13"] },
+  { item: "Squid Ink Sauce",         linkedSkus: ["PF08", { sku: "T09", qty: 3 }] },
+  { item: "Truffle Mushroom Paste",  linkedSkus: ["A08"] },
+  { item: "Loco Moco Gravy",         linkedSkus: ["M06"] },
+  { item: "Squash Soup",             linkedSkus: ["A04"] },
+  { item: "Tomato Soup",             linkedSkus: ["A06"] },
+  { item: "Tuna Spread",             linkedSkus: ["S04"] },
+  { item: "Flatbread",               linkedSkus: ["PF04", "PF05"] },
+  { item: "Salted Egg Sauce",        linkedSkus: ["PF07", { sku: "T08", qty: 3 }] },
+  { item: "Salted Egg Custard",      linkedSkus: ["B11"] },
+  // ── LOOSE — ordersPerPack from Portion Guide (April 2026) ────────────────
+  { item: "Gyudon Sauce",            linkedSkus: ["B16", { sku: "T12", qty: 3 }],                     ordersPerPack: 18 },
+  { item: "Tartar",                  linkedSkus: ["M05", { sku: "T05", qty: 3 }, "B13"],               ordersPerPack: 33 },
+  { item: "Aioli",                   linkedSkus: ["M05", { sku: "T05", qty: 3 }],                     ordersPerPack: 33 },
+  { item: "Caesar Dressing",         linkedSkus: ["A05", { sku: "T04", qty: 3 }],                     ordersPerPack: 16 },
+  { item: "Raspberry Dressing",      linkedSkus: ["A03", { sku: "T07", qty: 3 }],                     ordersPerPack: 10 },
+  { item: "Candied Walnut",          linkedSkus: ["A03", { sku: "T07", qty: 3 }],                     ordersPerPack: 5  },
+  { item: "Nigiri",                  linkedSkus: ["B01", { sku: "T01", qty: 3 }],                     ordersPerPack: 25 },
+  { item: "Burger Dressing",         linkedSkus: ["M07", "S06"],                                      ordersPerPack: 16 },
+  { item: "Pesto",                   linkedSkus: ["S01", "PF03"],                                     ordersPerPack: 10 },
+  { item: "Beef Pares Sauce",        linkedSkus: ["B09", "PF06", { sku: "T06", qty: 3 }],             ordersPerPack: 16 },
+  { item: "Adobo Flakes Sauce",      linkedSkus: ["B02", "B17"],                                      ordersPerPack: 16 },
+  { item: "Ube Halaya",              linkedSkus: ["S05", "M08"],                                      ordersPerPack: 7  },
+];
+
+const BRANCH_MAPPINGS: Record<string, StoreHubMappingEntry[]> = { MKT: MKT_MAPPING, BF: BF_MAPPING };
 
 function getMappingForBranch(branch: string): StoreHubMappingEntry[] {
-  return [...BASE_MAPPING, ...(BRANCH_OVERRIDES[branch] ?? [])];
+  return BRANCH_MAPPINGS[branch] ?? [];
 }
 
 // All SKUs referenced in the mapping for a given branch (for identifying unmatched sold items)

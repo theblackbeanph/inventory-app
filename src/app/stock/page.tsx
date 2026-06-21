@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS, BRANCH_POS_TYPE } from "@/lib/auth";
+import { getSession, logout, BRANCH_LABELS, DEPARTMENT_LABELS } from "@/lib/auth";
 import { auth, db, COLS, saveDocById } from "@/lib/firebase";
 import { CATALOG, stockDocId, beginningDocId, catalogSort } from "@/lib/items";
 import { collection, onSnapshot, query, where, getDocs, writeBatch, doc, deleteDoc } from "@/lib/firebase";
@@ -20,7 +20,6 @@ import { DeliveryContent } from "./_components/DeliveryContent";
 import { DeliveryCompleted } from "./_components/DeliveryCompleted";
 import { DeliveryReviewSheet } from "./_components/DeliveryReviewSheet";
 import { StoreHubSyncModal } from "./_components/StoreHubSyncModal";
-import { CSVImportModal } from "./_components/CSVImportModal";
 import { WasteContent } from "./_components/WasteContent";
 import type { WasteReason } from "./_components/WasteEntrySheet";
 
@@ -78,7 +77,6 @@ export default function StockPage() {
   const [wasteHistory, setWasteHistory] = useState<StockAdjustment[]>([]);
 
   // Modals
-  const [showCSVImport, setShowCSVImport] = useState(false);
   const [showStoreHubSync, setShowStoreHubSync] = useState(false);
 
 
@@ -290,7 +288,6 @@ export default function StockPage() {
   const critCount = deptCatalog.filter(i => { const m = dailyMetrics[i.name]; if (!m || m.beginning === null) return false; const avail = m.endCount !== null ? m.endCount : (m.beginning + m.inQty - m.outQty); return avail <= 0; }).length;
   const lowItems  = new Set(deptCatalog.filter(i => { const m = dailyMetrics[i.name]; if (!m || m.beginning === null) return false; const avail = m.endCount !== null ? m.endCount : (m.beginning + m.inQty - m.outQty); return avail > 0 && avail <= i.reorderAt; }).map(i => i.name));
   const oosItems  = new Set(deptCatalog.filter(i => { const m = dailyMetrics[i.name]; if (!m || m.beginning === null) return false; const avail = m.endCount !== null ? m.endCount : (m.beginning + m.inQty - m.outQty); return avail <= 0; }).map(i => i.name));
-  const posType = branch ? BRANCH_POS_TYPE[branch] : null;
 
 
   function handleStocktakeDateChange(newDate: string) {
@@ -664,16 +661,9 @@ export default function StockPage() {
                 Auto-saved
               </span>
             )}
-            {posType === "csv" && (
-              <button onClick={() => setShowCSVImport(true)} style={{ background: "#EFF6FF", border: "none", color: "#2563EB", cursor: "pointer", fontSize: 12, padding: "4px 10px", fontWeight: 600, borderRadius: 8 }}>
-                Import sales
-              </button>
-            )}
-            {posType === "storehub" && (
-              <button onClick={() => setShowStoreHubSync(true)} style={{ background: "#EFF6FF", border: "none", color: "#2563EB", cursor: "pointer", fontSize: 12, padding: "4px 10px", fontWeight: 600, borderRadius: 8 }}>
-                Sync sales
-              </button>
-            )}
+            <button onClick={() => setShowStoreHubSync(true)} style={{ background: "#EFF6FF", border: "none", color: "#2563EB", cursor: "pointer", fontSize: 12, padding: "4px 10px", fontWeight: 600, borderRadius: 8 }}>
+              Sync sales
+            </button>
             <button onClick={async () => { await logout(); router.replace("/login"); }} style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 13, padding: "4px 8px" }}>Log out</button>
           </div>
         </div>
@@ -807,17 +797,6 @@ export default function StockPage() {
           onComplete={() => {}}
         />
       )}
-
-      {showCSVImport && (
-        <CSVImportModal
-          branch={branch}
-          department={department}
-          today={today}
-          onClose={() => setShowCSVImport(false)}
-          onComplete={() => {}}
-        />
-      )}
-
 
       <BottomNav />
     </div>

@@ -15,12 +15,12 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 3. **Phase 3 — Production** — NEXT PRIORITY (built but needs RAW_MATERIALS config before usable; supplier deliveries, portioning)
 4. **Phase 4 — Food Cost / GP Analysis** (depends on Recipe Database being built first)
 
-### Sales Import — Both Branches Are LIVE
+### Sales Import — Both Branches Use StoreHub API
 - **MKT**: StoreHub API (`/api/storehub/sales` + `/api/storehub/sync`)
-- **BF**: CSV upload from **Utak POS** — ALREADY FULLY BUILT, do not re-implement
-  - `src/lib/csv-mapping.ts` — `parseSalesCSV()` + `applyCsvMapping()` — 31 items mapped
-  - `src/app/stock/_components/CSVImportModal.tsx` — full UI modal
-  - Gated by `BRANCH_POS_TYPE.BF === "csv"` in `src/lib/auth.ts` ✅
+- **BF**: StoreHub API — mapping ready in `src/lib/storehub-mapping.ts` (`BF_MAPPING`); awaiting BF store credentials from supplier before going live
+- CSV/Utak import (previously BF) has been removed — `csv-mapping.ts` and `CSVImportModal.tsx` are deleted
+- Both branches now show "Sync sales" button unconditionally (no more `BRANCH_POS_TYPE` conditional)
+- SKU IDs are branch-specific for now (BF uses M-/B-/S-/PF-/T-/A-/EX- prefixes); unified SKU IDs across branches are a future milestone
 
 ### Phase 2 Transfer Flow Design (agreed 2026-04-28)
 - **Branch-only initiation**: all pull-out requests MUST come from the branch (`pull_outs` collection)
@@ -85,6 +85,12 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **Reset button removed**: no longer needed post-trial. `ResetModal` component still exists but is not imported or used.
 - **Delivery list excludes commissary items**: `commissary: true` items are filtered out of `DeliveryContent` via `deliveryItems` computed in `stock/page.tsx`. These items come in automatically via the Orders flow. Only non-commissary items remain: Burrata, Clam Chowder, Sourdough, Focaccia, Pandesal, Potato Buns, Brioche Loaf. The "missing items" list in `DeliveryCompleted` is filtered the same way.
 - **Orders tab auto-back**: switching tabs (Pending/Active/History) in `transfers/page.tsx` now resets `view` to `"list"` inside `OrdersContent` via a `useEffect` on the `tab` prop.
+
+### Catalog — BF-Specific Items (2026-06-21)
+- **Porkchop** — `packed`, 1 pc, `branches: ["BF"]`, no `commissary: true` — sourced from supplier at BF (same cut as MKT's Tomahawk Porkchop but tracked separately; deducted by StoreHub SKU M08)
+- **Tomahawk Porkchop** — now `branches: ["MKT"]` only — commissary-sourced for MKT
+- Items restricted to MKT only (`branches: ["MKT"]`): House Vinaigrette, Kimchi, Maple Syrup, Marinara Sauce, Marinara Sauce (Blend), Truffle Pasta Sauce, Tomahawk Porkchop
+- BF StoreHub mapping: `BF_MAPPING` in `src/lib/storehub-mapping.ts` — party trays deduct qty:3; Breakfast Sampler (T03) deducts qty:2
 
 ### Catalog — Last SKU Added (2026-05-29)
 - **Ube Halaya** — `loose`, 500g pack, `ordersPerPack: 7`, reorder at 2, back kitchen, commissary-supplied, all branches

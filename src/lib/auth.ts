@@ -16,7 +16,7 @@ export const DEPARTMENT_LABELS: Record<Department, string> = {
 
 export const BRANCH_POS_TYPE: Record<Branch, PosType> = {
   MKT: "storehub",
-  BF:  "csv",
+  BF:  "storehub",
 };
 
 // ── Cookie helpers ────────────────────────────────────────────────────────────

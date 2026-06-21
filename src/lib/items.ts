@@ -29,7 +29,8 @@ export const CATALOG: CatalogItem[] = [
   { name: "Salmon Fillet",           category: "portion", unit: "pc", reorderAt: 3,  parLevel: 10,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Scallops",                category: "portion", unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Smoked Salmon",           category: "portion", unit: "pc", reorderAt: 10, parLevel: 40,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
-  { name: "Tomahawk Porkchop",       category: "packed",  unit: "pc", reorderAt: 3,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
+  { name: "Tomahawk Porkchop",       category: "packed",  unit: "pc", reorderAt: 3,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["MKT"], commissary: true },
+  { name: "Porkchop",               category: "packed",  unit: "pc", reorderAt: 3,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["BF"] },
   // ── PACKED (pc) ──────────────────────────────────────────────────────
   { name: "Au Jus",                  category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 20,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Bacon Jam",               category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 20,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
@@ -43,7 +44,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Squid Ink Sauce",         category: "packed",  unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Tomato Soup",             category: "packed",  unit: "pc", reorderAt: 15, parLevel: 40,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Truffle Mushroom Paste",  category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
-  { name: "Truffle Pasta Sauce",     category: "packed",  unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
+  { name: "Truffle Pasta Sauce",     category: "packed",  unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["MKT"], commissary: true },
   { name: "Tuna Spread",             category: "packed",  unit: "pc", reorderAt: 3,  parLevel: 10,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Vodka Sauce",             category: "packed",  unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Burrata",                 category: "packed",  unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
