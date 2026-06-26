@@ -194,10 +194,8 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
                 </div>
               </div>
               <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                {tab === "history" && dn?.receivedAt && dn.receivedAt !== po.requestedAt
-                  ? `Ordered ${formatDay(po.requestedAt)} · Delivered ${formatDay(dn.receivedAt)}`
-                  : formatDay(po.requestedAt)
-                }{" · "}{po.items.length} item{po.items.length !== 1 ? "s" : ""}
+                {tab === "history" && dn?.dnRef ? dn.dnRef : formatDay(po.requestedAt)}
+                {" · "}{po.items.length} item{po.items.length !== 1 ? "s" : ""}
                 {incomplete ? ` · ${pct}% fulfilled` : ""}
               </div>
               {tab === "active" && (
