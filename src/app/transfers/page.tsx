@@ -90,7 +90,7 @@ export default function TransfersPage() {
   }
 
   const pendingCount = pullOuts.filter(p => p.status === "PENDING_REVIEW").length;
-  const activeCount  = pullOuts.filter(p => p.status === "DISPATCHED").length;
+  const activeCount  = pullOuts.filter(p => ["DISPATCHED", "DISCREPANCY"].includes(p.status)).length;
   const firstNotice  = notices[0] ?? null;
 
   if (!branch) return null;
