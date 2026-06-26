@@ -33,7 +33,7 @@ const STATUS_LABEL: Record<string, string> = {
   CANCELLED:      "Cancelled",
   DISCREPANCY:    "Discrepancy",
   DISPUTED:       "Disputed",
-  DONE:           "Done",
+  DONE:           "Received",
   SENT_BACK:      "Sent Back",
   RESOLVED:       "Resolved",
 };
