@@ -116,6 +116,23 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **Per-item check button**: checkbox on the left of each item row in `ActiveDetail` (`OrdersContent.tsx`). Tapping toggles a green checked state. Checked + no discrepancy → green row, dimmed qty controls. Checked + discrepancy → light red row, red border stays dominant. Progress counter ("Items checked X of Y") shown between the info banner and item list. State is local (`useState<Set<string>>`) — resets if user navigates away. No Firestore writes.
 - **Confirm receipt summary**: tapping "Confirm Receipt" opens a full-screen overlay (`showReview` state) instead of immediately writing to Firestore. Overlay shows a receipt card with colored header (green = all good, red = discrepancy), read-only item list, discrepancy items highlighted with "Expected X · received Y", footer note, and **Back** / **Submit** buttons. Submit fires the existing `confirmReceipt()` unchanged.
 
+### Dispute Resolution Flow (2026-06-21)
+- **Status state machine**: `DISCREPANCY → DISPUTED → SENT_BACK → RESOLVED` (also `DONE` for no-dispute path)
+- **`DISCREPANCY`**: branch confirmed receipt with wrong quantities — commissary sees the modal to review
+- **`DISPUTED`**: commissary submitted a counter (per-item adjusted quantities) → escalated to superadmin
+- **`SENT_BACK`**: superadmin returned the dispute to commissary to re-edit; commissary sees orange "↩ SENT BACK" card with "Re-edit Dispute" button
+- **`RESOLVED`**: superadmin approved the final quantities; inventory adjusted atomically; `dispute_notices` doc written for branch
+- **Cancel Dispute** (`OrdersContent.tsx`): shown when `po.status === "DISCREPANCY"`. Batch-writes: commissary `invEntries` for ALL items using `dispatchedQty`, `branch_adjustments`, `branch_stock` increment for discrepancy items only, delivery note → `"RECEIVED"`, pull_out → `"DONE"` with `commissaryInvWritten: true`
+- **Resolution notice** (`transfers/page.tsx`): onSnapshot on `dispute_notices` filtered by branch + `branchAcknowledged == false`. Shows sticky dark banner; bottom sheet displays superadmin note + corrected items table (delta green/red). Dismiss writes `branchAcknowledged: true` + `branchAcknowledgedAt`
+- **Firestore**: `dispute_notices` collection — `{ poRef, pullOutId, branch, resolvedAt, resolvedBy, superadminNote, correctedItems[], branchAcknowledged, branchAcknowledgedAt? }`. Pre-computed at resolution time (denormalized snapshot). `COLS.disputeNotices = "dispute_notices"` in `src/lib/firebase.ts`
+- **`branch_stock` updates**: always use `FieldValue.increment(delta)` — never plain `{ qty: delta }` with merge, which overwrites instead of adding
+
+### Waste Tab — History & Export (2026-06-26)
+- **History window**: loads the past 30 days of waste adjustments on page mount (up from 14). Uses per-date equality queries to avoid a composite index — 30 parallel `getDocs` calls, one per date.
+- **Export Waste (90 days)** button appears at the bottom of the History subtab. Fetches 90 days of waste adjustments (90 parallel `getDocs`), filters `type === "waste"`, sorts newest-first, and triggers a CSV download named `waste-{branch}-{department}-90d.csv`.
+- CSV columns: `date, item, qty, reason, logged_by`
+- Handler: `handleExportWaste` in `src/app/stock/page.tsx`; button + loading state in `src/app/stock/_components/WasteContent.tsx` (`onExport` prop)
+
 ### Recipe Database (future 3rd app — not yet built)
 - Will share the same Firebase project (`commissary-dashboard-ccd7c`)
 - First step before building: migrate hardcoded `RECIPES` array from commissary `src/data.ts` → Firestore `recipes` collection
