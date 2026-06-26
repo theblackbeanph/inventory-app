@@ -95,11 +95,19 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
     setSelected(null);
   }, [tab]);
 
-  const pending = useMemo(() => pullOuts.filter(p => p.status === "PENDING_REVIEW"), [pullOuts]);
-  const active  = useMemo(() => pullOuts.filter(p => p.status === "DISPATCHED"),     [pullOuts]);
-  const history = useMemo(() => pullOuts.filter(p =>
-    ["RECEIVED", "DONE", "CANCELLED", "REJECTED", "DISCREPANCY", "DISPUTED", "SENT_BACK", "RESOLVED"].includes(p.status)
-  ), [pullOuts]);
+  const pending = useMemo(() =>
+    [...pullOuts.filter(p => p.status === "PENDING_REVIEW")]
+      .sort((a, b) => b.id.localeCompare(a.id)),
+  [pullOuts]);
+  const active  = useMemo(() =>
+    [...pullOuts.filter(p => ["DISPATCHED", "DISCREPANCY"].includes(p.status))]
+      .sort((a, b) => b.id.localeCompare(a.id)),
+  [pullOuts]);
+  const history = useMemo(() =>
+    [...pullOuts.filter(p =>
+      ["RECEIVED", "DONE", "CANCELLED", "REJECTED", "DISPUTED", "SENT_BACK", "RESOLVED"].includes(p.status)
+    )].sort((a, b) => b.id.localeCompare(a.id)),
+  [pullOuts]);
 
   const list = tab === "pending" ? pending : tab === "active" ? active : history;
 
@@ -186,12 +194,19 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
                 </div>
               </div>
               <div style={{ fontSize: 13, color: "var(--text-secondary)" }}>
-                {formatDay(po.requestedAt)} · {po.items.length} item{po.items.length !== 1 ? "s" : ""}
+                {tab === "history" && dn?.receivedAt && dn.receivedAt !== po.requestedAt
+                  ? `Ordered ${formatDay(po.requestedAt)} · Delivered ${formatDay(dn.receivedAt)}`
+                  : formatDay(po.requestedAt)
+                }{" · "}{po.items.length} item{po.items.length !== 1 ? "s" : ""}
                 {incomplete ? ` · ${pct}% fulfilled` : ""}
               </div>
               {tab === "active" && (
                 <div style={{ marginTop: 6 }}>
-                  {dn ? (
+                  {po.status === "DISCREPANCY" ? (
+                    <div style={{ fontSize: 12, color: "#D97706", fontWeight: 600 }}>
+                      Dispute filed — pending commissary review
+                    </div>
+                  ) : dn ? (
                     <>
                       <div style={{ fontSize: 12, color: "#4338CA", fontWeight: 600 }}>{dn.dnRef}</div>
                       <div style={{ fontSize: 12, color: "#4338CA" }}>Tap to confirm receipt →</div>
@@ -199,11 +214,6 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
                   ) : (
                     <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Awaiting delivery note…</div>
                   )}
-                </div>
-              )}
-              {tab === "history" && po.status === "DISCREPANCY" && (
-                <div style={{ marginTop: 6, fontSize: 12, color: "#D97706", fontWeight: 600 }}>
-                  Dispute filed — pending commissary review
                 </div>
               )}
               {tab === "history" && po.status === "DISPUTED" && (
