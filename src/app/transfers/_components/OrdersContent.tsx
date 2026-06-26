@@ -120,10 +120,22 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
         />
       );
     }
-    if (selected.status === "DISPATCHED" || selected.status === "DISCREPANCY") {
+    if (selected.status === "DISPATCHED") {
       const dn = deliveryNotes.find(d => d.pullOutId === selected.id) ?? null;
       return (
         <ActiveDetail
+          po={selected}
+          dn={dn}
+          branch={branch}
+          onBack={goBack}
+          onUpdated={updated => setSelected(updated)}
+        />
+      );
+    }
+    if (selected.status === "DISCREPANCY") {
+      const dn = deliveryNotes.find(d => d.pullOutId === selected.id) ?? null;
+      return (
+        <DiscrepancyDetail
           po={selected}
           dn={dn}
           branch={branch}
@@ -189,9 +201,14 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
                   )}
                 </div>
               )}
-              {tab === "history" && ["DISCREPANCY", "DISPUTED", "RESOLVED"].includes(po.status) && (
-                <div style={{ marginTop: 6, fontSize: 12, color: "#D97706" }}>
-                  Discrepancy on file — place a new order if needed
+              {tab === "history" && po.status === "DISCREPANCY" && (
+                <div style={{ marginTop: 6, fontSize: 12, color: "#D97706", fontWeight: 600 }}>
+                  Dispute filed — pending commissary review
+                </div>
+              )}
+              {tab === "history" && po.status === "DISPUTED" && (
+                <div style={{ marginTop: 6, fontSize: 12, color: "#7C3AED", fontWeight: 600 }}>
+                  Escalated — pending admin decision
                 </div>
               )}
             </div>
@@ -366,78 +383,6 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
     setLoading(false);
   }
 
-  async function cancelDispute() {
-    if (!dn) return;
-    setLoading(true); setError("");
-    try {
-      await auth.authStateReady();
-      const loggedBy  = auth.currentUser?.displayName || BRANCH_LABELS[branch];
-      const today     = todayPHT();
-      const now       = Date.now();
-      const poRef     = `${po.poRef} · ${dn.dnRef}`;
-      const batchW    = writeBatch(db);
-
-      // 1. Commissary invEntries — OUT using dispatchedQty for ALL items
-      dn.items.forEach((it, i) => {
-        batchW.set(doc(db, COLS.invEntries, String(now + i)), {
-          id:       now + i,
-          date:     today,
-          item:     it.item,
-          type:     "out",
-          qty:      it.dispatchedQty,
-          note:     `Transfer to ${po.branch} · ${poRef} · branch cancelled dispute`,
-          loggedBy,
-          poRef:    po.poRef,
-        });
-      });
-
-      // 2. Branch corrective adjustments for discrepancy items only
-      dn.items.forEach((it) => {
-        const ri    = dn.receivedItems?.find(r => r.item === it.item);
-        const recv  = ri?.receivedQty ?? it.dispatchedQty;
-        const delta = it.dispatchedQty - recv;
-        if (delta === 0) return;
-
-        const adjRef = doc(collection(db, COLS.adjustments));
-        batchW.set(adjRef, {
-          id:         adjRef.id,
-          branch,
-          department: "kitchen",
-          date:       today,
-          item:       it.item,
-          type:       delta > 0 ? "in" : "out",
-          qty:        Math.abs(delta),
-          loggedBy,
-          note:       `Dispute cancelled · ${po.poRef}`,
-        });
-
-        const catalogItem = CATALOG_MAP.get(it.item);
-        if (catalogItem) {
-          const dept    = catalogItem.department;
-          const stockId = `${branch}_${dept}_${it.item}`;
-          batchW.set(doc(db, COLS.branchStock, stockId),
-            { qty: increment(delta), lastUpdated: today, lastUpdatedBy: loggedBy },
-            { merge: true }
-          );
-        }
-      });
-
-      // 3. Update delivery note and pull out
-      batchW.update(doc(db, COLS.deliveryNotes, dn.id), { status: "RECEIVED" });
-      batchW.update(doc(db, COLS.pullOuts, po.id), {
-        status:               "DONE",
-        commissaryInvWritten: true,
-      });
-
-      await batchW.commit();
-      onUpdated({ ...po, status: "DONE" as PullOut["status"] });
-      onBack();
-    } catch {
-      setError("Failed to cancel dispute. Try again.");
-    }
-    setLoading(false);
-  }
-
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 100px)" }}>
       <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 12 }}>
@@ -548,24 +493,6 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
           >
             {hasDiscrepancy ? "Confirm Receipt with Discrepancy" : "Confirm Receipt — All Good"}
           </button>
-          {po.status === "DISCREPANCY" && (
-            <div style={{ marginTop: 16 }}>
-              <button
-                onClick={cancelDispute}
-                disabled={loading}
-                style={{
-                  width: "100%", padding: "13px 0", borderRadius: 14, border: "1px solid var(--border)",
-                  background: "transparent", color: "var(--text-secondary)", fontWeight: 600,
-                  fontSize: 14, cursor: loading ? "not-allowed" : "pointer",
-                }}
-              >
-                Cancel Dispute — Accept Dispatched Quantities
-              </button>
-              <div style={{ fontSize: 11, color: "var(--text-secondary)", textAlign: "center", marginTop: 6 }}>
-                Confirms commissary was correct. Adjusts your stock to match dispatched quantities.
-              </div>
-            </div>
-          )}
         </div>
       )}
 
@@ -654,6 +581,174 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── DiscrepancyDetail ─────────────────────────────────────────────────────────
+
+function DiscrepancyDetail({ po, dn, branch, onBack, onUpdated }: {
+  po: PullOut;
+  dn: DeliveryNote | null;
+  branch: Branch;
+  onBack: () => void;
+  onUpdated: (po: PullOut) => void;
+}) {
+  const [loading, setLoading] = useState(false);
+  const [error,   setError]   = useState("");
+
+  const discrepancyItems = dn
+    ? dn.items.filter(i => {
+        const ri = dn.receivedItems?.find(r => r.item === i.item);
+        return ri && ri.receivedQty !== i.dispatchedQty;
+      })
+    : [];
+
+  async function cancelDispute() {
+    if (!dn) return;
+    setLoading(true); setError("");
+    try {
+      await auth.authStateReady();
+      const loggedBy = auth.currentUser?.displayName || BRANCH_LABELS[branch];
+      const today    = todayPHT();
+      const now      = Date.now();
+      const poRef    = `${po.poRef} · ${dn.dnRef}`;
+      const batchW   = writeBatch(db);
+
+      dn.items.forEach((it, i) => {
+        batchW.set(doc(db, COLS.invEntries, String(now + i)), {
+          id: now + i, date: today, item: it.item, type: "out",
+          qty: it.dispatchedQty,
+          note: `Transfer to ${po.branch} · ${poRef} · branch cancelled dispute`,
+          loggedBy, poRef: po.poRef,
+        });
+      });
+
+      dn.items.forEach(it => {
+        const ri    = dn.receivedItems?.find(r => r.item === it.item);
+        const recv  = ri?.receivedQty ?? it.dispatchedQty;
+        const delta = it.dispatchedQty - recv;
+        if (delta === 0) return;
+        const adjRef = doc(collection(db, COLS.adjustments));
+        batchW.set(adjRef, {
+          id: adjRef.id, branch, department: "kitchen", date: today,
+          item: it.item, type: delta > 0 ? "in" : "out", qty: Math.abs(delta),
+          loggedBy, note: `Dispute cancelled · ${po.poRef}`,
+        });
+        const catalogItem = CATALOG_MAP.get(it.item);
+        if (catalogItem) {
+          batchW.set(
+            doc(db, COLS.branchStock, `${branch}_${catalogItem.department}_${it.item}`),
+            { qty: increment(delta), lastUpdated: today, lastUpdatedBy: loggedBy },
+            { merge: true },
+          );
+        }
+      });
+
+      batchW.update(doc(db, COLS.deliveryNotes, dn.id), { status: "RECEIVED" });
+      batchW.update(doc(db, COLS.pullOuts, po.id), { status: "DONE", commissaryInvWritten: true });
+      await batchW.commit();
+      onUpdated({ ...po, status: "DONE" as PullOut["status"] });
+      onBack();
+    } catch {
+      setError("Failed to cancel dispute. Try again.");
+    }
+    setLoading(false);
+  }
+
+  return (
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 100px)" }}>
+      <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-secondary)", fontSize: 20 }}>←</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{po.poRef}</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>{dn?.dnRef ?? "No delivery note"}</div>
+        </div>
+        <span style={statusBadgeStyle(po.status)}>{STATUS_LABEL[po.status]}</span>
+      </div>
+
+      <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        {error && (
+          <div style={{ background: "#FEF2F2", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#DC2626" }}>{error}</div>
+        )}
+
+        <div style={{ background: "#FEF3C7", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#D97706" }}>
+          Dispute filed — commissary has been notified and is reviewing the quantities.
+        </div>
+
+        {discrepancyItems.length > 0 && (
+          <>
+            <div style={{ fontSize: 12, fontWeight: 700, color: "#DC2626", padding: "4px 2px", marginTop: 4 }}>
+              Items with discrepancy
+            </div>
+            {discrepancyItems.map(item => {
+              const ri = dn!.receivedItems?.find(r => r.item === item.item);
+              return (
+                <div key={item.item} style={{ background: "#FEF2F2", borderRadius: 12, padding: "12px 14px", borderLeft: "4px solid #DC2626", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item}</div>
+                    <div style={{ fontSize: 11, color: "#DC2626", marginTop: 2 }}>
+                      Dispatched: {item.dispatchedQty} · You received: {ri?.receivedQty ?? "—"}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right" }}>
+                    <div style={{ fontWeight: 700, fontSize: 18, color: "#DC2626" }}>{ri?.receivedQty ?? "—"}</div>
+                    <div style={{ fontSize: 11, color: "#DC2626" }}>{item.unit}</div>
+                  </div>
+                </div>
+              );
+            })}
+            <div style={{ borderBottom: "1px solid var(--border)", margin: "4px 0" }} />
+          </>
+        )}
+
+        <div style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", padding: "4px 2px" }}>
+          All items received
+        </div>
+        {po.items.map(item => {
+          const dnItem     = dn?.items.find(i => i.item === item.item);
+          const ri         = dn?.receivedItems?.find(r => r.item === item.item);
+          const isDisc     = ri && ri.receivedQty !== dnItem?.dispatchedQty;
+          const dispatched = dnItem?.dispatchedQty;
+          const received   = ri?.receivedQty ?? dispatched ?? item.qty;
+          return (
+            <div key={item.item} style={{ background: "#FFF", borderRadius: 12, padding: "12px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.05)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>{item.item}</div>
+                {dispatched !== undefined && (
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                    Dispatched: {dispatched}
+                    {isDisc && <span style={{ color: "#DC2626", fontWeight: 600, marginLeft: 4 }}>· Received: {ri!.receivedQty}</span>}
+                    {!isDisc && ri && <span style={{ color: "#059669", marginLeft: 4 }}>· Received: {ri.receivedQty}</span>}
+                  </div>
+                )}
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: 700, fontSize: 18, color: isDisc ? "#DC2626" : "var(--text)" }}>{received}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>{item.unit}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      <div style={{ position: "fixed", bottom: "var(--nav-h)", left: 0, right: 0, background: "#FFF", borderTop: "1px solid var(--border)", padding: "12px 16px" }}>
+        <button
+          onClick={cancelDispute}
+          disabled={loading}
+          style={{
+            width: "100%", padding: "14px 0", borderRadius: 14,
+            border: "1px solid var(--border)", background: "transparent",
+            color: "var(--text-secondary)", fontWeight: 600,
+            fontSize: 14, cursor: loading ? "not-allowed" : "pointer",
+          }}
+        >
+          {loading ? "Cancelling…" : "Cancel Dispute — Accept Dispatched Quantities"}
+        </button>
+        <div style={{ fontSize: 11, color: "var(--text-secondary)", textAlign: "center", marginTop: 6 }}>
+          Confirms commissary was correct. Adjusts your stock to match dispatched quantities.
+        </div>
+      </div>
     </div>
   );
 }
