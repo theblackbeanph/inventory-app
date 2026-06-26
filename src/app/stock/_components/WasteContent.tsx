@@ -13,16 +13,18 @@ interface WasteContentProps {
   todayWaste: StockAdjustment[];
   wasteHistory: StockAdjustment[];
   onSubmit: (entries: WasteEntry[]) => Promise<void>;
+  onExport: () => Promise<void>;
   today: string;
   loading: boolean;
 }
 
-export function WasteContent({ items, todayWaste, wasteHistory, onSubmit, today, loading }: WasteContentProps) {
+export function WasteContent({ items, todayWaste, wasteHistory, onSubmit, onExport, today, loading }: WasteContentProps) {
   const [subTab, setSubTab] = useState<"log" | "history">("log");
   const [view, setView] = useState<"select" | "review">("select");
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Map<string, number>>(new Map());
   const [reasons, setReasons] = useState<Map<string, WasteReason>>(new Map());
+  const [exporting, setExporting] = useState(false);
 
   const filtered = items.filter(i => i.name.toLowerCase().includes(search.toLowerCase()));
   const selectedCount = selected.size;
@@ -135,6 +137,13 @@ export function WasteContent({ items, todayWaste, wasteHistory, onSubmit, today,
               </div>
             );
           })}
+          <button
+            onClick={async () => { setExporting(true); try { await onExport(); } finally { setExporting(false); } }}
+            disabled={exporting}
+            style={{ width: "100%", height: 44, borderRadius: 14, border: "1.5px solid #D1D5DB", background: "#fff", color: exporting ? "var(--text-secondary)" : "#1A1A1A", fontSize: 14, fontWeight: 600, cursor: exporting ? "not-allowed" : "pointer", marginTop: 8 }}
+          >
+            {exporting ? "Exporting…" : "Export Waste (90 days)"}
+          </button>
           <button
             onClick={goToLog}
             style={{ width: "100%", height: 52, borderRadius: 14, border: "none", background: "#1A1A1A", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer", marginTop: 8 }}

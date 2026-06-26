@@ -14,6 +14,7 @@ const baseProps = {
   todayWaste: [] as StockAdjustment[],
   wasteHistory: [] as StockAdjustment[],
   onSubmit: vi.fn(),
+  onExport: vi.fn(),
   today: "2026-06-04",
   loading: false,
 };

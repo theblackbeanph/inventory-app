@@ -111,11 +111,11 @@ export default function StockPage() {
       setDayClose(snap.empty ? null : snap.docs[0].data() as DailyClose);
     });
 
-    // Fetch waste history for the past 14 days using per-date equality queries
+    // Fetch waste history for the past 30 days using per-date equality queries
     // (avoids range query which requires a composite index that doesn't exist)
     const today = businessDatePHT();
     const pastDates: string[] = [];
-    for (let i = 1; i <= 14; i++) {
+    for (let i = 1; i <= 30; i++) {
       const d = new Date(today); d.setDate(d.getDate() - i);
       pastDates.push(d.toISOString().slice(0, 10));
     }
@@ -321,6 +321,33 @@ export default function StockPage() {
       wasteSubmittingRef.current = false;
       setWasteLoading(false);
     }
+  }
+
+  async function handleExportWaste() {
+    if (!branch || !department) return;
+    await auth.authStateReady();
+    const base = businessDatePHT();
+    const dates: string[] = [];
+    for (let i = 0; i <= 89; i++) {
+      const d = new Date(base); d.setDate(d.getDate() - i);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    const snaps = await Promise.all(
+      dates.map(date =>
+        getDocs(query(collection(db, COLS.adjustments), where("branch", "==", branch), where("department", "==", department), where("date", "==", date)))
+      )
+    );
+    const rows = snaps
+      .flatMap(s => s.docs.map(d => d.data() as StockAdjustment))
+      .filter(a => a.type === "waste")
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const header = "date,item,qty,reason,logged_by";
+    const csv = [header, ...rows.map(r => `${r.date},"${r.item}",${r.qty},"${r.note ?? ""}","${r.loggedBy ?? ""}"`)].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = `waste-${branch}-${department}-90d.csv`; a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function handleDeliverySave() {
@@ -752,6 +779,7 @@ export default function StockPage() {
           todayWaste={adjustments.filter(a => a.type === "waste")}
           wasteHistory={[...adjustments.filter(a => a.type === "waste"), ...wasteHistory]}
           onSubmit={handleSubmitWaste}
+          onExport={handleExportWaste}
           today={today}
           loading={wasteLoading}
         />
