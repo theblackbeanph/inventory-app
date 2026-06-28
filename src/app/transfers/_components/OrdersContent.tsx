@@ -875,6 +875,7 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
   const [stockCtx,    setStockCtx]    = useState<Map<string, StockContext>>(new Map());
   const [loadingStock, setLoadingStock] = useState(true);
+  const [prefillError, setPrefillError] = useState("");
   const [search,      setSearch]      = useState("");
   const [showReview,  setShowReview]  = useState(false);
   const [loading,     setLoading]     = useState(false);
@@ -971,6 +972,21 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
 
       setStockCtx(ctx);
       setSelectedItems(autoSelected);
+      } catch (err) {
+        console.error("prefill failed:", err);
+        // Firestore error — fall back to catalog par levels so the guide still shows
+        const fallback = new Map<string, StockContext>();
+        for (const item of branchItems) {
+          fallback.set(item.name, {
+            currentStock: 0,
+            parLevel: item.parLevel ?? item.reorderAt ?? 0,
+            source: "stock",
+          });
+        }
+        setStockCtx(fallback);
+        setPrefillError(
+          err instanceof Error ? err.message : "Could not load stock data — showing par levels only."
+        );
       } finally {
         setLoadingStock(false);
       }
@@ -1074,6 +1090,11 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
       {!loadingStock && (
         <div style={{ margin: "12px 16px 0", background: "#EFF6FF", borderRadius: 10, padding: "9px 13px", fontSize: 12, color: "#1D4ED8" }}>
           Pre-filled based on {sourceLabel} vs. par level. Packs are not pre-filled — add manually if needed.
+        </div>
+      )}
+      {prefillError && (
+        <div style={{ margin: "8px 16px 0", background: "#FEF3C7", borderRadius: 10, padding: "9px 13px", fontSize: 12, color: "#92400E" }}>
+          Stock sync issue — par levels shown, current stock unavailable. ({prefillError})
         </div>
       )}
 
