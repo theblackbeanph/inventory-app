@@ -1,4 +1,16 @@
 @AGENTS.md
+## Firestore Rules — IMPORTANT
+
+**Editing `firestore.rules` does NOT auto-deploy.** After every change to `firestore.rules`, you MUST run:
+```
+npx firebase-tools deploy --only firestore:rules
+```
+before considering the task done. Failing to do this means the new rules are never enforced and features that depend on them will silently fail with PERMISSION_DENIED.
+
+> The Firestore database and rules are **shared across all Black Bean apps** (commissary, branch-inventory, and future Recipe DB). A rules change in any one app must be deployed here and applies to all apps.
+
+---
+
 ## App Context
 
 My current app state, architecture, and feature tracker are in Notion.
@@ -116,22 +128,36 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **Per-item check button**: checkbox on the left of each item row in `ActiveDetail` (`OrdersContent.tsx`). Tapping toggles a green checked state. Checked + no discrepancy → green row, dimmed qty controls. Checked + discrepancy → light red row, red border stays dominant. Progress counter ("Items checked X of Y") shown between the info banner and item list. State is local (`useState<Set<string>>`) — resets if user navigates away. No Firestore writes.
 - **Confirm receipt summary**: tapping "Confirm Receipt" opens a full-screen overlay (`showReview` state) instead of immediately writing to Firestore. Overlay shows a receipt card with colored header (green = all good, red = discrepancy), read-only item list, discrepancy items highlighted with "Expected X · received Y", footer note, and **Back** / **Submit** buttons. Submit fires the existing `confirmReceipt()` unchanged.
 
-### Dispute Resolution Flow (2026-06-21)
+### Dispute Resolution Flow (2026-06-21, UI updated 2026-06-26)
 - **Status state machine**: `DISCREPANCY → DISPUTED → SENT_BACK → RESOLVED` (also `DONE` for no-dispute path)
 - **`DISCREPANCY`**: branch confirmed receipt with wrong quantities — commissary sees the modal to review
 - **`DISPUTED`**: commissary submitted a counter (per-item adjusted quantities) → escalated to superadmin
 - **`SENT_BACK`**: superadmin returned the dispute to commissary to re-edit; commissary sees orange "↩ SENT BACK" card with "Re-edit Dispute" button
 - **`RESOLVED`**: superadmin approved the final quantities; inventory adjusted atomically; `dispute_notices` doc written for branch
-- **Cancel Dispute** (`OrdersContent.tsx`): shown when `po.status === "DISCREPANCY"`. Batch-writes: commissary `invEntries` for ALL items using `dispatchedQty`, `branch_adjustments`, `branch_stock` increment for discrepancy items only, delivery note → `"RECEIVED"`, pull_out → `"DONE"` with `commissaryInvWritten: true`
+- **Cancel Dispute** (`DiscrepancyDetail` in `OrdersContent.tsx`): branch cancels dispute and accepts dispatched quantities. Batch-writes: commissary `invEntries` for ALL items using `dispatchedQty`, `branch_adjustments`, `branch_stock` increment for discrepancy items only, delivery note → `"RECEIVED"`, pull_out → `"DONE"` with `commissaryInvWritten: true`
 - **Resolution notice** (`transfers/page.tsx`): onSnapshot on `dispute_notices` filtered by branch + `branchAcknowledged == false`. Shows sticky dark banner; bottom sheet displays superadmin note + corrected items table (delta green/red). Dismiss writes `branchAcknowledged: true` + `branchAcknowledgedAt`
 - **Firestore**: `dispute_notices` collection — `{ poRef, pullOutId, branch, resolvedAt, resolvedBy, superadminNote, correctedItems[], branchAcknowledged, branchAcknowledgedAt? }`. Pre-computed at resolution time (denormalized snapshot). `COLS.disputeNotices = "dispute_notices"` in `src/lib/firebase.ts`
 - **`branch_stock` updates**: always use `FieldValue.increment(delta)` — never plain `{ qty: delta }` with merge, which overwrites instead of adding
+
+### Orders Tab — UI Decisions (2026-06-26)
+- **Tab placement**: `DISCREPANCY` stays in the **Active** tab (not History) — dispute is still unresolved, so it should remain visible as an action item. Active tab count badge includes both `DISPATCHED` and `DISCREPANCY`.
+- **`DISCREPANCY` detail view**: opens `DiscrepancyDetail` (not `ActiveDetail`) — read-only view showing a status banner, discrepancy items highlighted at top, all items below, and only the "Cancel Dispute" button. No qty adjusters or "Confirm Receipt" button.
+- **`DISCREPANCY` card subtext** (Active tab): "Dispute filed — pending commissary review" (amber)
+- **`DISPUTED` card subtext** (History tab): "Escalated — pending admin decision" (purple)
+- **`DONE` label**: displays as **"Received"** — `DONE` is the outcome of cancelling a dispute; from the branch's perspective the stock was still received, so the label should match `RECEIVED`
+- **List sort order**: all three tabs (Pending, Active, History) sort newest-first by document `id` (which is `String(Date.now())` at creation)
+- **History card description line**: shows the DN ref (e.g. `DN-26-0626-MKT001`) instead of the order date, followed by item count and fulfillment %. Falls back to the order date if no DN exists.
 
 ### Waste Tab — History & Export (2026-06-26)
 - **History window**: loads the past 30 days of waste adjustments on page mount (up from 14). Uses per-date equality queries to avoid a composite index — 30 parallel `getDocs` calls, one per date.
 - **Export Waste (90 days)** button appears at the bottom of the History subtab. Fetches 90 days of waste adjustments (90 parallel `getDocs`), filters `type === "waste"`, sorts newest-first, and triggers a CSV download named `waste-{branch}-{department}-90d.csv`.
 - CSV columns: `date, item, qty, reason, logged_by`
 - Handler: `handleExportWaste` in `src/app/stock/page.tsx`; button + loading state in `src/app/stock/_components/WasteContent.tsx` (`onExport` prop)
+
+### Known Issues / Correction Blindness (2026-07-02)
+- **Fixed in `computeMetrics`**: Daily tab END column and CSV export now include `type: "correction"` adjustments (tap-to-correct). Before this fix, corrections updated `dailyBeginning` (so BEG for the next day was correct) but the END column for the corrected day still showed the pre-correction stocktake value — causing a visible gap on audits.
+- **Still open in dashboard variance**: `computeVarianceRows` and `computeItemSummaries` in `src/app/dashboard/_lib/variance.ts` have their own adjustment loop that only handles `type: "count"`. Same correction-blindness bug. Corrections won't show in the dashboard variance report until that file is also updated.
+- **Still open in NewOrderForm**: auto-fill prefill logic in `NewOrderForm` also ignores `type: "correction"` when computing current stock for auto-select quantities. Minor gap.
 
 ### Recipe Database (future 3rd app — not yet built)
 - Will share the same Firebase project (`commissary-dashboard-ccd7c`)

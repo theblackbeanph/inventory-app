@@ -70,6 +70,9 @@ export function computeMetrics(
     metrics[item.name] = { beginning: beginnings[item.name] ?? null, inQty: 0, outQty: 0, salesOrders: 0, endCount: null };
   }
   const latestCount: Record<string, { qty: number; id: number }> = {};
+  // Corrections (tap-to-correct on a confirmed stocktake) use Firestore auto-IDs (strings).
+  // They always supersede the original count, so we track them separately and apply last.
+  const latestCorrection: Record<string, { qty: number; id: string }> = {};
   for (const adj of adjustments) {
     if (!metrics[adj.item]) continue;
     const m = metrics[adj.item];
@@ -84,9 +87,17 @@ export function computeMetrics(
       if (!latestCount[adj.item] || adj.id > latestCount[adj.item].id) {
         latestCount[adj.item] = { qty: adj.qty, id: adj.id };
       }
+    } else if (adj.type === "correction") {
+      const corrId = String(adj.id);
+      if (!latestCorrection[adj.item] || corrId > latestCorrection[adj.item].id) {
+        latestCorrection[adj.item] = { qty: adj.qty, id: corrId };
+      }
     }
   }
   for (const [item, { qty }] of Object.entries(latestCount)) {
+    if (metrics[item]) metrics[item].endCount = qty;
+  }
+  for (const [item, { qty }] of Object.entries(latestCorrection)) {
     if (metrics[item]) metrics[item].endCount = qty;
   }
   return metrics;
