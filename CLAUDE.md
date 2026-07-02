@@ -154,6 +154,9 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - CSV columns: `date, item, qty, reason, logged_by`
 - Handler: `handleExportWaste` in `src/app/stock/page.tsx`; button + loading state in `src/app/stock/_components/WasteContent.tsx` (`onExport` prop)
 
+### Bug Log
+- All known bugs and fixes are tracked in `docs/bugs.md`. Update this file whenever a bug is found or fixed.
+
 ### Correction Blindness — Fixed (2026-07-02)
 - **What it was**: tap-to-correct writes `type: "correction"` adjustments (Firestore string auto-IDs). Both `computeMetrics` and the dashboard variance functions only read `type: "count"`, so corrections were invisible — END column showed pre-correction values while BEG for the next day was already correct, causing an irreconcilable audit gap.
 - **Fixed in `computeMetrics`** (`src/app/stock/_lib/helpers.ts`): Daily tab END/VAR columns and CSV export now reflect corrections. Corrections are tracked separately and applied after counts so they always win. String comparison used for IDs (`String(adj.id)`) since correction docs use Firestore auto-ID strings.
