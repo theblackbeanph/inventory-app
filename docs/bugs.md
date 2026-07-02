@@ -14,6 +14,8 @@ After a team member used tap-to-correct on a confirmed stocktake, the "Count Con
 ### Fix
 Added a `latestCorrection` tracker (separate from `latestCount`) in `computeMetrics`. Corrections are applied after counts so they always win. Firestore auto-IDs are compared lexicographically via `String(adj.id)` — they're roughly time-ordered, so the latest correction wins in multi-correction edge cases.
 
-### Not yet fixed (same root cause, different files)
-- **`src/app/dashboard/_lib/variance.ts`** — `computeVarianceRows` and `computeItemSummaries` have their own adjustment loops; also ignore `type: "correction"`. Dashboard variance report still shows pre-correction END values.
-- **`src/app/transfers/_components/OrdersContent.tsx`** (`NewOrderForm`) — auto-fill prefill ignores corrections when computing current stock for order quantity suggestions.
+### Also fixed (2026-07-02)
+- **`src/app/dashboard/_lib/variance.ts`** — `computeVarianceRows` and `computeItemSummaries` had the same blind spot. Both now track `type: "correction"` and use corrections over counts. Dashboard END values, period variance, status, trend, and CSV exports are now correct.
+
+### Still open
+- **`src/app/transfers/_components/OrdersContent.tsx`** (`NewOrderForm`) — auto-fill prefill ignores corrections when computing current stock for order quantity suggestions. Minor — team reviews quantities before submitting.

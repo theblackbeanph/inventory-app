@@ -154,10 +154,11 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - CSV columns: `date, item, qty, reason, logged_by`
 - Handler: `handleExportWaste` in `src/app/stock/page.tsx`; button + loading state in `src/app/stock/_components/WasteContent.tsx` (`onExport` prop)
 
-### Known Issues / Correction Blindness (2026-07-02)
-- **Fixed in `computeMetrics`**: Daily tab END column and CSV export now include `type: "correction"` adjustments (tap-to-correct). Before this fix, corrections updated `dailyBeginning` (so BEG for the next day was correct) but the END column for the corrected day still showed the pre-correction stocktake value — causing a visible gap on audits.
-- **Still open in dashboard variance**: `computeVarianceRows` and `computeItemSummaries` in `src/app/dashboard/_lib/variance.ts` have their own adjustment loop that only handles `type: "count"`. Same correction-blindness bug. Corrections won't show in the dashboard variance report until that file is also updated.
-- **Still open in NewOrderForm**: auto-fill prefill logic in `NewOrderForm` also ignores `type: "correction"` when computing current stock for auto-select quantities. Minor gap.
+### Correction Blindness — Fixed (2026-07-02)
+- **What it was**: tap-to-correct writes `type: "correction"` adjustments (Firestore string auto-IDs). Both `computeMetrics` and the dashboard variance functions only read `type: "count"`, so corrections were invisible — END column showed pre-correction values while BEG for the next day was already correct, causing an irreconcilable audit gap.
+- **Fixed in `computeMetrics`** (`src/app/stock/_lib/helpers.ts`): Daily tab END/VAR columns and CSV export now reflect corrections. Corrections are tracked separately and applied after counts so they always win. String comparison used for IDs (`String(adj.id)`) since correction docs use Firestore auto-ID strings.
+- **Fixed in dashboard variance** (`src/app/dashboard/_lib/variance.ts`): same fix applied to `computeVarianceRows` and `computeItemSummaries`. Dashboard END values, period variance, status, trend, and CSV exports now reflect corrections.
+- **Still open in NewOrderForm**: auto-fill prefill ignores `type: "correction"` when computing current stock for order quantity suggestions. Minor gap — team reviews before submitting.
 
 ### Recipe Database (future 3rd app — not yet built)
 - Will share the same Firebase project (`commissary-dashboard-ccd7c`)
