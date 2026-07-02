@@ -37,6 +37,7 @@ export function computeVarianceRows(
     date: string;
     item: string;
     counts: StockAdjustment[];
+    corrections: StockAdjustment[];
     totalIn: number;
     totalOut: number;
   }>();
@@ -44,11 +45,13 @@ export function computeVarianceRows(
   for (const adj of adjustments) {
     const key = `${adj.date}|${adj.item}`;
     if (!groups.has(key)) {
-      groups.set(key, { date: adj.date, item: adj.item, counts: [], totalIn: 0, totalOut: 0 });
+      groups.set(key, { date: adj.date, item: adj.item, counts: [], corrections: [], totalIn: 0, totalOut: 0 });
     }
     const g = groups.get(key)!;
     if (adj.type === "count") {
       g.counts.push(adj);
+    } else if (adj.type === "correction") {
+      g.corrections.push(adj);
     } else if (adj.type === "in") {
       g.totalIn += adj.qty;
     } else if (adj.type === "out" || adj.type === "waste" || adj.type === "sales_import") {
@@ -58,10 +61,16 @@ export function computeVarianceRows(
 
   const rows: VarianceRow[] = [];
   for (const g of groups.values()) {
-    if (g.counts.length === 0) continue;
-    // Use the count with the highest id — matches existing behavior in ReportsContent
-    const countAdj = g.counts.reduce((best, a) => (a.id > best.id ? a : best));
-    const actual = countAdj.qty;
+    if (g.counts.length === 0 && g.corrections.length === 0) continue;
+    // Corrections (tap-to-correct) always supersede the original count
+    let actual: number;
+    if (g.corrections.length > 0) {
+      const corrAdj = g.corrections.reduce((best, a) => (String(a.id) > String(best.id) ? a : best));
+      actual = corrAdj.qty;
+    } else {
+      const countAdj = g.counts.reduce((best, a) => (a.id > best.id ? a : best));
+      actual = countAdj.qty;
+    }
     const beginning = begMap.get(`${g.item}|${g.date}`) ?? 0;
     const expected = beginning + g.totalIn - g.totalOut;
     const variance = actual - expected;
@@ -215,7 +224,7 @@ export function computeItemSummaries(
     const dateMap = itemDateAdjs.get(adj.item)!;
     if (!dateMap.has(adj.date)) dateMap.set(adj.date, []);
     dateMap.get(adj.date)!.push(adj);
-    if (adj.type === "count") itemsWithCounts.add(adj.item);
+    if (adj.type === "count" || adj.type === "correction") itemsWithCounts.add(adj.item);
   }
 
   const summaries: ItemSummary[] = [];
@@ -229,6 +238,7 @@ export function computeItemSummaries(
       const beg = begMap.get(`${item}|${date}`) ?? 0;
       let totalIn = 0, totalOut = 0;
       let latestCount: StockAdjustment | null = null;
+      let latestCorrection: StockAdjustment | null = null;
 
       for (const adj of adjs) {
         if (adj.type === "in") {
@@ -237,11 +247,13 @@ export function computeItemSummaries(
           totalOut += adj.qty;
         } else if (adj.type === "count") {
           if (!latestCount || adj.id > latestCount.id) latestCount = adj;
+        } else if (adj.type === "correction") {
+          if (!latestCorrection || String(adj.id) > String(latestCorrection.id)) latestCorrection = adj;
         }
       }
 
       const exp = beg + totalIn - totalOut;
-      const end = latestCount ? latestCount.qty : null;
+      const end = latestCorrection ? latestCorrection.qty : (latestCount ? latestCount.qty : null);
       const variance = end !== null ? end - exp : null;
       dailyRows.push({ date, beg, totalIn, totalOut, exp, end, variance });
     }
