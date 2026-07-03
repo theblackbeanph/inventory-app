@@ -62,8 +62,7 @@ const MKT_MAPPING: StoreHubMappingEntry[] = [
   { item: "Adobo Flakes Sauce",      linkedSkus: ["55"],                                              ordersPerPack: 16 },
   { item: "Aioli",                   linkedSkus: ["66", { sku: "156", qty: 3 }, "B5"],                ordersPerPack: 33 },
   { item: "Nigiri",                  linkedSkus: ["53"],                                              ordersPerPack: 25 },
-  { item: "Marinara Sauce",          linkedSkus: ["79", "69"],                                        ordersPerPack: 10 },
-  { item: "Marinara Sauce (Blend)",  linkedSkus: ["45", "B2"],                                        ordersPerPack: 10 },
+  { item: "Marinara Sauce",          linkedSkus: ["79", "69", "45", "B2"],                            ordersPerPack: 10 },
   { item: "House Vinaigrette",       linkedSkus: ["62", "63", "64", "C24"],                           ordersPerPack: 25 },
   { item: "Ube Halaya",              linkedSkus: ["S3", "70"],                                        ordersPerPack: 7  },
 ];
