@@ -46,7 +46,6 @@ export const CATALOG: CatalogItem[] = [
   { name: "Truffle Mushroom Paste",  category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Truffle Pasta Sauce",     category: "packed",  unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["MKT"], commissary: true },
   { name: "Tuna Spread",             category: "packed",  unit: "pc", reorderAt: 3,  parLevel: 10,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
-  { name: "Vodka Sauce",             category: "loose",   unit: "pack", reorderAt: 3, packSize: "1,100g",  department: "kitchen", location: "back_kitchen", ordersPerPack: 6,  commissary: true },
   { name: "Burrata",                 category: "packed",  unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Clam Chowder",            category: "packed",  unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen", location: "back_kitchen"  },
   // ── LOOSE (sealed pack — count packs only, never weigh) ───────────────
@@ -66,6 +65,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Pesto",                   category: "loose",   unit: "pack", reorderAt: 1, packSize: "300g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 10, commissary: true },
   { name: "Raspberry Dressing",      category: "loose",   unit: "pack", reorderAt: 1, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 10, commissary: true },
   { name: "Tartar",                  category: "loose",   unit: "pack", reorderAt: 2, packSize: "1,000g",  department: "kitchen", location: "back_kitchen", ordersPerPack: 33, commissary: true },
+  { name: "Vodka Sauce",             category: "loose",   unit: "pack", reorderAt: 3, packSize: "1,100g",  department: "kitchen", location: "back_kitchen", ordersPerPack: 6,  commissary: true },
   { name: "Ube Halaya",              category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 7,  commissary: true },
   // ── BREADS (count only — no sales deduction) ─────────────────────────
   { name: "Sourdough",               category: "packed",  unit: "pc", reorderAt: 6,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
