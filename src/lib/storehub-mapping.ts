@@ -36,7 +36,6 @@ const MKT_MAPPING: StoreHubMappingEntry[] = [
   { item: "Au Jus",                  linkedSkus: ["S1", "B11"] },
   { item: "Bacon Jam",               linkedSkus: ["S1", "B11"] },
   { item: "Caramelized Onion",       linkedSkus: ["67", "M3", "S1", "B11"] },
-  { item: "Vodka Sauce",             linkedSkus: ["P1", "P5"] },
   { item: "Squid Ink Sauce",         linkedSkus: ["P2", { sku: "166", qty: 3 }] },
   { item: "Truffle Pasta Sauce",     linkedSkus: ["73", { sku: "170", qty: 3 }] },
   { item: "Truffle Mushroom Paste",  linkedSkus: ["48"] },
@@ -64,6 +63,7 @@ const MKT_MAPPING: StoreHubMappingEntry[] = [
   { item: "Nigiri",                  linkedSkus: ["53"],                                              ordersPerPack: 25 },
   { item: "Marinara Sauce",          linkedSkus: ["79", "69", "45", "B2"],                            ordersPerPack: 10 },
   { item: "House Vinaigrette",       linkedSkus: ["62", "63", "64", "C24"],                           ordersPerPack: 25 },
+  { item: "Vodka Sauce",             linkedSkus: ["P1", "P5"],                                        ordersPerPack: 6  },
   { item: "Ube Halaya",              linkedSkus: ["S3", "70"],                                        ordersPerPack: 7  },
 ];
 
@@ -94,7 +94,6 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Au Jus",                  linkedSkus: ["S03"] },
   { item: "Bacon Jam",               linkedSkus: ["S03"] },
   { item: "Caramelized Onion",       linkedSkus: ["M07", "S03"] },
-  { item: "Vodka Sauce",             linkedSkus: ["PF12", "PF13"] },
   { item: "Squid Ink Sauce",         linkedSkus: ["PF08", { sku: "T09", qty: 3 }] },
   { item: "Truffle Mushroom Paste",  linkedSkus: ["A08"] },
   { item: "Loco Moco Gravy",         linkedSkus: ["M06"] },
@@ -116,6 +115,7 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Pesto",                   linkedSkus: ["S01", "PF03"],                                     ordersPerPack: 10 },
   { item: "Beef Pares Sauce",        linkedSkus: ["B09", "PF06", { sku: "T06", qty: 3 }],             ordersPerPack: 16 },
   { item: "Adobo Flakes Sauce",      linkedSkus: ["B02", "B17"],                                      ordersPerPack: 16 },
+  { item: "Vodka Sauce",             linkedSkus: ["PF12", "PF13"],                                    ordersPerPack: 6  },
   { item: "Ube Halaya",              linkedSkus: ["S05", "M08"],                                      ordersPerPack: 7  },
 ];
 
