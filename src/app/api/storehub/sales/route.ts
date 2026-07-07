@@ -63,10 +63,11 @@ export async function GET(request: NextRequest) {
     nextDate.setUTCDate(nextDate.getUTCDate() + 1);
     const nextDateStr = nextDate.toISOString().slice(0, 10);
 
-    const [{ skuMap, nameBySkuMap }, transactions, txWide] = await Promise.all([
+    const [{ skuMap, nameBySkuMap }, transactions, txWide, txPage2] = await Promise.all([
       buildSkuMaps(branch),
       fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}`, branch),
       fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDateStr}&to=${nextDateStr}`, branch),
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}&page=2`, branch),
     ]);
 
     const soldBySkuMap: Record<string, number> = {};
@@ -86,7 +87,7 @@ export async function GET(request: NextRequest) {
       .filter(([sku]) => !mappedSkus.has(sku))
       .map(([sku, qty]) => ({ sku, name: nameBySkuMap[sku] ?? sku, qty }));
 
-    return NextResponse.json({ date, matched, unmatchedSkus, _debug: { txCountNarrow: Array.isArray(transactions) ? transactions.length : -1, txCountWide: Array.isArray(txWide) ? txWide.length : -1, soldBySkuMap } });
+    return NextResponse.json({ date, matched, unmatchedSkus, _debug: { txCountNarrow: Array.isArray(transactions) ? transactions.length : -1, txCountWide: Array.isArray(txWide) ? txWide.length : -1, txCountPage2: Array.isArray(txPage2) ? txPage2.length : -1, soldBySkuMap } });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 502 });
