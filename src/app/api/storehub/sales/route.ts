@@ -65,16 +65,13 @@ export async function GET(request: NextRequest) {
 
     const [{ skuMap, nameBySkuMap }, transactions] = await Promise.all([
       buildSkuMaps(branch),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${addUtcDays(date, 1)}`, branch),
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${addUtcDays(date, 1)}`, branch),
     ]);
-
-    console.log(`[StoreHub debug] branch=${branch} date=${date} txCount=${Array.isArray(transactions) ? transactions.length : "not-array"} bizStart=${new Date(bizStart).toISOString()} bizEnd=${new Date(bizEnd).toISOString()}`);
 
     const soldBySkuMap: Record<string, number> = {};
     for (const tx of transactions) {
       if (tx.transactionType !== "Sale" || tx.isCancelled) continue;
       const txTime = new Date(tx.transactionTime).getTime();
-      console.log(`[StoreHub tx] id=${tx.id} time=${tx.transactionTime} parsed=${new Date(tx.transactionTime).toISOString()} inWindow=${txTime >= bizStart && txTime <= bizEnd}`);
       if (txTime < bizStart || txTime > bizEnd) continue;
       for (const item of tx.items ?? []) {
         if (item.itemType !== "Item" || !item.productId || item.quantity <= 0) continue;
