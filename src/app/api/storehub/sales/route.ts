@@ -80,7 +80,7 @@ export async function GET(request: NextRequest) {
       .filter(([sku]) => !mappedSkus.has(sku))
       .map(([sku, qty]) => ({ sku, name: nameBySkuMap[sku] ?? sku, qty }));
 
-    return NextResponse.json({ date, matched, unmatchedSkus });
+    return NextResponse.json({ date, matched, unmatchedSkus, _debug: { txCount: Array.isArray(transactions) ? transactions.length : -1, soldBySkuMap } });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 502 });
