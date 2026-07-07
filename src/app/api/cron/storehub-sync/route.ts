@@ -37,50 +37,19 @@ async function fetchStoreHub(path: string, branch: SyncBranch) {
   return JSON.parse(text);
 }
 
-// Business hours in UTC per branch.
-// BF:  8am–10pm PHT = 00:00–14:00 UTC same day
-// MKT: 6am–midnight PHT = 22:00 UTC prev day – 16:00 UTC same day
-const BIZ_HOURS: Record<SyncBranch, { startH: number; startPrevDay: boolean; endH: number }> = {
-  BF:  { startH: 0,  startPrevDay: false, endH: 14 },
-  MKT: { startH: 22, startPrevDay: true,  endH: 16 },
-};
-
-function getBizWindow(branch: SyncBranch, date: string) {
-  const { startH, startPrevDay, endH } = BIZ_HOURS[branch];
-  const prevDate = addUtcDays(date, -1);
-  const startDate = startPrevDay ? prevDate : date;
-  const bizStartISO = `${startDate}T${String(startH).padStart(2, "0")}:00:00Z`;
-  const bizEndISO   = `${date}T${String(endH).padStart(2, "0")}:00:00Z`;
-  return {
-    bizStartISO,
-    bizEndISO,
-    bizStart: new Date(bizStartISO).getTime(),
-    bizEnd:   new Date(bizEndISO).getTime(),
-  };
-}
-
 function syncDatePHT(): string {
-  const pht = new Date(Date.now() + 8 * 60 * 60 * 1000);
-  // Use 6am as the cutoff (earliest branch open time) so we don't roll over too early
-  if (pht.getUTCHours() < 6) pht.setUTCDate(pht.getUTCDate() - 1);
-  return pht.toISOString().slice(0, 10);
-}
-
-function addUtcDays(date: string, days: number): string {
-  const d = new Date(date + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
+  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 }
 
 async function syncBranch(branch: SyncBranch, date: string) {
   const storeId = STORE_IDS[branch];
   if (!storeId) return { branch, skipped: true, reason: "no store ID configured" };
 
-  const { bizStartISO, bizEndISO, bizStart, bizEnd } = getBizWindow(branch, date);
-
+  // StoreHub from/to use PHT dates — from=date&to=date returns the full PHT calendar day,
+  // which matches the back office "Sales by SKU" report exactly.
   const [products, branchTxns] = await Promise.all([
     fetchStoreHub("/products", branch),
-    fetchStoreHub(`/transactions?storeId=${storeId}&from=${bizStartISO}&to=${bizEndISO}`, branch),
+    fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}`, branch),
   ]);
 
   const skuMap: Record<string, string> = {};
@@ -93,10 +62,8 @@ async function syncBranch(branch: SyncBranch, date: string) {
   }
 
   const soldBySkuMap: Record<string, number> = {};
-  for (const tx of branchTxns as { transactionType: string; isCancelled: boolean; transactionTime: string; items?: { itemType: string; productId: string; quantity: number }[] }[]) {
+  for (const tx of branchTxns as { transactionType: string; isCancelled: boolean; items?: { itemType: string; productId: string; quantity: number }[] }[]) {
     if (tx.transactionType !== "Sale" || tx.isCancelled) continue;
-    const txTime = new Date(tx.transactionTime).getTime();
-    if (txTime < bizStart || txTime > bizEnd) continue;
     for (const item of tx.items ?? []) {
       if (item.itemType !== "Item" || !item.productId || item.quantity <= 0) continue;
       const sku = skuMap[item.productId];

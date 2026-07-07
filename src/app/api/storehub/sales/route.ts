@@ -15,28 +15,6 @@ const STORE_IDS: Record<string, string | undefined> = {
   BF:  process.env.STOREHUB_BF_STORE_ID,
 };
 
-// Business hours in UTC per branch.
-// BF:  8am–10pm PHT = 00:00–14:00 UTC same day
-// MKT: 6am–midnight PHT = 22:00 UTC prev day – 16:00 UTC same day
-const BIZ_HOURS: Record<string, { startH: number; startPrevDay: boolean; endH: number }> = {
-  BF:  { startH: 0,  startPrevDay: false, endH: 14 },
-  MKT: { startH: 22, startPrevDay: true,  endH: 16 },
-};
-
-function getBizWindow(branch: string, date: string) {
-  const { startH, startPrevDay, endH } = BIZ_HOURS[branch] ?? BIZ_HOURS.MKT;
-  const prevDate = addUtcDays(date, -1);
-  const startDate = startPrevDay ? prevDate : date;
-  const bizStartISO = `${startDate}T${String(startH).padStart(2, "0")}:00:00Z`;
-  const bizEndISO   = `${date}T${String(endH).padStart(2, "0")}:00:00Z`;
-  return {
-    bizStartISO,
-    bizEndISO,
-    bizStart: new Date(bizStartISO).getTime(),
-    bizEnd:   new Date(bizEndISO).getTime(),
-  };
-}
-
 function authHeader(branch: string): string {
   const { user, pass } = CREDENTIALS[branch] ?? CREDENTIALS.MKT;
   return "Basic " + Buffer.from(`${user}:${pass}`).toString("base64");
@@ -78,28 +56,19 @@ export async function GET(request: NextRequest) {
   if (!storeId) return NextResponse.json({ error: `StoreHub store ID not configured for branch ${branch}` }, { status: 500 });
 
   try {
-    const { bizStartISO, bizEndISO, bizStart, bizEnd } = getBizWindow(branch, date);
-
+    // StoreHub's from/to parameters use PHT dates — querying from=date&to=date
+    // returns the full PHT calendar day, which matches the back office "Sales by SKU" report.
     const [{ skuMap, nameBySkuMap }, transactions] = await Promise.all([
       buildSkuMaps(branch),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${bizStartISO}&to=${bizEndISO}`, branch),
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}`, branch),
     ]);
 
-    console.log(`[SH3] branch=${branch} date=${date} txCount=${Array.isArray(transactions) ? transactions.length : "not-array"} window=${bizStartISO}→${bizEndISO}`);
-
-    const DEBUG_SKUS = new Set(["BREAK01", "BREAK02", "BREAK03", "BREAK05"]);
     const soldBySkuMap: Record<string, number> = {};
     for (const tx of transactions) {
       if (tx.transactionType !== "Sale" || tx.isCancelled) continue;
-      const txTime = new Date(tx.transactionTime).getTime();
-      const inWindow = txTime >= bizStart && txTime <= bizEnd;
       for (const item of tx.items ?? []) {
         if (item.itemType !== "Item" || !item.productId || item.quantity <= 0) continue;
         const sku = skuMap[item.productId];
-        if (sku && DEBUG_SKUS.has(sku)) {
-          console.log(`[SH4] sku=${sku} qty=${item.quantity} time=${tx.transactionTime} inWindow=${inWindow}`);
-        }
-        if (!inWindow) continue;
         if (!sku) continue;
         soldBySkuMap[sku] = (soldBySkuMap[sku] ?? 0) + item.quantity;
       }
@@ -120,10 +89,4 @@ export async function GET(request: NextRequest) {
 
 function phtToday(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
-}
-
-function addUtcDays(date: string, days: number): string {
-  const d = new Date(date + "T00:00:00Z");
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
 }
