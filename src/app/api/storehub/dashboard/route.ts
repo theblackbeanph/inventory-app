@@ -53,8 +53,7 @@ function phtHour(utcMs: number): number {
 }
 
 // Normalize StoreHub payment strings → card / gcash / cash.
-// If field names are wrong this will default everything to "card" — check
-// console output on first run to find the real field and value shape.
+// Real values seen: "Cash", "CreditCard", "Gcash / QRPH", "Online / Maya QR", "GrabFood"
 function normalizePayment(raw: string | undefined): "card" | "gcash" | "cash" {
   const s = (raw ?? "").toLowerCase();
   if (s.includes("gcash") || s.includes("maya") || s.includes("ewallet") || s.includes("qr")) return "gcash";
@@ -106,15 +105,10 @@ export async function GET(request: NextRequest) {
       const txTime = new Date(tx["transactionTime"] as string).getTime();
       if (txTime < bizStart || txTime > bizEnd) continue;
 
-      // ⚠️ totalAmount / paymentMethod: guessed field names — verify on first run.
-      // Check the console output below for the real keys if revenue shows as 0.
-      if (process.env.NODE_ENV === "development" && txCount === 0) {
-        console.log("[storehub/dashboard] sample tx keys:", Object.keys(tx));
-        console.log("[storehub/dashboard] sample tx:", JSON.stringify(tx).slice(0, 500));
-      }
-
-      const amount = ((tx["totalAmount"] ?? tx["grandTotal"] ?? tx["total"] ?? 0) as number);
-      const paymentRaw = ((tx["paymentMethod"] ?? tx["paymentType"] ?? tx["payment"] ?? "") as string);
+      const amount = (tx["total"] ?? 0) as number;
+      // Payment method lives in the payments[] array, not on the transaction (API doc p.20)
+      const payments = (tx["payments"] ?? []) as { paymentMethod?: string; amount?: number }[];
+      const paymentRaw = payments[0]?.paymentMethod ?? "";
 
       totalRevenue += amount;
       txCount++;
