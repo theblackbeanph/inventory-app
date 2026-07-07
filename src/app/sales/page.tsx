@@ -122,7 +122,7 @@ export default function SalesPage() {
   useEffect(() => {
     const session = getSession();
     if (!session) { router.replace("/login"); return; }
-    if (!hasMinRole(session.role, "admin")) { router.replace("/dashboard"); return; }
+    if (!hasMinRole(session.role, "superadmin")) { router.replace("/stock"); return; }
     setBranch(session.branch);
   }, [router]);
 

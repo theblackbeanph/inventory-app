@@ -10,7 +10,7 @@ const ALL_TABS: { href: string; icon: React.FC<IconProps>; label: string; minRol
   { href: "/stock",      icon: StockIcon,      label: "Stock",      minRole: "linecook"   },
   { href: "/transfers",  icon: TransfersIcon,  label: "Orders",     minRole: "linecook"   },
   { href: "/production", icon: ProductionIcon, label: "Production", minRole: "superadmin" },
-  { href: "/sales",      icon: SalesIcon,      label: "Sales",      minRole: "admin"      },
+  { href: "/sales",      icon: SalesIcon,      label: "Sales",      minRole: "superadmin" },
   { href: "/dashboard",  icon: DashboardIcon,  label: "Dashboard",  minRole: "linecook"   },
 ];
 

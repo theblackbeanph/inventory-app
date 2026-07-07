@@ -23,4 +23,13 @@ describe("getRedirectPath", () => {
   it("does not redirect /login (public path)", () => {
     expect(getRedirectPath(null, "/login")).toBeNull();
   });
+  it("redirects admin from /sales to /stock", () => {
+    expect(getRedirectPath({ role: "admin" }, "/sales")).toBe("/stock");
+  });
+  it("redirects linecook from /sales to /stock", () => {
+    expect(getRedirectPath({ role: "linecook" }, "/sales")).toBe("/stock");
+  });
+  it("allows superadmin to access /sales", () => {
+    expect(getRedirectPath({ role: "superadmin" }, "/sales")).toBeNull();
+  });
 });
