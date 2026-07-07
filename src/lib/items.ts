@@ -58,7 +58,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Candied Walnut",          category: "loose",   unit: "pack", reorderAt: 1, packSize: "200g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 5,  commissary: true },
   { name: "Gyudon Sauce",            category: "loose",   unit: "pack", reorderAt: 1, packSize: "1,300g",  department: "kitchen", location: "back_kitchen", ordersPerPack: 18, commissary: true },
   { name: "House Vinaigrette",       category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 25, branches: ["MKT"], commissary: true },
-  { name: "Kimchi",                  category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 16, branches: ["MKT"], commissary: true },
+  { name: "Kimchi",                  category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 16, branches: ["MKT", "BF"], commissary: true },
   { name: "Maple Syrup",             category: "loose",   unit: "pack", reorderAt: 1, packSize: "300g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 10, branches: ["MKT"], commissary: true },
   { name: "Marinara Sauce",          category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 10, branches: ["MKT"], commissary: true },
   { name: "Nigiri",                  category: "loose",   unit: "pack", reorderAt: 1, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 25, commissary: true },
