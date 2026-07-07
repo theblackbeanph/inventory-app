@@ -92,9 +92,11 @@ Email and password are NOT editable here (use Firebase Console for password rese
 
 ## Firestore Rules — REQUIRED BEFORE SHIPPING
 
-The `users` collection currently allows writes by any authenticated user. This is a role-escalation vector: a linecook with DevTools could `setDoc` their own `users/{uid}` doc and promote themselves to superadmin.
+**Cross-app note:** `firestore.rules` in branch-inventory is the single deploy point for all three apps (commissary, branch-inventory, Recipe DB). The commissary app does not read or write the `users` collection, so this change is safe to deploy without coordinating across apps.
 
-**Required rule:** `users` collection writes must be restricted to superadmin only. Since Firestore rules can't read Firebase Auth custom claims (we don't use them), gate writes on the caller's own `users/{uid}` doc:
+The `users` collection currently falls under the catch-all `match /{document=**}` rule, which allows writes only to `isKnownUser()` (4 hardcoded emails). This guards against unknown accounts but not role escalation by a known staff member — a linecook with DevTools could `setDoc` their own `users/{uid}` doc and promote themselves to superadmin.
+
+**Required rule:** Add an explicit `users` match above the catch-all, locking writes to superadmin role only via a Firestore `get()` lookup:
 
 ```
 match /users/{uid} {
