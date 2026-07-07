@@ -65,6 +65,7 @@ export default function EditUserSheet({ user, onClose, onUpdated, onDeleted }: P
       onDeleted(user.uid);
     } catch {
       setError("Delete failed. Try again.");
+    } finally {
       submittingRef.current = false;
       setDeleting(false);
     }
