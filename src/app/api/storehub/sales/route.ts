@@ -56,11 +56,17 @@ export async function GET(request: NextRequest) {
   if (!storeId) return NextResponse.json({ error: `StoreHub store ID not configured for branch ${branch}` }, { status: 500 });
 
   try {
-    // StoreHub's from/to parameters use PHT dates — querying from=date&to=date
-    // returns the full PHT calendar day, which matches the back office "Sales by SKU" report.
-    const [{ skuMap, nameBySkuMap }, transactions] = await Promise.all([
+    const prevDate = new Date(date + "T00:00:00Z");
+    prevDate.setUTCDate(prevDate.getUTCDate() - 1);
+    const prevDateStr = prevDate.toISOString().slice(0, 10);
+    const nextDate = new Date(date + "T00:00:00Z");
+    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
+    const nextDateStr = nextDate.toISOString().slice(0, 10);
+
+    const [{ skuMap, nameBySkuMap }, transactions, txWide] = await Promise.all([
       buildSkuMaps(branch),
       fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}`, branch),
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDateStr}&to=${nextDateStr}`, branch),
     ]);
 
     const soldBySkuMap: Record<string, number> = {};
@@ -80,7 +86,7 @@ export async function GET(request: NextRequest) {
       .filter(([sku]) => !mappedSkus.has(sku))
       .map(([sku, qty]) => ({ sku, name: nameBySkuMap[sku] ?? sku, qty }));
 
-    return NextResponse.json({ date, matched, unmatchedSkus, _debug: { txCount: Array.isArray(transactions) ? transactions.length : -1, soldBySkuMap } });
+    return NextResponse.json({ date, matched, unmatchedSkus, _debug: { txCountNarrow: Array.isArray(transactions) ? transactions.length : -1, txCountWide: Array.isArray(txWide) ? txWide.length : -1, soldBySkuMap } });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 502 });
