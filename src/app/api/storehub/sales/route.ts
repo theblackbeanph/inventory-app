@@ -15,6 +15,28 @@ const STORE_IDS: Record<string, string | undefined> = {
   BF:  process.env.STOREHUB_BF_STORE_ID,
 };
 
+// Business hours in UTC per branch.
+// BF:  8am–10pm PHT = 00:00–14:00 UTC same day
+// MKT: 6am–midnight PHT = 22:00 UTC prev day – 16:00 UTC same day
+const BIZ_HOURS: Record<string, { startH: number; startPrevDay: boolean; endH: number }> = {
+  BF:  { startH: 0,  startPrevDay: false, endH: 14 },
+  MKT: { startH: 22, startPrevDay: true,  endH: 16 },
+};
+
+function getBizWindow(branch: string, date: string) {
+  const { startH, startPrevDay, endH } = BIZ_HOURS[branch] ?? BIZ_HOURS.MKT;
+  const prevDate = addUtcDays(date, -1);
+  const startDate = startPrevDay ? prevDate : date;
+  const bizStartISO = `${startDate}T${String(startH).padStart(2, "0")}:00:00Z`;
+  const bizEndISO   = `${date}T${String(endH).padStart(2, "0")}:00:00Z`;
+  return {
+    bizStartISO,
+    bizEndISO,
+    bizStart: new Date(bizStartISO).getTime(),
+    bizEnd:   new Date(bizEndISO).getTime(),
+  };
+}
+
 function authHeader(branch: string): string {
   const { user, pass } = CREDENTIALS[branch] ?? CREDENTIALS.MKT;
   return "Basic " + Buffer.from(`${user}:${pass}`).toString("base64");
@@ -56,19 +78,14 @@ export async function GET(request: NextRequest) {
   if (!storeId) return NextResponse.json({ error: `StoreHub store ID not configured for branch ${branch}` }, { status: 500 });
 
   try {
-    // StoreHub stores transactionTime in UTC. Business day runs 7am–2am PHT,
-    // which in UTC is 23:00 (prev day) – 18:00 (same day). We query yesterday+today
-    // in UTC so we don't miss the 7am–8am PHT window, then filter client-side.
-    const prevDate = addUtcDays(date, -1);
-    const bizStart = new Date(`${prevDate}T23:00:00Z`).getTime(); // 7:00 AM PHT
-    const bizEnd   = new Date(`${date}T18:00:00Z`).getTime();     // 2:00 AM PHT next day
+    const { bizStartISO, bizEndISO, bizStart, bizEnd } = getBizWindow(branch, date);
 
     const [{ skuMap, nameBySkuMap }, transactions] = await Promise.all([
       buildSkuMaps(branch),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${addUtcDays(date, 1)}`, branch),
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${bizStartISO}&to=${bizEndISO}`, branch),
     ]);
 
-    console.log(`[SH2] branch=${branch} date=${date} txCount=${Array.isArray(transactions) ? transactions.length : "not-array"}`);
+    console.log(`[SH3] branch=${branch} date=${date} txCount=${Array.isArray(transactions) ? transactions.length : "not-array"} window=${bizStartISO}→${bizEndISO}`);
 
     const soldBySkuMap: Record<string, number> = {};
     for (const tx of transactions) {
@@ -83,7 +100,6 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log(`[SH2] soldBySkuMap=${JSON.stringify(soldBySkuMap)}`);
     const matched = applyStoreHubMapping(soldBySkuMap, branch);
     const mappedSkus = allMappedSkus(branch);
     const unmatchedSkus = Object.entries(soldBySkuMap)
