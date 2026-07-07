@@ -16,7 +16,7 @@ Allow the superadmin to create and manage Firebase Auth user accounts directly f
 
 - Settings page gains a tab switcher: **Par Levels** | **Users**
 - The Users tab renders only when `session.role === "superadmin"`
-- Admin and linecook users see Settings exactly as today (no tab switcher visible)
+- Admin users see Settings exactly as today (no tab switcher visible)
 - Route-level guard stays at `admin+` — the tab-level guard handles the superadmin restriction
 
 ---
@@ -40,7 +40,7 @@ No additional Firestore collections needed.
 ### `settings/page.tsx` (modified)
 - Read `session.role` in the `useEffect`
 - If superadmin: render `<TabSwitcher tabs={["Par Levels", "Users"]} />` and conditionally render `<UserManagement />` or `<ParLevelSettings />`
-- If not superadmin: render existing layout unchanged
+- If not superadmin: render existing layout unchanged (Par Levels only, no tab switcher)
 
 ### `settings/_components/UserManagement.tsx` (new)
 Responsible for the full Users tab. Two sub-sections:
@@ -70,14 +70,16 @@ On submit:
 4. `await secondaryAuth.signOut()`
 5. Refresh user list, close sheet, show success state
 
-Error handling: display inline error message within the sheet (auth errors: email already in use, weak password, etc.)
+**Partial failure handling:** If step 2 succeeds but step 3 fails, surface an explicit inline error: "Account created but profile save failed — delete the account from Firebase Console before retrying." This prevents silent ghost accounts that block re-creation with the same email.
+
+Error handling for other cases: inline error message within the sheet (email already in use, weak password, network failure, etc.)
 
 ### `settings/_components/EditUserSheet.tsx` (new)
 Bottom sheet for editing an existing user. Fields:
 - Display Name (editable)
 - Branch, Department, Role (segmented controls)
 
-Email and password are NOT editable here (Firebase Console for password resets). On save: `setDoc` with merge. On delete: `deleteDoc(doc(db, "users", uid))` — removes Firestore doc only (Firebase Auth account remains, user just can't log in meaningfully).
+Email and password are NOT editable here (use Firebase Console for password resets). On save: `setDoc` with merge. On delete: `deleteDoc(doc(db, "users", uid))` — removes Firestore doc only (Firebase Auth account remains).
 
 ---
 
@@ -88,8 +90,27 @@ Email and password are NOT editable here (Firebase Console for password resets).
 
 ---
 
-## Firestore Rules
-No changes needed. The `users` collection is already readable/writable by any authenticated user per current rules.
+## Firestore Rules — REQUIRED BEFORE SHIPPING
+
+The `users` collection currently allows writes by any authenticated user. This is a role-escalation vector: a linecook with DevTools could `setDoc` their own `users/{uid}` doc and promote themselves to superadmin.
+
+**Required rule:** `users` collection writes must be restricted to superadmin only. Since Firestore rules can't read Firebase Auth custom claims (we don't use them), gate writes on the caller's own `users/{uid}` doc:
+
+```
+match /users/{uid} {
+  allow read: if request.auth != null;
+  allow write: if request.auth != null
+    && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == "superadmin";
+}
+```
+
+This must be deployed (`npx firebase-tools deploy --only firestore:rules`) before the Users tab ships.
+
+---
+
+## Auth Flow — Missing Firestore Doc (delete safety)
+
+When a user's Firestore doc is deleted (but their Firebase Auth account remains), they can re-authenticate and receive a new `__identity` cookie. The existing `loginUser` function in `src/lib/auth.ts` reads the `users/{uid}` doc immediately after sign-in — if the doc is missing, it throws and the login fails. Verify during implementation that this path returns the user to the login screen with a clear error, not a broken state.
 
 ---
 
@@ -109,6 +130,6 @@ function getSecondaryAuth() {
 
 ## Out of Scope
 - Password reset from within the app (use Firebase Console)
-- Deleting Firebase Auth accounts (Firestore doc deletion is sufficient — user loses access)
+- Deleting Firebase Auth accounts (Firestore doc deletion is sufficient — user loses access on next login attempt)
 - User avatars / photos
 - Email verification flow
