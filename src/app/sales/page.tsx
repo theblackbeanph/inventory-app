@@ -131,6 +131,7 @@ export default function SalesPage() {
   // Fetch every (branch, date) pair the current view needs, skipping cached keys
   useEffect(() => {
     if (!authed) return;
+    let stale = false;
     const branches = view === "ALL" ? BRANCHES : [view];
     const prevDate = prevDay(date);
     const needed = branches.flatMap(b => [`${b}__${date}`, `${b}__${prevDate}`])
@@ -151,7 +152,8 @@ export default function SalesPage() {
       })
     )
       .then(entries => setCache(c => ({ ...c, ...Object.fromEntries(entries) })))
-      .finally(() => setLoading(false));
+      .finally(() => { if (!stale) setLoading(false); });
+    return () => { stale = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authed, view, date]);
 
