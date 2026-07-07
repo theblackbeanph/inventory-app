@@ -1,3 +1,4 @@
+// src/app/settings/page.tsx
 "use client";
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -5,13 +6,19 @@ import Link from "next/link";
 import { getSession, BRANCH_LABELS } from "@/lib/auth";
 import { hasMinRole } from "@/lib/roles";
 import type { Branch } from "@/lib/types";
+import type { Role } from "@/lib/roles";
 import BottomNav from "@/components/BottomNav";
 import ParLevelSettings from "./_components/ParLevelSettings";
+import UserManagement from "./_components/UserManagement";
+
+type Tab = "parlevel" | "users";
 
 export default function SettingsPage() {
   const router = useRouter();
-  const [branch, setBranch] = useState<Branch | null>(null);
+  const [branch, setBranch]         = useState<Branch | null>(null);
   const [displayName, setDisplayName] = useState("");
+  const [role, setRole]             = useState<Role | null>(null);
+  const [tab, setTab]               = useState<Tab>("parlevel");
 
   useEffect(() => {
     const session = getSession();
@@ -19,9 +26,12 @@ export default function SettingsPage() {
     if (!hasMinRole(session.role, "admin")) { router.replace("/dashboard"); return; }
     setBranch(session.branch);
     setDisplayName(session.displayName);
+    setRole(session.role);
   }, [router]);
 
-  if (!branch) return null;
+  if (!branch || !role) return null;
+
+  const isSuperadmin = role === "superadmin";
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 16px)" }}>
@@ -48,17 +58,43 @@ export default function SettingsPage() {
         </div>
       </div>
 
-      {/* Section label */}
-      <div style={{ padding: "16px 16px 8px" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
-          Par Levels
+      {/* Tab switcher — superadmin only */}
+      {isSuperadmin && (
+        <div style={{ display: "flex", borderBottom: "1px solid var(--border)", background: "#fff" }}>
+          {([["parlevel", "Par Levels"], ["users", "Users"]] as [Tab, string][]).map(([t, label]) => (
+            <button
+              key={t}
+              onClick={() => setTab(t)}
+              style={{
+                flex: 1, padding: "12px 0", fontSize: 13, fontWeight: 700,
+                border: "none", background: "none", cursor: "pointer",
+                color: tab === t ? "#1A1A1A" : "var(--text-secondary)",
+                borderBottom: `2px solid ${tab === t ? "#1A1A1A" : "transparent"}`,
+                marginBottom: -1,
+              }}
+            >
+              {label}
+            </button>
+          ))}
         </div>
-        <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-          Par Level = order-up-to target · Low Alert = shows LOW badge below this qty
-        </div>
-      </div>
+      )}
 
-      <ParLevelSettings branch={branch} updatedBy={displayName} />
+      {/* Content */}
+      {tab === "parlevel" && (
+        <>
+          <div style={{ padding: "16px 16px 8px" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
+              Par Levels
+            </div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+              Par Level = order-up-to target · Low Alert = shows LOW badge below this qty
+            </div>
+          </div>
+          <ParLevelSettings branch={branch} updatedBy={displayName} />
+        </>
+      )}
+
+      {tab === "users" && isSuperadmin && <UserManagement />}
 
       <BottomNav />
     </div>
