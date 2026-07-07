@@ -5,15 +5,24 @@ export const maxDuration = 30;
 
 const BASE_URL = "https://api.storehubhq.com";
 
-function authHeader(): string {
-  const user = process.env.STOREHUB_USERNAME;
-  const pass = process.env.STOREHUB_PASSWORD;
+const CREDENTIALS: Record<string, { user: string | undefined; pass: string | undefined }> = {
+  MKT: { user: process.env.STOREHUB_USERNAME,    pass: process.env.STOREHUB_PASSWORD },
+  BF:  { user: process.env.STOREHUB_BF_USERNAME, pass: process.env.STOREHUB_BF_PASSWORD },
+};
+
+const STORE_IDS: Record<string, string | undefined> = {
+  MKT: process.env.STOREHUB_MKT_STORE_ID,
+  BF:  process.env.STOREHUB_BF_STORE_ID,
+};
+
+function authHeader(branch: string): string {
+  const { user, pass } = CREDENTIALS[branch] ?? CREDENTIALS.MKT;
   return "Basic " + Buffer.from(`${user}:${pass}`).toString("base64");
 }
 
-async function fetchStoreHub(path: string) {
+async function fetchStoreHub(path: string, branch: string) {
   const res = await fetch(`${BASE_URL}${path}`, {
-    headers: { Authorization: authHeader(), Accept: "application/json" },
+    headers: { Authorization: authHeader(branch), Accept: "application/json" },
     cache: "no-store",
   });
   const text = await res.text();
@@ -25,9 +34,8 @@ async function fetchStoreHub(path: string) {
   }
 }
 
-// Build productId → SKU map and SKU → product name map from the full product list
-async function buildSkuMaps(): Promise<{ skuMap: Record<string, string>; nameBySkuMap: Record<string, string> }> {
-  const products: { id: string; sku?: string; name?: string }[] = await fetchStoreHub("/products");
+async function buildSkuMaps(branch: string): Promise<{ skuMap: Record<string, string>; nameBySkuMap: Record<string, string> }> {
+  const products: { id: string; sku?: string; name?: string }[] = await fetchStoreHub("/products", branch);
   const skuMap: Record<string, string> = {};
   const nameBySkuMap: Record<string, string> = {};
   for (const p of products) {
@@ -40,14 +48,15 @@ async function buildSkuMaps(): Promise<{ skuMap: Record<string, string>; nameByS
 }
 
 export async function GET(request: NextRequest) {
-  const storeId = process.env.STOREHUB_MKT_STORE_ID;
-  if (!storeId) return NextResponse.json({ error: "StoreHub store ID not configured" }, { status: 500 });
-
   const { searchParams } = new URL(request.url);
-  const date = searchParams.get("date") ?? phtToday();
+  const branch = searchParams.get("branch") ?? "MKT";
+  const date   = searchParams.get("date")   ?? phtToday();
+
+  const storeId = STORE_IDS[branch];
+  if (!storeId) return NextResponse.json({ error: `StoreHub store ID not configured for branch ${branch}` }, { status: 500 });
 
   try {
-    // StoreHub stores transactionTime in UTC. MKT's business day runs 7am–2am PHT,
+    // StoreHub stores transactionTime in UTC. Business day runs 7am–2am PHT,
     // which in UTC is 23:00 (prev day) – 18:00 (same day). We query yesterday+today
     // in UTC so we don't miss the 7am–8am PHT window, then filter client-side.
     const prevDate = addUtcDays(date, -1);
@@ -55,13 +64,11 @@ export async function GET(request: NextRequest) {
     const bizEnd   = new Date(`${date}T18:00:00Z`).getTime();     // 2:00 AM PHT next day
 
     const [{ skuMap, nameBySkuMap }, transactions] = await Promise.all([
-      buildSkuMaps(),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${date}`),
+      buildSkuMaps(branch),
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${date}`, branch),
     ]);
 
-    // Aggregate qty sold per SKU — Sales only, not cancelled, items only, within PHT business day
     const soldBySkuMap: Record<string, number> = {};
-
     for (const tx of transactions) {
       if (tx.transactionType !== "Sale" || tx.isCancelled) continue;
       const txTime = new Date(tx.transactionTime).getTime();
@@ -74,10 +81,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    const matched = applyStoreHubMapping(soldBySkuMap, "MKT");
-
-    // Unmatched: sold SKUs not referenced in any mapping entry
-    const mappedSkus = allMappedSkus("MKT");
+    const matched = applyStoreHubMapping(soldBySkuMap, branch);
+    const mappedSkus = allMappedSkus(branch);
     const unmatchedSkus = Object.entries(soldBySkuMap)
       .filter(([sku]) => !mappedSkus.has(sku))
       .map(([sku, qty]) => ({ sku, name: nameBySkuMap[sku] ?? sku, qty }));

@@ -23,7 +23,7 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
     const timeout = setTimeout(() => controller.abort(), 25000);
     try {
       // Fetch sales from StoreHub
-      const salesRes = await fetch(`/api/storehub/sales?date=${today}`, { signal: controller.signal });
+      const salesRes = await fetch(`/api/storehub/sales?date=${today}&branch=${branch}`, { signal: controller.signal });
       clearTimeout(timeout);
       const salesData = await salesRes.json();
       if (!salesRes.ok) throw new Error(salesData.error ?? "Failed to fetch sales");
