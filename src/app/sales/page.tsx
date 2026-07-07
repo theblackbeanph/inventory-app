@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { getSession, BRANCH_LABELS } from "@/lib/auth";
 import { hasMinRole } from "@/lib/roles";
 import { businessDatePHT } from "@/app/stock/_lib/helpers";
-import type { DashboardData } from "@/app/sales/_lib/combine";
+import { combineDashboards, type DashboardData } from "@/app/sales/_lib/combine";
 import BottomNav from "@/components/BottomNav";
 import type { Branch } from "@/lib/types";
 
@@ -109,51 +109,78 @@ function StatCard({
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+type View = "ALL" | Branch;
+const BRANCHES: Branch[] = ["MKT", "BF"];
+
 export default function SalesPage() {
   const router = useRouter();
-  const [branch, setBranch] = useState<Branch | null>(null);
-  const [date, setDate]     = useState<string>(businessDatePHT());
-  const [data, setData]     = useState<DashboardData | null>(null);
-  const [prev, setPrev]     = useState<DashboardData | null>(null);
+  const [authed, setAuthed]   = useState(false);
+  const [view, setView]       = useState<View>("ALL");
+  const [date, setDate]       = useState<string>(businessDatePHT());
+  const [cache, setCache]     = useState<Record<string, DashboardData | null>>({});
   const [loading, setLoading] = useState(false);
-  const [error, setError]     = useState<string | null>(null);
 
   // Auth guard
   useEffect(() => {
     const session = getSession();
     if (!session) { router.replace("/login"); return; }
     if (!hasMinRole(session.role, "superadmin")) { router.replace("/stock"); return; }
-    setBranch(session.branch);
+    setAuthed(true);
   }, [router]);
 
-  // Fetch on branch or date change
+  // Fetch every (branch, date) pair the current view needs, skipping cached keys
   useEffect(() => {
-    if (!branch) return;
-    setLoading(true);
-    setError(null);
-
+    if (!authed) return;
+    const branches = view === "ALL" ? BRANCHES : [view];
     const prevDate = prevDay(date);
-    Promise.all([
-      fetch(`/api/storehub/dashboard?branch=${branch}&date=${date}`).then(r => r.json()),
-      fetch(`/api/storehub/dashboard?branch=${branch}&date=${prevDate}`).then(r => r.json()).catch(() => null),
-    ])
-      .then(([today, yesterday]) => {
-        if (today?.error) {
-          setError(today.error);
-          setData(null);
-        } else {
-          setData(today as DashboardData);
+    const needed = branches.flatMap(b => [`${b}__${date}`, `${b}__${prevDate}`])
+      .filter(k => !(k in cache));
+    if (needed.length === 0) return;
+
+    setLoading(true);
+    Promise.all(
+      needed.map(async key => {
+        const [b, d] = key.split("__");
+        try {
+          const r = await fetch(`/api/storehub/dashboard?branch=${b}&date=${d}`);
+          const j = await r.json();
+          return [key, j?.error ? null : (j as DashboardData)] as const;
+        } catch {
+          return [key, null] as const;
         }
-        setPrev(!yesterday || yesterday.error ? null : yesterday as DashboardData);
       })
-      .catch(e => setError(e.message ?? "Failed to load"))
+    )
+      .then(entries => setCache(c => ({ ...c, ...Object.fromEntries(entries) })))
       .finally(() => setLoading(false));
-  }, [branch, date]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authed, view, date]);
 
-  // Wait for auth
-  if (!branch) return null;
+  if (!authed) return null;
 
-  // Delta vs prev day
+  const prevDate = prevDay(date);
+  const get = (b: Branch, d: string) => cache[`${b}__${d}`] ?? null;
+
+  const todayMKT = get("MKT", date), todayBF = get("BF", date);
+  const prevMKT  = get("MKT", prevDate), prevBF = get("BF", prevDate);
+
+  let data: DashboardData | null = null;
+  let prev: DashboardData | null = null;
+  let partialNotice: string | null = null;
+
+  if (view === "ALL") {
+    if (todayMKT && todayBF) data = combineDashboards(todayMKT, todayBF);
+    else if (todayMKT || todayBF) {
+      data = todayMKT ?? todayBF;
+      const missing = todayMKT ? "BF" : "MKT";
+      const shown   = todayMKT ? "MKT" : "BF";
+      partialNotice = `${missing} data unavailable — totals show ${shown} only`;
+    }
+    prev = prevMKT && prevBF ? combineDashboards(prevMKT, prevBF) : null;
+  } else {
+    data = get(view, date);
+    prev = get(view, prevDate);
+  }
+
   const delta = data && prev
     ? ((data.revenue - prev.revenue) / (prev.revenue || 1)) * 100
     : null;
@@ -169,7 +196,7 @@ export default function SalesPage() {
         <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
           <div>
             <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase" }}>
-              {BRANCH_LABELS[branch]} · POS
+              {view === "ALL" ? "The Black Bean · POS" : `${BRANCH_LABELS[view]} · POS`}
             </div>
             <div style={{ fontSize: 20, fontWeight: 700 }}>Sales</div>
           </div>
@@ -186,6 +213,28 @@ export default function SalesPage() {
             }}
           />
         </div>
+
+        {/* Pills */}
+        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+          {(["ALL", ...BRANCHES] as View[]).map(v => {
+            const active = view === v;
+            return (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                style={{
+                  borderRadius: 999, padding: "5px 14px", fontSize: 12, cursor: "pointer",
+                  fontWeight: active ? 600 : 400,
+                  background: active ? "#1A1A1A" : "#FFFFFF",
+                  color: active ? "#FFFFFF" : "var(--text-secondary)",
+                  border: active ? "1px solid #1A1A1A" : "1px solid var(--border)",
+                }}
+              >
+                {v === "ALL" ? "Both" : v}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div style={{ padding: "14px 14px 0" }}>
@@ -197,19 +246,19 @@ export default function SalesPage() {
           </div>
         )}
 
-        {/* Error */}
-        {error && (
-          <div style={{
-            background: "#FEF2F2", border: "1px solid #FECACA",
-            borderRadius: 10, padding: "12px 14px", marginBottom: 12,
-            fontSize: 13, color: "var(--critical)",
-          }}>
-            {error}
-          </div>
-        )}
-
         {data && (
           <>
+            {/* Partial-failure notice */}
+            {partialNotice && (
+              <div style={{
+                background: "#FFFBEB", border: "1px solid #FDE68A",
+                borderRadius: 10, padding: "10px 14px", marginBottom: 12,
+                fontSize: 13, color: "#B45309",
+              }}>
+                {partialNotice}
+              </div>
+            )}
+
             {/* Revenue card */}
             <div style={{ marginBottom: 10 }}>
               <StatCard
@@ -217,21 +266,36 @@ export default function SalesPage() {
                 value={fmt(data.revenue)}
                 accent
                 sub={
-                  delta !== null ? (
-                    <span style={{ color: delta >= 0 ? "var(--good)" : "var(--critical)", fontWeight: 500 }}>
-                      {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(1)}% vs prev day
-                    </span>
-                  ) : (
-                    <span style={{ color: "var(--text-secondary)" }}>no prev-day data</span>
-                  )
+                  <>
+                    {delta !== null ? (
+                      <span style={{ color: delta >= 0 ? "var(--good)" : "var(--critical)", fontWeight: 500 }}>
+                        {delta >= 0 ? "▲" : "▼"} {Math.abs(delta).toFixed(1)}% vs prev day
+                      </span>
+                    ) : (
+                      <span style={{ color: "var(--text-secondary)" }}>no prev-day data</span>
+                    )}
+                    {view === "ALL" && todayMKT && todayBF && (
+                      <div style={{ color: "var(--text-secondary)", marginTop: 2 }}>
+                        MKT {fmt(todayMKT.revenue)} · BF {fmt(todayBF.revenue)}
+                      </div>
+                    )}
+                  </>
                 }
               />
             </div>
 
             {/* Tx + AOV */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 12 }}>
-              <StatCard label="Transactions" value={data.txCount} sub={<span style={{ color: "var(--text-secondary)" }}>orders today</span>} />
-              <StatCard label="Avg Order"    value={fmt(data.aov)} sub={<span style={{ color: "var(--text-secondary)" }}>per transaction</span>} />
+              <StatCard
+                label="Transactions"
+                value={data.txCount}
+                sub={
+                  view === "ALL" && todayMKT && todayBF
+                    ? <span style={{ color: "var(--text-secondary)" }}>MKT {todayMKT.txCount} · BF {todayBF.txCount}</span>
+                    : <span style={{ color: "var(--text-secondary)" }}>orders today</span>
+                }
+              />
+              <StatCard label="Avg Order" value={fmt(data.aov)} sub={<span style={{ color: "var(--text-secondary)" }}>per transaction</span>} />
             </div>
 
             {/* Hourly chart */}
@@ -240,7 +304,7 @@ export default function SalesPage() {
               borderRadius: 12, padding: "14px 14px 10px", marginBottom: 12,
             }}>
               <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 10 }}>
-                Hourly Sales
+                {view === "ALL" ? "Hourly Sales — Combined" : "Hourly Sales"}
               </div>
               <HourlyChart data={data.hourly} />
             </div>
@@ -251,7 +315,7 @@ export default function SalesPage() {
               {/* Top items */}
               <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 14px" }}>
                 <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 10 }}>
-                  Top Items
+                  {view === "ALL" ? "Top Items — Combined" : "Top Items"}
                 </div>
                 {data.topItems.map((item, i) => {
                   const maxQty = data.topItems[0]?.qty || 1;
@@ -276,7 +340,7 @@ export default function SalesPage() {
               {/* Payment mix */}
               <div style={{ background: "var(--card)", border: "1px solid var(--border)", borderRadius: 12, padding: "14px 14px" }}>
                 <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase", marginBottom: 10 }}>
-                  Payment Mix
+                  {view === "ALL" ? "Payment Mix — Combined" : "Payment Mix"}
                 </div>
                 {([
                   { label: "Card",  value: data.paymentMix.card  },
