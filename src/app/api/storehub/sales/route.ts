@@ -68,6 +68,8 @@ export async function GET(request: NextRequest) {
       fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${addUtcDays(date, 1)}`, branch),
     ]);
 
+    console.log(`[SH2] branch=${branch} date=${date} txCount=${Array.isArray(transactions) ? transactions.length : "not-array"}`);
+
     const soldBySkuMap: Record<string, number> = {};
     for (const tx of transactions) {
       if (tx.transactionType !== "Sale" || tx.isCancelled) continue;
@@ -81,6 +83,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
+    console.log(`[SH2] soldBySkuMap=${JSON.stringify(soldBySkuMap)}`);
     const matched = applyStoreHubMapping(soldBySkuMap, branch);
     const mappedSkus = allMappedSkus(branch);
     const unmatchedSkus = Object.entries(soldBySkuMap)
