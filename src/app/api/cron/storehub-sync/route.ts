@@ -49,7 +49,8 @@ async function syncBranch(branch: SyncBranch, date: string) {
   // which matches the back office "Sales by SKU" report exactly.
   const [products, branchTxns] = await Promise.all([
     fetchStoreHub("/products", branch),
-    fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}`, branch),
+    // includeOnline=true is required — StoreHub excludes online orders (GrabFood, Beep, etc.) by default
+    fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}&includeOnline=true`, branch),
   ]);
 
   const skuMap: Record<string, string> = {};

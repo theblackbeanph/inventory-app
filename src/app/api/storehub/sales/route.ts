@@ -56,18 +56,10 @@ export async function GET(request: NextRequest) {
   if (!storeId) return NextResponse.json({ error: `StoreHub store ID not configured for branch ${branch}` }, { status: 500 });
 
   try {
-    const prevDate = new Date(date + "T00:00:00Z");
-    prevDate.setUTCDate(prevDate.getUTCDate() - 1);
-    const prevDateStr = prevDate.toISOString().slice(0, 10);
-    const nextDate = new Date(date + "T00:00:00Z");
-    nextDate.setUTCDate(nextDate.getUTCDate() + 1);
-    const nextDateStr = nextDate.toISOString().slice(0, 10);
-
-    const [{ skuMap, nameBySkuMap }, transactions, txWide, txPage2] = await Promise.all([
+    // includeOnline=true is required — StoreHub excludes online orders (GrabFood, Beep, etc.) by default
+    const [{ skuMap, nameBySkuMap }, transactions] = await Promise.all([
       buildSkuMaps(branch),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}`, branch),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDateStr}&to=${nextDateStr}`, branch),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}&page=2`, branch),
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${date}&to=${date}&includeOnline=true`, branch),
     ]);
 
     const soldBySkuMap: Record<string, number> = {};
@@ -87,7 +79,7 @@ export async function GET(request: NextRequest) {
       .filter(([sku]) => !mappedSkus.has(sku))
       .map(([sku, qty]) => ({ sku, name: nameBySkuMap[sku] ?? sku, qty }));
 
-    return NextResponse.json({ date, matched, unmatchedSkus, _debug: { txCountNarrow: Array.isArray(transactions) ? transactions.length : -1, txCountWide: Array.isArray(txWide) ? txWide.length : -1, txCountPage2: Array.isArray(txPage2) ? txPage2.length : -1, soldBySkuMap } });
+    return NextResponse.json({ date, matched, unmatchedSkus });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 502 });

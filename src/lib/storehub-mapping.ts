@@ -85,6 +85,7 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Arroz ala Cubana",        linkedSkus: ["BREAK03"] },
   { item: "Roast Beef",              linkedSkus: ["SW03"] },
   { item: "Mozzarella Sticks",       linkedSkus: ["APP02"] },
+  { item: "Clam Chowder",            linkedSkus: ["APP01"] },
   { item: "Scallops",                linkedSkus: ["PSTA06", { sku: "PARTY09", qty: 3 }] },
   { item: "Bacon Cubes",             linkedSkus: ["PSTA07", { sku: "PARTY10", qty: 3 }] },
   { item: "Prosciutto",              linkedSkus: ["PSTA09", "PSTA10"] },

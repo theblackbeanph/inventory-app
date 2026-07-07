@@ -82,7 +82,8 @@ export async function GET(request: NextRequest) {
 
     const [products, transactions] = await Promise.all([
       fetchStoreHub("/products", branch),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${date}`, branch),
+      // includeOnline=true is required — StoreHub excludes online orders (GrabFood, Beep, etc.) by default
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${date}&includeOnline=true`, branch),
     ]);
 
     const skuMap: Record<string, string> = {};
