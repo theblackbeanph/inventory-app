@@ -4,21 +4,9 @@ import { useRouter } from "next/navigation";
 import { getSession, BRANCH_LABELS } from "@/lib/auth";
 import { hasMinRole } from "@/lib/roles";
 import { businessDatePHT } from "@/app/stock/_lib/helpers";
+import type { DashboardData } from "@/app/sales/_lib/combine";
 import BottomNav from "@/components/BottomNav";
 import type { Branch } from "@/lib/types";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface DashboardData {
-  date: string;
-  branch: string;
-  revenue: number;
-  txCount: number;
-  aov: number;
-  hourly: { hour: number; revenue: number }[];
-  topItems: { name: string; qty: number }[];
-  paymentMix: { card: number; gcash: number; cash: number };
-}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
