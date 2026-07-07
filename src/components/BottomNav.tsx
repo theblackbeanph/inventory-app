@@ -8,8 +8,9 @@ import type { Role } from "@/lib/roles";
 
 const ALL_TABS: { href: string; icon: React.FC<IconProps>; label: string; minRole: Role }[] = [
   { href: "/stock",      icon: StockIcon,      label: "Stock",      minRole: "linecook"   },
-  { href: "/transfers",  icon: TransfersIcon,  label: "Orders",  minRole: "linecook" },
+  { href: "/transfers",  icon: TransfersIcon,  label: "Orders",     minRole: "linecook"   },
   { href: "/production", icon: ProductionIcon, label: "Production", minRole: "superadmin" },
+  { href: "/sales",      icon: SalesIcon,      label: "Sales",      minRole: "admin"      },
   { href: "/dashboard",  icon: DashboardIcon,  label: "Dashboard",  minRole: "linecook"   },
 ];
 
@@ -97,6 +98,16 @@ function ProductionIcon({ size, active }: IconProps) {
       <path d="M2 20h20" />
       <path d="M5 20V8l7-6 7 6v12" />
       <path d="M9 20v-6h6v6" />
+    </svg>
+  );
+}
+
+function SalesIcon({ size, active }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round">
+      <line x1="12" y1="20" x2="12" y2="10" />
+      <line x1="18" y1="20" x2="18" y2="4"  />
+      <line x1="6"  y1="20" x2="6"  y2="16" />
     </svg>
   );
 }
