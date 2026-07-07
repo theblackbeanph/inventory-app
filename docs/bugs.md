@@ -1,5 +1,19 @@
 # Bug Log — branch-inventory
 
+## [FIXED] Dashboard payment mix always showed 100% card
+**Date found:** 2026-07-07
+**Fixed:** 2026-07-07
+**File:** `src/app/api/storehub/dashboard/route.ts`
+
+### Symptom
+Dashboard payment mix bucketed every transaction as "card".
+
+### Root cause
+The route guessed transaction-level field names (`tx.paymentMethod` / `paymentType` / `payment`) that don't exist. Per the StoreHub API doc (p.20), payment method lives in the `payments[]` array as `payments[].paymentMethod`. The empty string defaulted every tx to "card" in `normalizePayment`. Also removed nonexistent `totalAmount`/`grandTotal` amount fallbacks (`total` is the documented field).
+
+### Note
+GrabFood transactions currently normalize to "card" — if a separate GrabFood slice is wanted, extend `normalizePayment` and the paymentMix buckets. Real paymentMethod values seen: "Cash", "CreditCard", "Gcash / QRPH", "Online / Maya QR", "GrabFood".
+
 ## [FIXED] BF StoreHub sync undercounts sales — online orders excluded by API default
 **Date found:** 2026-07-06 (root cause found 2026-07-07)
 **Fixed:** 2026-07-07
