@@ -22,17 +22,23 @@ const DEPT_LABEL:   Record<string, string> = { kitchen: "Kitchen", bar: "Bar", c
 export default function UserManagement() {
   const [users, setUsers]           = useState<UserRow[]>([]);
   const [loading, setLoading]       = useState(true);
+  const [loadError, setLoadError]   = useState<string | null>(null);
   const [showAdd, setShowAdd]       = useState(false);
   const [editing, setEditing]       = useState<UserRow | null>(null);
 
   useEffect(() => {
     async function load() {
-      await auth.authStateReady();
-      const snap = await getDocs(collection(db, COLS.users));
-      const rows: UserRow[] = snap.docs.map(d => ({ uid: d.id, ...(d.data() as UserDoc) }));
-      rows.sort((a, b) => a.displayName.localeCompare(b.displayName));
-      setUsers(rows);
-      setLoading(false);
+      try {
+        await auth.authStateReady();
+        const snap = await getDocs(collection(db, COLS.users));
+        const rows: UserRow[] = snap.docs.map(d => ({ uid: d.id, ...(d.data() as UserDoc) }));
+        rows.sort((a, b) => a.displayName.localeCompare(b.displayName));
+        setUsers(rows);
+      } catch {
+        setLoadError("Failed to load users. Please refresh and try again.");
+      } finally {
+        setLoading(false);
+      }
     }
     load();
   }, []);
@@ -56,6 +62,14 @@ export default function UserManagement() {
     return (
       <div style={{ padding: "32px 16px", textAlign: "center", color: "var(--text-secondary)", fontSize: 14 }}>
         Loading…
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div style={{ padding: "32px 16px", textAlign: "center", color: "#DC2626", fontSize: 14 }}>
+        {loadError}
       </div>
     );
   }
