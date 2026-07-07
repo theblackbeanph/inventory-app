@@ -87,14 +87,19 @@ export async function GET(request: NextRequest) {
 
     console.log(`[SH3] branch=${branch} date=${date} txCount=${Array.isArray(transactions) ? transactions.length : "not-array"} window=${bizStartISO}→${bizEndISO}`);
 
+    const DEBUG_SKUS = new Set(["BREAK01", "BREAK02", "BREAK03", "BREAK05"]);
     const soldBySkuMap: Record<string, number> = {};
     for (const tx of transactions) {
       if (tx.transactionType !== "Sale" || tx.isCancelled) continue;
       const txTime = new Date(tx.transactionTime).getTime();
-      if (txTime < bizStart || txTime > bizEnd) continue;
+      const inWindow = txTime >= bizStart && txTime <= bizEnd;
       for (const item of tx.items ?? []) {
         if (item.itemType !== "Item" || !item.productId || item.quantity <= 0) continue;
         const sku = skuMap[item.productId];
+        if (sku && DEBUG_SKUS.has(sku)) {
+          console.log(`[SH4] sku=${sku} qty=${item.quantity} time=${tx.transactionTime} inWindow=${inWindow}`);
+        }
+        if (!inWindow) continue;
         if (!sku) continue;
         soldBySkuMap[sku] = (soldBySkuMap[sku] ?? 0) + item.quantity;
       }
