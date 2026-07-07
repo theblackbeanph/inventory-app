@@ -59,7 +59,7 @@ async function syncBranch(branch: SyncBranch, date: string) {
 
   const [products, branchTxns] = await Promise.all([
     fetchStoreHub("/products", branch),
-    fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${date}`, branch),
+    fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${addUtcDays(date, 1)}`, branch),
   ]);
 
   const skuMap: Record<string, string> = {};

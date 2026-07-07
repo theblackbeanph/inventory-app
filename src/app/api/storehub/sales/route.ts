@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
 
     const [{ skuMap, nameBySkuMap }, transactions] = await Promise.all([
       buildSkuMaps(branch),
-      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${date}`, branch),
+      fetchStoreHub(`/transactions?storeId=${storeId}&from=${prevDate}&to=${addUtcDays(date, 1)}`, branch),
     ]);
 
     const soldBySkuMap: Record<string, number> = {};
