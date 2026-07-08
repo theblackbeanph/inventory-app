@@ -431,12 +431,6 @@ export default function SalesPage() {
   const bfFoodPct   = bfFoodCost !== null && todayBF && todayBF.revenue > 0
     ? (bfFoodCost / todayBF.revenue) * 100 : null;
 
-  // Diagnostic log — remove before prod deploy
-  if (costMapLoaded && data?.soldBySku) {
-    const soldSkus = Object.keys(data.soldBySku);
-    const matched = soldSkus.filter(s => s in costMap);
-    console.log(`Food cost SKU match: ${matched.length}/${soldSkus.length}`);
-  }
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 16px)" }}>
