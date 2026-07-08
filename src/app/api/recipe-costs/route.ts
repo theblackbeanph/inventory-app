@@ -36,7 +36,7 @@ export async function GET() {
     for (const docSnap of snap.docs) {
       const r = docSnap.data();
       if (r.recipe_type !== "LINE" || !FOOD_CATEGORIES.has(r.category)) continue;
-      if (r.pos_sku && typeof r.food_cost === "number" && r.food_cost > 0) {
+      if (r.pos_sku != null && r.pos_sku !== "" && typeof r.food_cost === "number" && r.food_cost > 0) {
         skuCostMap[r.pos_sku as string] = r.food_cost as number;
       } else {
         uncostedCount++;
