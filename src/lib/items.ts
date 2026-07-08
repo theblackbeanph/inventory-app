@@ -45,14 +45,14 @@ export const CATALOG: CatalogItem[] = [
   { name: "Truffle Mushroom Paste",  category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Truffle Pasta Sauce",     category: "packed",  unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["MKT"], commissary: true },
   { name: "Tuna Spread",             category: "packed",  unit: "pc", reorderAt: 3,  parLevel: 10,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
-  { name: "Burrata",                 category: "packed",  unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
-  { name: "Clam Chowder",            category: "packed",  unit: "pc", reorderAt: 10, packSize: "1 pc",    department: "kitchen", location: "back_kitchen"  },
-  // ── SUPPLIER — BF only (reorderAt: update via Settings) ──────────────────
+  { name: "Burrata",                 category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  { name: "Clam Chowder",            category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen"  },
+  // ── SUPPLIER — BF only ───────────────────────────────────────────────────
   { name: "Pork Chop",              category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
-  { name: "Longganisa Duo",         category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
-  { name: "Wagyu Cubes",            category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
-  { name: "Farmer's Ham",           category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
-  { name: "Bacon Strip",            category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
+  { name: "Longganisa Duo",         category: "packed",  unit: "pc", reorderAt: 15, packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
+  { name: "Wagyu Cubes",            category: "packed",  unit: "pc", reorderAt: 25, packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
+  { name: "Farmer's Ham",           category: "packed",  unit: "pc", reorderAt: 15, packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
+  { name: "Bacon Strip",            category: "packed",  unit: "pc", reorderAt: 15, packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
   // ── LOOSE (sealed pack — count packs only, never weigh) ───────────────
   // ordersPerPack = SPP from Portion Guide (April 2026). branches omitted = all branches.
   { name: "Adobo Flakes Sauce",      category: "loose",   unit: "pack", reorderAt: 2, packSize: "500g",    department: "kitchen", location: "back_kitchen", ordersPerPack: 16, commissary: true },
