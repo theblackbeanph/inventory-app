@@ -72,6 +72,12 @@ export const CATALOG: CatalogItem[] = [
   { name: "Pandesal",                category: "packed",  unit: "pc", reorderAt: 12, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Potato Buns",             category: "packed",  unit: "pc", reorderAt: 12, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Brioche Loaf",            category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  // ── SUPPLIER — BF only (reorderAt: update via Settings) ──────────────────
+  { name: "Pork Chop",              category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
+  { name: "Longganisa Duo",         category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
+  { name: "Wagyu Cubes",            category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
+  { name: "Farmer's Ham",           category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
+  { name: "Bacon Strip",            category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
 ];
 
 export const CATALOG_MAP = new Map(CATALOG.map(i => [i.name, i]));

@@ -113,6 +113,12 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Beef Pares Sauce",        linkedSkus: ["BREAK04", "PSTA04", { sku: "PARTY06", qty: 3 }],           ordersPerPack: 16 },
   { item: "Adobo Flakes Sauce",      linkedSkus: ["BREAK02", "BREAK17"],                                      ordersPerPack: 16 },
   { item: "Ube Halaya",              linkedSkus: ["SW05", "MAIN09"],                                          ordersPerPack: 7  },
+  // ── SUPPLIER — BF only ────────────────────────────────────────────────────
+  { item: "Pork Chop",              linkedSkus: ["MAIN08"] },
+  { item: "Longganisa Duo",         linkedSkus: ["BREAK06", { sku: "PARTY03", qty: 2 }] },
+  { item: "Wagyu Cubes",            linkedSkus: ["BREAK07", { sku: "PARTY12", qty: 3 }] },
+  { item: "Farmer's Ham",           linkedSkus: ["BREAK08"] },
+  { item: "Bacon Strip",            linkedSkus: ["APP05", { sku: "PARTY04", qty: 3 }, "BREAK10"] },
 ];
 
 const BRANCH_MAPPINGS: Record<string, StoreHubMappingEntry[]> = { MKT: MKT_MAPPING, BF: BF_MAPPING };
