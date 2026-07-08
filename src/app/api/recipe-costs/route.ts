@@ -31,6 +31,7 @@ export async function GET() {
 
     const snap = await getDocs(collection(db, "recipes"));
     const skuCostMap: Record<string, number> = {};
+    const srpMap: Record<string, number> = {};
     let uncostedCount = 0;
 
     for (const docSnap of snap.docs) {
@@ -38,12 +39,15 @@ export async function GET() {
       if (r.recipe_type !== "LINE" || !FOOD_CATEGORIES.has(r.category)) continue;
       if (r.pos_sku_id != null && r.pos_sku_id !== "" && typeof r.food_cost === "number" && r.food_cost > 0) {
         skuCostMap[r.pos_sku_id as string] = r.food_cost as number;
+        if (typeof r.srp === "number" && r.srp > 0) {
+          srpMap[r.pos_sku_id as string] = r.srp as number;
+        }
       } else {
         uncostedCount++;
       }
     }
 
-    return NextResponse.json({ skuCostMap, uncostedCount });
+    return NextResponse.json({ skuCostMap, srpMap, uncostedCount });
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 502 });

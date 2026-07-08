@@ -173,7 +173,7 @@ function FoodCostCard({
             ₱{Math.round(projectedCost).toLocaleString("en-PH")}
           </div>
           <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
-            of ₱{revenue.toLocaleString("en-PH")} revenue
+            of ₱{revenue.toLocaleString("en-PH")} food sales
           </div>
         </div>
         {pct !== null && (
@@ -316,6 +316,7 @@ export default function SalesPage() {
   const [cache, setCache]     = useState<Record<string, DashboardData | null>>({});
   const [loading, setLoading] = useState(false);
   const [costMap, setCostMap]             = useState<Record<string, number>>({});
+  const [srpMap, setSrpMap]               = useState<Record<string, number>>({});
   const [uncostedCount, setUncostedCount] = useState(0);
   const [costMapLoaded, setCostMapLoaded] = useState(false);
 
@@ -323,11 +324,12 @@ export default function SalesPage() {
   useEffect(() => {
     fetch("/api/recipe-costs")
       .then(r => r.json())
-      .then((j: { skuCostMap?: Record<string, number>; uncostedCount?: number }) => {
+      .then((j: { skuCostMap?: Record<string, number>; srpMap?: Record<string, number>; uncostedCount?: number }) => {
         setCostMap(j.skuCostMap ?? {});
+        setSrpMap(j.srpMap ?? {});
         setUncostedCount(j.uncostedCount ?? 0);
       })
-      .catch(() => { /* leave costMap empty — cards show ₱0 gracefully */ })
+      .catch(() => { /* leave maps empty — cards show ₱0 gracefully */ })
       .finally(() => setCostMapLoaded(true));
   }, []);
 
@@ -406,6 +408,14 @@ export default function SalesPage() {
     );
   }
 
+  function computeFoodRevenue(d: DashboardData | null): number {
+    if (!d?.soldBySku) return 0;
+    return Object.entries(d.soldBySku).reduce(
+      (sum, [sku, qty]) => sum + (srpMap[sku] ?? 0) * qty,
+      0
+    );
+  }
+
   function foodCostColor(pct: number): string {
     if (pct < 30) return "#16A34A";
     if (pct <= 33) return "#D97706";
@@ -419,17 +429,20 @@ export default function SalesPage() {
   }
 
   const projectedFoodCost = computeFoodCost(data);
-  const foodCostPct = data && data.revenue > 0
-    ? (projectedFoodCost / data.revenue) * 100
+  const foodRevenue = computeFoodRevenue(data);
+  const foodCostPct = foodRevenue > 0
+    ? (projectedFoodCost / foodRevenue) * 100
     : null;
 
   // Per-branch (only meaningful when view === ALL and both loaded)
-  const mktFoodCost = view === "ALL" && todayMKT ? computeFoodCost(todayMKT) : null;
-  const bfFoodCost  = view === "ALL" && todayBF  ? computeFoodCost(todayBF)  : null;
-  const mktFoodPct  = mktFoodCost !== null && todayMKT && todayMKT.revenue > 0
-    ? (mktFoodCost / todayMKT.revenue) * 100 : null;
-  const bfFoodPct   = bfFoodCost !== null && todayBF && todayBF.revenue > 0
-    ? (bfFoodCost / todayBF.revenue) * 100 : null;
+  const mktFoodCost    = view === "ALL" && todayMKT ? computeFoodCost(todayMKT)    : null;
+  const bfFoodCost     = view === "ALL" && todayBF  ? computeFoodCost(todayBF)     : null;
+  const mktFoodRevenue = view === "ALL" && todayMKT ? computeFoodRevenue(todayMKT) : null;
+  const bfFoodRevenue  = view === "ALL" && todayBF  ? computeFoodRevenue(todayBF)  : null;
+  const mktFoodPct = mktFoodCost !== null && mktFoodRevenue && mktFoodRevenue > 0
+    ? (mktFoodCost / mktFoodRevenue) * 100 : null;
+  const bfFoodPct  = bfFoodCost !== null && bfFoodRevenue && bfFoodRevenue > 0
+    ? (bfFoodCost / bfFoodRevenue) * 100 : null;
 
 
   return (
@@ -549,7 +562,7 @@ export default function SalesPage() {
             <FoodCostCard
               projectedCost={projectedFoodCost}
               pct={foodCostPct}
-              revenue={data.revenue}
+              revenue={foodRevenue}
               mktCost={mktFoodCost}
               mktPct={mktFoodPct}
               bfCost={bfFoodCost}
