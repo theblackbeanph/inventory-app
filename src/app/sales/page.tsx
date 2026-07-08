@@ -107,6 +107,202 @@ function StatCard({
   );
 }
 
+// ─── Food Cost Card ───────────────────────────────────────────────────────────
+
+function FoodCostCard({
+  projectedCost,
+  pct,
+  revenue,
+  mktCost,
+  mktPct,
+  bfCost,
+  bfPct,
+  uncosted,
+  showBranches,
+  loaded,
+  foodCostColor,
+  foodCostBg,
+}: {
+  projectedCost: number;
+  pct: number | null;
+  revenue: number;
+  mktCost: number | null;
+  mktPct: number | null;
+  bfCost: number | null;
+  bfPct: number | null;
+  uncosted: number;
+  showBranches: boolean;
+  loaded: boolean;
+  foodCostColor: (pct: number) => string;
+  foodCostBg: (pct: number) => string;
+}) {
+  const TARGET = 30;
+  const color  = pct !== null ? foodCostColor(pct) : "#9CA3AF";
+  const bg     = pct !== null ? foodCostBg(pct)    : "#F5F5F2";
+  const barPct = pct !== null ? Math.min(pct / TARGET, 1.2) * 100 : 0; // cap at 120% of target width
+
+  if (!loaded) {
+    return (
+      <div style={{
+        background: "var(--card)", border: "1px solid var(--border)",
+        borderRadius: 12, borderLeft: "3px solid #C8A96E",
+        padding: "14px 16px", marginBottom: 10,
+        opacity: 0.5,
+      }}>
+        <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase" as const }}>
+          Projected Food Cost
+        </div>
+        <div style={{ fontSize: 13, color: "var(--text-secondary)", marginTop: 6 }}>Loading…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{
+      background: "var(--card)", border: "1px solid var(--border)",
+      borderRadius: 12, borderLeft: "3px solid #C8A96E",
+      padding: "14px 16px", marginBottom: 10,
+    }}>
+      {/* Header row */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+        <div>
+          <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase" as const, marginBottom: 4 }}>
+            Projected Food Cost
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700 }}>
+            ₱{Math.round(projectedCost).toLocaleString("en-PH")}
+          </div>
+          <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+            of ₱{revenue.toLocaleString("en-PH")} revenue
+          </div>
+        </div>
+        {pct !== null && (
+          <div style={{ textAlign: "right" }}>
+            <div style={{
+              background: bg, color, fontSize: 18, fontWeight: 800,
+              padding: "4px 12px", borderRadius: 8, letterSpacing: "-0.02em",
+            }}>
+              {pct.toFixed(1)}%
+            </div>
+            <div style={{ fontSize: 10, color: "var(--text-secondary)", marginTop: 2 }}>target: {TARGET}%</div>
+          </div>
+        )}
+      </div>
+
+      {/* Progress bar */}
+      {pct !== null && (
+        <>
+          <div style={{ height: 6, background: "var(--bg)", borderRadius: 3, overflow: "visible", position: "relative", marginBottom: 5 }}>
+            <div style={{
+              height: "100%", width: `${Math.min(barPct, 100)}%`,
+              background: color, borderRadius: 3,
+            }} />
+            {/* target line at the 30%/TARGET position = barPct 100% = full bar */}
+            <div style={{
+              position: "absolute", top: -4, left: `${(TARGET / (TARGET * 1.2)) * 100}%`,
+              width: 2, height: 14, background: "#9CA3AF", borderRadius: 1,
+            }} />
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "var(--text-secondary)", marginBottom: showBranches || uncosted > 0 ? 10 : 0 }}>
+            <span>0%</span>
+            <span>▲ {TARGET}% target</span>
+            <span>{(TARGET * 1.2).toFixed(0)}%</span>
+          </div>
+        </>
+      )}
+
+      {/* Per-branch mini cards */}
+      {showBranches && (mktCost !== null || bfCost !== null) && (
+        <div style={{ display: "flex", gap: 8, marginBottom: uncosted > 0 ? 10 : 0 }}>
+          {[
+            { label: "MKT", cost: mktCost, pct: mktPct },
+            { label: "BF",  cost: bfCost,  pct: bfPct  },
+          ].map(({ label, cost, pct: p }) => (
+            <div key={label} style={{ flex: 1, background: "var(--bg)", borderRadius: 8, padding: "8px 10px" }}>
+              <div style={{ fontSize: 9, fontWeight: 600, color: "var(--text-secondary)", textTransform: "uppercase" as const, letterSpacing: "0.08em", marginBottom: 2 }}>
+                {label}
+              </div>
+              <div style={{ fontSize: 13, fontWeight: 700 }}>
+                {cost !== null ? `₱${Math.round(cost).toLocaleString("en-PH")}` : "—"}
+              </div>
+              {p !== null && (
+                <div style={{ fontSize: 10, fontWeight: 500, color: foodCostColor(p) }}>
+                  {p.toFixed(1)}%
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Uncosted warning */}
+      {uncosted > 0 && (
+        <div style={{ fontSize: 11, color: "#D97706" }}>
+          ⚠ {uncosted} item{uncosted !== 1 ? "s" : ""} uncosted — cost may be understated
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Channel Card ─────────────────────────────────────────────────────────────
+
+function ChannelCard({ data }: { data: DashboardData }) {
+  const grabRevenue  = data.grabFood?.revenue  ?? 0;
+  const grabCount    = data.grabFood?.txCount  ?? 0;
+  const grabAov      = data.grabFood?.aov      ?? 0;
+  const dineRevenue  = data.revenue - grabRevenue;
+  const dineCount    = data.txCount - grabCount;
+  const dineAov      = dineCount ? Math.round(dineRevenue / dineCount) : 0;
+  const total        = data.revenue || 1;
+
+  const rows = [
+    { label: "Dine-in / Walk-in", color: "#1A1A1A", revenue: dineRevenue, count: dineCount, aov: dineAov },
+    { label: "GrabFood",          color: "#00B140", revenue: grabRevenue,  count: grabCount,  aov: grabAov  },
+  ];
+
+  return (
+    <div style={{
+      background: "var(--card)", border: "1px solid var(--border)",
+      borderRadius: 12, padding: "14px 16px", marginBottom: 12,
+    }}>
+      <div style={{ fontSize: 10, fontWeight: 600, letterSpacing: "0.1em", color: "var(--text-secondary)", textTransform: "uppercase" as const, marginBottom: 10 }}>
+        Sales Channel
+      </div>
+
+      {rows.map((row, i) => (
+        <div key={row.label} style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: i === 0 ? "0 0 8px" : "8px 0 0",
+          borderBottom: i === 0 ? "1px solid var(--bg)" : "none",
+        }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: row.color, flexShrink: 0 }} />
+          <div style={{ flex: 1, fontSize: 13, fontWeight: 500 }}>{row.label}</div>
+          <div style={{ textAlign: "right" }}>
+            <div style={{ fontSize: 13, fontWeight: 700 }}>₱{row.revenue.toLocaleString("en-PH")}</div>
+            <div style={{ fontSize: 10, color: "var(--text-secondary)" }}>
+              {row.count} orders · avg ₱{row.aov.toLocaleString("en-PH")}
+            </div>
+          </div>
+          <div style={{ fontSize: 11, fontWeight: 600, color: "var(--text-secondary)", minWidth: 36, textAlign: "right" }}>
+            {((row.revenue / total) * 100).toFixed(1)}%
+          </div>
+        </div>
+      ))}
+
+      {/* Proportion bar */}
+      <div style={{ marginTop: 12, height: 5, background: "var(--bg)", borderRadius: 3, overflow: "hidden", display: "flex", gap: 2 }}>
+        <div style={{ height: "100%", width: `${(dineRevenue / total) * 100}%`, background: "#1A1A1A", borderRadius: 2 }} />
+        <div style={{ height: "100%", width: `${(grabRevenue / total) * 100}%`, background: "#00B140", borderRadius: 2 }} />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-between", marginTop: 5, fontSize: 10, color: "var(--text-secondary)" }}>
+        <span>Dine-in</span>
+        <span>GrabFood</span>
+      </div>
+    </div>
+  );
+}
+
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 type View = "ALL" | Branch;
@@ -119,6 +315,21 @@ export default function SalesPage() {
   const [date, setDate]       = useState<string>(businessDatePHT());
   const [cache, setCache]     = useState<Record<string, DashboardData | null>>({});
   const [loading, setLoading] = useState(false);
+  const [costMap, setCostMap]             = useState<Record<string, number>>({});
+  const [uncostedCount, setUncostedCount] = useState(0);
+  const [costMapLoaded, setCostMapLoaded] = useState(false);
+
+  // Fetch cost map once on mount — applies across all dates and branches
+  useEffect(() => {
+    fetch("/api/recipe-costs")
+      .then(r => r.json())
+      .then((j: { skuCostMap?: Record<string, number>; uncostedCount?: number }) => {
+        setCostMap(j.skuCostMap ?? {});
+        setUncostedCount(j.uncostedCount ?? 0);
+      })
+      .catch(() => { /* leave costMap empty — cards show ₱0 gracefully */ })
+      .finally(() => setCostMapLoaded(true));
+  }, []);
 
   // Auth guard
   useEffect(() => {
@@ -186,6 +397,46 @@ export default function SalesPage() {
   const delta = data && prev
     ? ((data.revenue - prev.revenue) / (prev.revenue || 1)) * 100
     : null;
+
+  function computeFoodCost(d: DashboardData | null): number {
+    if (!d?.soldBySku) return 0;
+    return Object.entries(d.soldBySku).reduce(
+      (sum, [sku, qty]) => sum + (costMap[sku] ?? 0) * qty,
+      0
+    );
+  }
+
+  function foodCostColor(pct: number): string {
+    if (pct < 30) return "#16A34A";
+    if (pct <= 33) return "#D97706";
+    return "#DC2626";
+  }
+
+  function foodCostBg(pct: number): string {
+    if (pct < 30) return "#DCFCE7";
+    if (pct <= 33) return "#FEF9C3";
+    return "#FEE2E2";
+  }
+
+  const projectedFoodCost = computeFoodCost(data);
+  const foodCostPct = data && data.revenue > 0
+    ? (projectedFoodCost / data.revenue) * 100
+    : null;
+
+  // Per-branch (only meaningful when view === ALL and both loaded)
+  const mktFoodCost = view === "ALL" && todayMKT ? computeFoodCost(todayMKT) : null;
+  const bfFoodCost  = view === "ALL" && todayBF  ? computeFoodCost(todayBF)  : null;
+  const mktFoodPct  = mktFoodCost !== null && todayMKT && todayMKT.revenue > 0
+    ? (mktFoodCost / todayMKT.revenue) * 100 : null;
+  const bfFoodPct   = bfFoodCost !== null && todayBF && todayBF.revenue > 0
+    ? (bfFoodCost / todayBF.revenue) * 100 : null;
+
+  // Diagnostic log — remove before prod deploy
+  if (costMapLoaded && data?.soldBySku) {
+    const soldSkus = Object.keys(data.soldBySku);
+    const matched = soldSkus.filter(s => s in costMap);
+    console.log(`Food cost SKU match: ${matched.length}/${soldSkus.length}`);
+  }
 
   return (
     <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 16px)" }}>
@@ -300,6 +551,22 @@ export default function SalesPage() {
               <StatCard label="Avg Order" value={fmt(data.aov)} sub={<span style={{ color: "var(--text-secondary)" }}>per transaction</span>} />
             </div>
 
+            {/* Food Cost */}
+            <FoodCostCard
+              projectedCost={projectedFoodCost}
+              pct={foodCostPct}
+              revenue={data.revenue}
+              mktCost={mktFoodCost}
+              mktPct={mktFoodPct}
+              bfCost={bfFoodCost}
+              bfPct={bfFoodPct}
+              uncosted={uncostedCount}
+              showBranches={view === "ALL" && !!todayMKT && !!todayBF}
+              loaded={costMapLoaded}
+              foodCostColor={foodCostColor}
+              foodCostBg={foodCostBg}
+            />
+
             {/* Hourly chart */}
             <div style={{
               background: "var(--card)", border: "1px solid var(--border)",
@@ -310,6 +577,9 @@ export default function SalesPage() {
               </div>
               <HourlyChart data={data.hourly} />
             </div>
+
+            {/* Sales Channel */}
+            <ChannelCard data={data} />
 
             {/* Top Items + Payment Mix */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
