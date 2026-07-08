@@ -73,3 +73,54 @@ describe("combineDashboards", () => {
     expect(c.branch).toBe("ALL");
   });
 });
+
+describe("combineDashboards — new fields", () => {
+  it("merges soldBySku by summing qty per SKU", () => {
+    const a = mk({ soldBySku: { "S1": 5, "66": 3 } });
+    const b = mk({ branch: "BF", soldBySku: { "S1": 2, "M1": 7 } });
+    expect(combineDashboards(a, b).soldBySku).toEqual({ "S1": 7, "66": 3, "M1": 7 });
+  });
+
+  it("handles missing soldBySku on either side", () => {
+    const a = mk({ soldBySku: { "S1": 5 } });
+    const b = mk({ branch: "BF" }); // no soldBySku
+    expect(combineDashboards(a, b).soldBySku).toEqual({ "S1": 5 });
+  });
+
+  it("returns empty soldBySku when both missing", () => {
+    expect(combineDashboards(mk({}), mk({ branch: "BF" })).soldBySku).toEqual({});
+  });
+
+  it("combines grabFood revenue and txCount, recomputes aov", () => {
+    const a = mk({ grabFood: { revenue: 5000, txCount: 10, aov: 500 } });
+    const b = mk({ branch: "BF", grabFood: { revenue: 3000, txCount: 6, aov: 500 } });
+    const c = combineDashboards(a, b);
+    expect(c.grabFood?.revenue).toBe(8000);
+    expect(c.grabFood?.txCount).toBe(16);
+    expect(c.grabFood?.aov).toBe(500);
+  });
+
+  it("handles missing grabFood on either side", () => {
+    const a = mk({ grabFood: { revenue: 4000, txCount: 8, aov: 500 } });
+    const b = mk({ branch: "BF" }); // no grabFood
+    const c = combineDashboards(a, b);
+    expect(c.grabFood?.revenue).toBe(4000);
+    expect(c.grabFood?.txCount).toBe(8);
+  });
+
+  it("returns zeroed grabFood when both missing", () => {
+    const c = combineDashboards(mk({}), mk({ branch: "BF" }));
+    expect(c.grabFood).toEqual({ revenue: 0, txCount: 0, aov: 0 });
+  });
+
+  it("weights paymentMix by dine-in txCount (not total txCount)", () => {
+    // MKT: 10 total tx, 4 GrabFood → 6 dine-in, 100% card on dine-in
+    // BF: 10 total tx, 2 GrabFood → 8 dine-in, 100% cash on dine-in
+    // Combined dine-in: 14 tx → card = 6/14 ≈ 0.4286, cash = 8/14 ≈ 0.5714
+    const a = mk({ txCount: 10, grabFood: { revenue: 0, txCount: 4, aov: 0 }, paymentMix: { card: 1, gcash: 0, cash: 0 } });
+    const b = mk({ branch: "BF", txCount: 10, grabFood: { revenue: 0, txCount: 2, aov: 0 }, paymentMix: { card: 0, gcash: 0, cash: 1 } });
+    const mix = combineDashboards(a, b).paymentMix;
+    expect(mix.card).toBeCloseTo(6 / 14, 5);
+    expect(mix.cash).toBeCloseTo(8 / 14, 5);
+  });
+});

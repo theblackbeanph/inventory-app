@@ -7,6 +7,8 @@ export interface DashboardData {
   hourly: { hour: number; revenue: number }[];
   topItems: { name: string; qty: number }[];
   paymentMix: { card: number; gcash: number; cash: number };
+  soldBySku?: Record<string, number>;
+  grabFood?: { revenue: number; txCount: number; aov: number };
 }
 
 export function combineDashboards(a: DashboardData, b: DashboardData): DashboardData {
@@ -30,11 +32,34 @@ export function combineDashboards(a: DashboardData, b: DashboardData): Dashboard
     .sort((x, y) => y.qty - x.qty)
     .slice(0, 6);
 
+  // soldBySku: sum quantities per SKU across both branches
+  const skuAccum = new Map<string, number>();
+  for (const [sku, qty] of Object.entries(a.soldBySku ?? {})) {
+    skuAccum.set(sku, (skuAccum.get(sku) ?? 0) + qty);
+  }
+  for (const [sku, qty] of Object.entries(b.soldBySku ?? {})) {
+    skuAccum.set(sku, (skuAccum.get(sku) ?? 0) + qty);
+  }
+  const soldBySku = Object.fromEntries(skuAccum);
+
+  // grabFood: sum revenue + txCount, recompute aov
+  const grabFoodRevenue = (a.grabFood?.revenue ?? 0) + (b.grabFood?.revenue ?? 0);
+  const grabFoodCount   = (a.grabFood?.txCount ?? 0) + (b.grabFood?.txCount ?? 0);
+  const grabFood = {
+    revenue: grabFoodRevenue,
+    txCount: grabFoodCount,
+    aov: grabFoodCount ? Math.round(grabFoodRevenue / grabFoodCount) : 0,
+  };
+
+  // paymentMix: weight by dine-in txCount (GrabFood excluded from paymentCounts)
   const mixKeys = ["card", "gcash", "cash"] as const;
   const paymentMix = { card: 0, gcash: 0, cash: 0 };
-  if (txCount > 0) {
+  const aDineIn = a.txCount - (a.grabFood?.txCount ?? 0);
+  const bDineIn = b.txCount - (b.grabFood?.txCount ?? 0);
+  const totalDineIn = aDineIn + bDineIn;
+  if (totalDineIn > 0) {
     for (const k of mixKeys) {
-      paymentMix[k] = (a.paymentMix[k] * a.txCount + b.paymentMix[k] * b.txCount) / txCount;
+      paymentMix[k] = (a.paymentMix[k] * aDineIn + b.paymentMix[k] * bDineIn) / totalDineIn;
     }
   }
 
@@ -47,5 +72,7 @@ export function combineDashboards(a: DashboardData, b: DashboardData): Dashboard
     hourly,
     topItems,
     paymentMix,
+    soldBySku,
+    grabFood,
   };
 }
