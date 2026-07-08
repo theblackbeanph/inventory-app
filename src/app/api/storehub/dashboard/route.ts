@@ -96,6 +96,8 @@ export async function GET(request: NextRequest) {
 
     let totalRevenue = 0;
     let txCount = 0;
+    let grabFoodRevenue = 0;
+    let grabFoodCount = 0;
     const hourlySales: Record<number, number> = {};
     const soldBySku: Record<string, number> = {};
     const paymentCounts: Record<"card" | "gcash" | "cash", number> = { card: 0, gcash: 0, cash: 0 };
@@ -115,7 +117,16 @@ export async function GET(request: NextRequest) {
 
       const hour = phtHour(txTime);
       hourlySales[hour] = (hourlySales[hour] ?? 0) + amount;
-      paymentCounts[normalizePayment(paymentRaw)]++;
+
+      const isGrabFood = paymentRaw.toLowerCase().includes('grab');
+
+      if (isGrabFood) {
+        grabFoodRevenue += amount;
+        grabFoodCount++;
+        // GrabFood excluded from paymentCounts — shown in the channel card instead
+      } else {
+        paymentCounts[normalizePayment(paymentRaw)]++;
+      }
 
       for (const item of (tx["items"] ?? []) as { itemType: string; productId: string; quantity: number }[]) {
         if (item.itemType !== "Item" || !item.productId || item.quantity <= 0) continue;
@@ -137,7 +148,8 @@ export async function GET(request: NextRequest) {
       .sort((a, b) => b.qty - a.qty)
       .slice(0, 6);
 
-    const paymentTotal = txCount || 1;
+    const dineInTxCount = txCount - grabFoodCount;
+    const paymentTotal = dineInTxCount || 1;
     const paymentMix = {
       card:  Math.round((paymentCounts.card  / paymentTotal) * 100) / 100,
       gcash: Math.round((paymentCounts.gcash / paymentTotal) * 100) / 100,
@@ -154,6 +166,12 @@ export async function GET(request: NextRequest) {
         hourly,
         topItems,
         paymentMix,
+        soldBySku,
+        grabFood: {
+          revenue: Math.round(grabFoodRevenue),
+          txCount: grabFoodCount,
+          aov: grabFoodCount ? Math.round(grabFoodRevenue / grabFoodCount) : 0,
+        },
       },
       { headers: CORS }
     );
