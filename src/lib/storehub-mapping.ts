@@ -98,6 +98,7 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Squash Soup",             linkedSkus: ["APP04"] },
   { item: "Tuna Spread",             linkedSkus: ["SW04"] },
   { item: "Flatbread",               linkedSkus: ["FLATB01", "FLATB02"] },
+  { item: "Tomahawk Porkchop",       linkedSkus: ["MAIN09"] },
   { item: "Salted Egg Sauce",        linkedSkus: ["PSTA05", { sku: "PARTY08", qty: 3 }] },
   { item: "Salted Egg Custard",      linkedSkus: ["BREAK12"] },
   // ── LOOSE — ordersPerPack from Portion Guide (April 2026) ────────────────
@@ -114,7 +115,6 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Adobo Flakes Sauce",      linkedSkus: ["BREAK02", "BREAK17"],                                      ordersPerPack: 16 },
   { item: "Ube Halaya",              linkedSkus: ["SW05", "MAIN09"],                                          ordersPerPack: 7  },
   // ── SUPPLIER — BF only ────────────────────────────────────────────────────
-  { item: "Pork Chop",              linkedSkus: ["MAIN08"] },
   { item: "Longganisa Duo",         linkedSkus: ["BREAK06", { sku: "PARTY03", qty: 2 }] },
   { item: "Wagyu Cubes",            linkedSkus: ["BREAK07", { sku: "PARTY12", qty: 3 }] },
   { item: "Farmer's Ham",           linkedSkus: ["BREAK08"] },

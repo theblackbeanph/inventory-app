@@ -29,7 +29,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Salmon Fillet",           category: "portion", unit: "pc", reorderAt: 3,  parLevel: 10,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Scallops",                category: "portion", unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Smoked Salmon",           category: "portion", unit: "pc", reorderAt: 10, parLevel: 40,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
-  { name: "Tomahawk Porkchop",       category: "packed",  unit: "pc", reorderAt: 3,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["MKT"], commissary: true },
+  { name: "Tomahawk Porkchop",       category: "packed",  unit: "pc", reorderAt: 3,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["MKT", "BF"], commissary: true },
   // ── PACKED (pc) ──────────────────────────────────────────────────────
   { name: "Au Jus",                  category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 20,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Bacon Jam",               category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 20,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
@@ -48,7 +48,6 @@ export const CATALOG: CatalogItem[] = [
   { name: "Burrata",                 category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Clam Chowder",            category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen"  },
   // ── SUPPLIER — BF only ───────────────────────────────────────────────────
-  { name: "Pork Chop",              category: "packed",  unit: "pc", reorderAt: 5,  packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
   { name: "Longganisa Duo",         category: "packed",  unit: "pc", reorderAt: 15, packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
   { name: "Wagyu Cubes",            category: "packed",  unit: "pc", reorderAt: 25, packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
   { name: "Farmer's Ham",           category: "packed",  unit: "pc", reorderAt: 15, packSize: "1 pc",    department: "kitchen", location: "back_kitchen",  branches: ["BF"] },
