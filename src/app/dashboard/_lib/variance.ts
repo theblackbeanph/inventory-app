@@ -271,7 +271,7 @@ export function computeItemSummaries(
       }
     }
 
-    if (periodVariance === 0) continue;
+    if (periodVariance === 0 && daysWithVariance === 0) continue;
 
     const absVariance = Math.abs(periodVariance);
     const periodVarPct =
