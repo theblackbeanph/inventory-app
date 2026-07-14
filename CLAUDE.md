@@ -29,9 +29,9 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 
 ### Sales Import — Both Branches Use StoreHub API
 - **MKT**: StoreHub API (`/api/storehub/sales` + `/api/storehub/sync`)
-- **BF**: StoreHub API — mapping ready in `src/lib/storehub-mapping.ts` (`BF_MAPPING`); awaiting BF store credentials from supplier before going live
+- **BF**: StoreHub API — live; mapping in `src/lib/storehub-mapping.ts` (`BF_MAPPING`); credentials set in Vercel env (`STOREHUB_BF_USERNAME`, `STOREHUB_BF_PASSWORD`, `STOREHUB_BF_STORE_ID`)
 - CSV/Utak import (previously BF) has been removed — `csv-mapping.ts` and `CSVImportModal.tsx` are deleted
-- Both branches now show "Sync sales" button unconditionally (no more `BRANCH_POS_TYPE` conditional)
+- Both branches show "Sync sales" button unconditionally (no more `BRANCH_POS_TYPE` conditional)
 - SKU IDs are branch-specific for now (BF uses M-/B-/S-/PF-/T-/A-/EX- prefixes); unified SKU IDs across branches are a future milestone
 
 ### Phase 2 Transfer Flow Design (agreed 2026-04-28)
@@ -40,6 +40,16 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **On Phase 2 launch**: the commissary app's manual `pullOuts` creation flow will be DISABLED
 - **Discrepancy handling**: commissary adjusts their inventory + notifies branch; branch re-requests if replacement needed; no auto-replacement sends from commissary
 - **Cutover strategy**: cutover is complete — old commissary manual pull-out flow removed; ActionSheet Pull Out is now the only commissary entry point
+
+### Cron Jobs — Auto Sales Sync (2026-07-14)
+- **Scheduler**: cron-job.org (job ID: 8090135) — NOT Vercel crons. Vercel crons are defined in `vercel.json` but never fire on the Hobby plan. Do not rely on Vercel to trigger cron routes.
+- **Schedule**: daily at **1:00 AM PHT (17:00 UTC)** — 1 hour after the cafe closes at midnight PHT
+- **Endpoint**: `GET /api/cron/storehub-sync` — no auth required (`CRON_SECRET` not set; `if (process.env.CRON_SECRET && ...)` check is skipped)
+- **Date logic**: `syncDatePHT()` in the route returns **yesterday's PHT date** (subtracts 24h before computing the PHT date). At 1am PHT, "yesterday" = the full business day that just closed. Do NOT change this to return today's date.
+- **Firestore writes**: `branch_adjustments` docs with `type: "sales_import"` and `loggedBy: "system (auto-sync)"`. Doc ID pattern: `storehub__{branch}__kitchen__{date}__{itemSlug}`. Also writes `storehubUnmatched/{branch}__{date}` with unmatched SKUs.
+- **Verification**: query `branch_adjustments` where `loggedBy == "system (auto-sync)"` and `date == <yesterday>` — if docs exist, the sync ran. No docs = sync did not run.
+- **cron-job.org API key**: stored in macOS Keychain (service: `cronjob-org`, account: `chris@theblackbean.ph`)
+- **Manual trigger**: `curl -X GET https://inventory.theblackbean.ph/api/cron/storehub-sync` — syncs yesterday PHT
 
 ### Business Date vs. Calendar Date
 - **`businessDatePHT()`** in `src/app/stock/_lib/helpers.ts` — use this (not `todayPHT()`) for all stocktake writes and queries
