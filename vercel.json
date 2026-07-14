@@ -9,7 +9,7 @@
     },
     {
       "path": "/api/cron/storehub-sync",
-      "schedule": "0 16 * * *"
+      "schedule": "0 17 * * *"
     },
     {
       "path": "/api/cron/rollover",

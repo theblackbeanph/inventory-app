@@ -38,7 +38,9 @@ async function fetchStoreHub(path: string, branch: SyncBranch) {
 }
 
 function syncDatePHT(): string {
-  return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // Cron runs at 1:00 AM PHT — sync the previous calendar day's complete sales
+  const yesterdayPHT = Date.now() + 8 * 60 * 60 * 1000 - 24 * 60 * 60 * 1000;
+  return new Date(yesterdayPHT).toISOString().slice(0, 10);
 }
 
 async function syncBranch(branch: SyncBranch, date: string) {
