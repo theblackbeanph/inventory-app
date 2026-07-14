@@ -75,6 +75,7 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Salmon Fillet",           linkedSkus: ["MAIN04"] },
   { item: "Smoked Salmon",           linkedSkus: ["BREAK09", "EXT15", "BREAK16"] },
   { item: "Aburi Salmon",            linkedSkus: ["BREAK01", { sku: "PARTY01", qty: 3 }] },
+  { item: "Miso Butter Paste",       linkedSkus: ["BREAK01", { sku: "PARTY01", qty: 3 }] },
   { item: "Beef Tapa",               linkedSkus: ["BREAK05", { sku: "PARTY02", qty: 3 }, { sku: "PARTY03", qty: 2 }] },
   { item: "Beef Pares",              linkedSkus: ["BREAK04", "PSTA04", { sku: "PARTY06", qty: 3 }] },
   { item: "Buttermilk Chicken 300g", linkedSkus: ["MAIN01"] },

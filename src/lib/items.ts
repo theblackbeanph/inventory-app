@@ -36,7 +36,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Caramelized Onion",       category: "packed",  unit: "pc", reorderAt: 15, parLevel: 40,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Flatbread",               category: "packed",  unit: "pc", reorderAt: 2,  parLevel: 5,   packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Loco Moco Gravy",         category: "packed",  unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["MKT"], commissary: true },
-  { name: "Miso Butter Paste",       category: "packed",  unit: "pc", reorderAt: 25, parLevel: 80,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["MKT"], commissary: true },
+  { name: "Miso Butter Paste",       category: "packed",  unit: "pc", reorderAt: 25, parLevel: 80,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", branches: ["MKT", "BF"], commissary: true },
   { name: "Salted Egg Custard",      category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Salted Egg Sauce",        category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 20,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Squash Soup",             category: "packed",  unit: "pc", reorderAt: 5,  parLevel: 15,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
