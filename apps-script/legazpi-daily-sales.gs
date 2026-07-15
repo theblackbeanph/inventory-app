@@ -45,7 +45,7 @@ var CONFIG = {
     'Bank Transfer': 6,        // F
   },
   // Column G = Event: filled manually, intentionally untouched.
-  SC_COL: 8,                   // H — seniorDiscount + pwdDiscount combined
+  SC_COL: 8,                   // H — service charge (StoreHub `serviceCharge`)
   GROSS_COL: 9,                // I
   TZ: 'Asia/Manila',
 };
@@ -147,7 +147,9 @@ function fetchTransactions(date) {
 /**
  * Aggregate a day's transactions into sheet columns.
  * Valid = not cancelled; Sales add, Returns subtract (both from the payment
- * method column and from gross). SC = seniorDiscount + pwdDiscount combined.
+ * method column and from gross). SC = `serviceCharge` (10% of discounted
+ * subtotal when applied). Service charge is already embedded in `total`, so
+ * the SC column is a breakout of gross, not an add-on line.
  * payments[] supports split tenders; sum(payments[].amount) === total on
  * every valid sale, so columns B–F (+ unmatched) reconcile to Gross.
  */
@@ -164,7 +166,7 @@ function aggregate(txs) {
 
     txCount++;
     gross += sign * (t.total || 0);
-    sc += sign * ((t.seniorDiscount || 0) + (t.pwdDiscount || 0));
+    sc += sign * (t.serviceCharge || 0);
 
     var payments = t.payments || [];
     for (var j = 0; j < payments.length; j++) {
