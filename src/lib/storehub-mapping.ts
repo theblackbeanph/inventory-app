@@ -118,7 +118,7 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   // ── SUPPLIER — BF only ────────────────────────────────────────────────────
   { item: "Longganisa Duo",         linkedSkus: ["BREAK06", { sku: "PARTY03", qty: 2 }] },
   { item: "Wagyu Cubes",            linkedSkus: ["BREAK07", { sku: "PARTY12", qty: 3 }] },
-  { item: "Farmer's Ham",           linkedSkus: ["BREAK08"] },
+  { item: "Farmer's Ham",           linkedSkus: ["BREAK08", "BREAK10"] },
   { item: "Bacon Strip",            linkedSkus: ["APP05", { sku: "PARTY04", qty: 3 }, "BREAK10"] },
 ];
 
