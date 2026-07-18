@@ -83,10 +83,20 @@ interface Props {
   pullOuts:      PullOut[];
   deliveryNotes: DeliveryNote[];
   branch:        Branch;
+  department:    string;
   canOrder:      boolean;
 }
 
-export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }: Props) {
+export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, department, canOrder }: Props) {
+  const filteredPullOuts = useMemo(
+    () => pullOuts.filter(po => {
+      if (department === "all") return true;
+      const firstItem = po.items[0]?.item;
+      if (!firstItem) return true;
+      return (CATALOG_MAP.get(firstItem)?.department ?? "kitchen") === department;
+    }),
+    [pullOuts, department]
+  );
   const [view,     setView]     = useState<View>("list");
   const [selected, setSelected] = useState<PullOut | null>(null);
 
@@ -96,18 +106,18 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
   }, [tab]);
 
   const pending = useMemo(() =>
-    [...pullOuts.filter(p => p.status === "PENDING_REVIEW")]
+    [...filteredPullOuts.filter(p => p.status === "PENDING_REVIEW")]
       .sort((a, b) => b.id.localeCompare(a.id)),
-  [pullOuts]);
+  [filteredPullOuts]);
   const active  = useMemo(() =>
-    [...pullOuts.filter(p => ["DISPATCHED", "DISCREPANCY"].includes(p.status))]
+    [...filteredPullOuts.filter(p => ["DISPATCHED", "DISCREPANCY"].includes(p.status))]
       .sort((a, b) => b.id.localeCompare(a.id)),
-  [pullOuts]);
+  [filteredPullOuts]);
   const history = useMemo(() =>
-    [...pullOuts.filter(p =>
+    [...filteredPullOuts.filter(p =>
       ["RECEIVED", "DONE", "CANCELLED", "REJECTED", "DISPUTED", "SENT_BACK", "RESOLVED"].includes(p.status)
     )].sort((a, b) => b.id.localeCompare(a.id)),
-  [pullOuts]);
+  [filteredPullOuts]);
 
   const list = tab === "pending" ? pending : tab === "active" ? active : history;
 
@@ -115,7 +125,7 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, canOrder }
   function goBack()                { setSelected(null); setView("list"); }
 
   if (view === "new") {
-    return <NewOrderForm branch={branch} onBack={goBack} />;
+    return <NewOrderForm branch={branch} department={department} onBack={goBack} />;
   }
 
   if (view === "detail" && selected) {
@@ -872,7 +882,7 @@ interface StockContext {
   source: "count" | "expected" | "stock";
 }
 
-function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }) {
+function NewOrderForm({ branch, department, onBack }: { branch: Branch; department: string; onBack: () => void }) {
   const [selectedItems, setSelectedItems] = useState<Map<string, number>>(new Map());
   const [stockCtx,    setStockCtx]    = useState<Map<string, StockContext>>(new Map());
   const [loadingStock, setLoadingStock] = useState(true);
@@ -883,8 +893,8 @@ function NewOrderForm({ branch, onBack }: { branch: Branch; onBack: () => void }
   const [error,       setError]       = useState("");
 
   const branchItems = useMemo(
-    () => CATALOG.filter(i => i.commissary && (!i.branches || i.branches.includes(branch))),
-    [branch]
+    () => CATALOG.filter(i => i.commissary && i.department === department && (!i.branches || i.branches.includes(branch))),
+    [branch, department]
   );
   const availableItems = useMemo(
     () => branchItems.filter(i => !search || i.name.toLowerCase().includes(search.toLowerCase())),

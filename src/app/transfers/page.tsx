@@ -35,6 +35,7 @@ interface DisputeNotice {
 export default function TransfersPage() {
   const router = useRouter();
   const [branch,        setBranch]        = useState<Branch | null>(null);
+  const [department,    setDepartment]    = useState<string>("kitchen");
   const [canOrder,      setCanOrder]      = useState(false);
   const [tab,           setTab]           = useState<Tab>("pending");
   const [pullOuts,      setPullOuts]      = useState<PullOut[]>([]);
@@ -48,6 +49,7 @@ export default function TransfersPage() {
     if (!session) { router.replace("/login"); return; }
     if (session.department !== "kitchen" && session.department !== "dining") { router.replace("/stock"); return; }
     setBranch(session.branch);
+    setDepartment(session.department);
     setCanOrder(hasMinRole(session.role, "admin"));
   }, [router]);
 
@@ -225,7 +227,7 @@ export default function TransfersPage() {
       </div>
 
       <OrdersContent tab={tab} pullOuts={pullOuts} deliveryNotes={deliveryNotes}
-        branch={branch} canOrder={canOrder} />
+        branch={branch} department={department} canOrder={canOrder} />
 
       <BottomNav />
     </div>
