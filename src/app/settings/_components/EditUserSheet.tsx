@@ -15,12 +15,12 @@ interface Props {
   onDeleted: (uid: string) => void;
 }
 
-const ROLES: Role[]   = ["linecook", "admin", "superadmin"];
+const ROLES: Role[]   = ["staff", "admin", "superadmin"];
 const BRANCHES        = ["MKT", "BF", "both"] as const;
 const DEPARTMENTS     = ["kitchen", "bar", "cafe", "all"] as const;
 
 const ROLE_LABELS: Record<Role, string> = {
-  linecook:   "Linecook",
+  staff:      "Staff",
   admin:      "Admin",
   supervisor: "Supervisor",
   superadmin: "Superadmin",

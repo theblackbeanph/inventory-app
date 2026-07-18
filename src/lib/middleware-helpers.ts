@@ -8,13 +8,13 @@ interface MinimalSession {
 const PUBLIC_PATHS = ["/login"];
 
 const ROUTE_ROLES: { prefix: string; minRole: Role }[] = [
-  { prefix: "/transfers",  minRole: "linecook"   },
+  { prefix: "/transfers",  minRole: "staff"   },
   { prefix: "/production", minRole: "superadmin" },
-  { prefix: "/stock",      minRole: "linecook"   },
-  { prefix: "/history",    minRole: "linecook"   },
-  { prefix: "/pullout",    minRole: "linecook"   },
-  { prefix: "/delivery",   minRole: "linecook"   },
-  { prefix: "/dashboard",  minRole: "linecook"   },
+  { prefix: "/stock",      minRole: "staff"   },
+  { prefix: "/history",    minRole: "staff"   },
+  { prefix: "/pullout",    minRole: "staff"   },
+  { prefix: "/delivery",   minRole: "staff"   },
+  { prefix: "/dashboard",  minRole: "staff"   },
   { prefix: "/settings",   minRole: "admin"      },
   { prefix: "/sales",      minRole: "superadmin" },
 ];

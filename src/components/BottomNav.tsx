@@ -7,11 +7,11 @@ import { hasMinRole } from "@/lib/roles";
 import type { Role } from "@/lib/roles";
 
 const ALL_TABS: { href: string; icon: React.FC<IconProps>; label: string; minRole: Role }[] = [
-  { href: "/stock",      icon: StockIcon,      label: "Stock",      minRole: "linecook"   },
-  { href: "/transfers",  icon: TransfersIcon,  label: "Orders",     minRole: "linecook"   },
+  { href: "/stock",      icon: StockIcon,      label: "Stock",      minRole: "staff"   },
+  { href: "/transfers",  icon: TransfersIcon,  label: "Orders",     minRole: "staff"   },
   { href: "/production", icon: ProductionIcon, label: "Production", minRole: "superadmin" },
   { href: "/sales",      icon: SalesIcon,      label: "Sales",      minRole: "superadmin" },
-  { href: "/dashboard",  icon: DashboardIcon,  label: "Dashboard",  minRole: "linecook"   },
+  { href: "/dashboard",  icon: DashboardIcon,  label: "Dashboard",  minRole: "staff"   },
 ];
 
 interface IconProps { size: number; active: boolean }

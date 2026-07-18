@@ -2,14 +2,14 @@ import { describe, it, expect } from "vitest";
 import { hasMinRole, ROLE_ORDER } from "./roles";
 
 describe("hasMinRole", () => {
-  it("linecook satisfies linecook", () => {
-    expect(hasMinRole("linecook", "linecook")).toBe(true);
+  it("staff satisfies staff", () => {
+    expect(hasMinRole("staff", "staff")).toBe(true);
   });
-  it("linecook does not satisfy admin", () => {
-    expect(hasMinRole("linecook", "admin")).toBe(false);
+  it("staff does not satisfy admin", () => {
+    expect(hasMinRole("staff", "admin")).toBe(false);
   });
-  it("admin satisfies linecook", () => {
-    expect(hasMinRole("admin", "linecook")).toBe(true);
+  it("admin satisfies staff", () => {
+    expect(hasMinRole("admin", "staff")).toBe(true);
   });
   it("admin satisfies admin", () => {
     expect(hasMinRole("admin", "admin")).toBe(true);

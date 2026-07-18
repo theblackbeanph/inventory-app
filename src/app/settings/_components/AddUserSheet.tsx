@@ -13,12 +13,12 @@ interface Props {
   onCreated: (uid: string, userDoc: UserDoc & { uid: string }) => void;
 }
 
-const ROLES: Role[]        = ["linecook", "admin", "superadmin"];
+const ROLES: Role[]        = ["staff", "admin", "superadmin"];
 const BRANCHES             = ["MKT", "BF", "both"] as const;
 const DEPARTMENTS          = ["kitchen", "bar", "cafe", "all"] as const;
 
 const ROLE_LABELS: Record<Role, string> = {
-  linecook:   "Linecook",
+  staff:      "Staff",
   admin:      "Admin",
   supervisor: "Supervisor",
   superadmin: "Superadmin",
@@ -30,7 +30,7 @@ export default function AddUserSheet({ onClose, onCreated }: Props) {
   const [password, setPassword]       = useState("");
   const [branch, setBranch]           = useState<Branch | "both">("MKT");
   const [department, setDepartment]   = useState<Department | "all">("kitchen");
-  const [role, setRole]               = useState<Role>("linecook");
+  const [role, setRole]               = useState<Role>("staff");
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
   const submittingRef                 = useRef(false);
