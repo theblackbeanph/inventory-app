@@ -65,6 +65,19 @@ const MKT_MAPPING: StoreHubMappingEntry[] = [
   { item: "House Vinaigrette",       linkedSkus: ["62", "63", "64", "C24"],                           ordersPerPack: 25 },
   { item: "Vodka Sauce",             linkedSkus: ["P1", "P5"],                                        ordersPerPack: 6  },
   { item: "Ube Halaya",              linkedSkus: ["S3", "70"],                                        ordersPerPack: 7  },
+  // ── DINING ───────────────────────────────────────────────────────────
+  { item: "Classic Tiramisu",            linkedSkus: ["DSRT02", { sku: "DSRT08", qty: 12 }] },
+  { item: "Hojicha Tiramisu",            linkedSkus: ["DSRT03"] },
+  { item: "Classic Tiramisu Mascarpone", linkedSkus: ["DSRT02", { sku: "DSRT08", qty: 12 }], ordersPerPack: 12 },
+  { item: "Hojicha Tiramisu Mascarpone", linkedSkus: ["DSRT03"],                              ordersPerPack: 12 },
+  { item: "Tres Leches",                 linkedSkus: ["DSRT01", { sku: "DSRT07", qty: 6 }] },
+  { item: "Oventime Carrot Cake",        linkedSkus: ["DSRT04-01", { sku: "DSRT09", qty: 8 }] },
+  { item: "Brulee Basque Cheesecake",    linkedSkus: ["DSRT06"] },
+  { item: "Engkanto Craft Beer (Green Lava)",     linkedSkus: ["ALC01-Green Lava"] },
+  { item: "Engkanto Craft Beer (High Five)",      linkedSkus: ["ALC01-High Five"] },
+  { item: "Engkanto Craft Beer (Live It Up)",     linkedSkus: ["ALC01-Live It Up"] },
+  { item: "Engkanto Craft Beer (Mango Nation)",   linkedSkus: ["ALC01-Mango Nation"] },
+  { item: "Engkanto Craft Beer (Paint Me Purple)", linkedSkus: ["ALC01-Paint Me Purple"] },
 ];
 
 // BF uses unified SKU IDs (MAIN05, BREAK01, etc.) — MKT will migrate to these eventually.
@@ -123,6 +136,29 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Wagyu Cubes",            linkedSkus: ["BREAK07", { sku: "PARTY12", qty: 3 }] },
   { item: "Farmer's Ham",           linkedSkus: ["BREAK08", "BREAK10"] },
   { item: "Bacon Strip",            linkedSkus: ["APP05", { sku: "PARTY04", qty: 3 }, "BREAK10", { sku: "EXT14", qty: 2 }] },
+  // ── DINING ───────────────────────────────────────────────────────────
+  { item: "Classic Tiramisu",            linkedSkus: ["DSRT02", { sku: "DSRT08", qty: 12 }] },
+  { item: "Hojicha Tiramisu",            linkedSkus: ["DSRT03"] },
+  { item: "Classic Tiramisu Mascarpone", linkedSkus: ["DSRT02", { sku: "DSRT08", qty: 12 }], ordersPerPack: 12 },
+  { item: "Hojicha Tiramisu Mascarpone", linkedSkus: ["DSRT03"],                              ordersPerPack: 12 },
+  { item: "Tres Leches",                 linkedSkus: ["DSRT01", { sku: "DSRT07", qty: 6 }] },
+  { item: "Carrot Cake",                 linkedSkus: ["DSRT04", { sku: "DSRT09", qty: 8 }] },
+  { item: "Matilda",                     linkedSkus: ["DSRT05", { sku: "DSRT10", qty: 8 }] },
+  { item: "Engkanto Craft Beer (Green Lava)",      linkedSkus: ["ALC01-Green Lava"] },
+  { item: "Engkanto Craft Beer (High Five)",       linkedSkus: ["ALC01-High Five"] },
+  { item: "Engkanto Craft Beer (Live It Up)",      linkedSkus: ["ALC01-Live It Up"] },
+  { item: "Engkanto Craft Beer (Mango Nation)",    linkedSkus: ["ALC01-Mango Nation"] },
+  { item: "Engkanto Craft Beer (Paint Me Purple)", linkedSkus: ["ALC01-Paint Me Purple"] },
+  // ── DINING — BF only ──────────────────────────────────────────────────
+  { item: "Bubu Bar (Basic Bu)",              linkedSkus: ["DSRT11-Basic Bu"] },
+  { item: "Bubu Bar (Dark Chocolate Crunch)", linkedSkus: ["DSRT11-Dark Chocolate Crunch"] },
+  { item: "Bubu Bar (Fancy Pants)",           linkedSkus: ["DSRT11-Fancy Pants"] },
+  { item: "Bubu Bar (Golden Goodness)",       linkedSkus: ["DSRT11-Golden Goodness"] },
+  { item: "Bubu Bar (Nuts For You)",          linkedSkus: ["DSRT11-Nuts For You"] },
+  { item: "Bubu Bar (You Little Monkey)",     linkedSkus: ["DSRT11-You Little Monkey"] },
+  { item: "Bubu Bar (Coffee Cookie Trail)",   linkedSkus: ["DSRT11-Coffee Cookie Trail"] },
+  { item: "Bubu Bar (Cookies & Cream)",       linkedSkus: ["DSRT11-Cookies & Cream"] },
+  { item: "Bubu Bar (Pineapple Creamsicle)",  linkedSkus: ["DSRT11-Pineapple Creamsicle"] },
 ];
 
 const BRANCH_MAPPINGS: Record<string, StoreHubMappingEntry[]> = { MKT: MKT_MAPPING, BF: BF_MAPPING };

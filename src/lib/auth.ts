@@ -12,6 +12,7 @@ export const DEPARTMENT_LABELS: Record<Department, string> = {
   kitchen: "Kitchen",
   bar:     "Bar",
   cafe:    "Cafe",
+  dining:  "Dining",
 };
 
 export const BRANCH_POS_TYPE: Record<Branch, PosType> = {

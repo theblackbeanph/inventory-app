@@ -6,6 +6,7 @@ export const LOCATIONS = [
   { id: "front_kitchen", label: "Front Kitchen" },
   { id: "back_kitchen",  label: "Back Kitchen"  },
   { id: "storage",       label: "Storage"       },
+  { id: "dining",        label: "Dining"        },
 ] as const;
 
 export type LocationId = typeof LOCATIONS[number]["id"];
@@ -77,6 +78,33 @@ export const CATALOG: CatalogItem[] = [
   { name: "Pandesal",                category: "packed",  unit: "pc", reorderAt: 12, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Potato Buns",             category: "packed",  unit: "pc", reorderAt: 12, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Brioche Loaf",            category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  // ── DINING — COMMISSARY ──────────────────────────────────────────────
+  { name: "Classic Tiramisu",             category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "tray", orderUnitSize: 12, commissary: true },
+  { name: "Hojicha Tiramisu",             category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "tray", orderUnitSize: 12, commissary: true },
+  { name: "Classic Tiramisu Mascarpone",  category: "loose",   unit: "pack", reorderAt: 1, packSize: "1kg",  department: "dining", location: "dining", ordersPerPack: 12,                    commissary: true },
+  { name: "Hojicha Tiramisu Mascarpone",  category: "loose",   unit: "pack", reorderAt: 1, packSize: "1kg",  department: "dining", location: "dining", ordersPerPack: 12,                    commissary: true },
+  // ── DINING — SUPPLIER DESSERTS ───────────────────────────────────────
+  { name: "Tres Leches",                  category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "tray", orderUnitSize: 6  },
+  { name: "Carrot Cake",                  category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "cake", orderUnitSize: 8,  branches: ["BF"]  },
+  { name: "Oventime Carrot Cake",         category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "cake", orderUnitSize: 8,  branches: ["MKT"] },
+  { name: "Matilda",                      category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "cake", orderUnitSize: 8,  branches: ["BF"]  },
+  { name: "Brulee Basque Cheesecake",     category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "cake", orderUnitSize: 10, branches: ["MKT"] },
+  // ── DINING — ENGKANTO BEERS ────────────────────
+  { name: "Engkanto Craft Beer (Green Lava)",     category: "packed", unit: "pc", reorderAt: 1, packSize: "1 bottle", department: "dining", location: "dining", orderUnit: "case", orderUnitSize: 24 },
+  { name: "Engkanto Craft Beer (High Five)",      category: "packed", unit: "pc", reorderAt: 1, packSize: "1 bottle", department: "dining", location: "dining", orderUnit: "case", orderUnitSize: 24 },
+  { name: "Engkanto Craft Beer (Live It Up)",     category: "packed", unit: "pc", reorderAt: 1, packSize: "1 bottle", department: "dining", location: "dining", orderUnit: "case", orderUnitSize: 24 },
+  { name: "Engkanto Craft Beer (Mango Nation)",   category: "packed", unit: "pc", reorderAt: 1, packSize: "1 bottle", department: "dining", location: "dining", orderUnit: "case", orderUnitSize: 24 },
+  { name: "Engkanto Craft Beer (Paint Me Purple)", category: "packed", unit: "pc", reorderAt: 1, packSize: "1 bottle", department: "dining", location: "dining", orderUnit: "case", orderUnitSize: 24 },
+  // ── DINING — BUBU BARS (BF only) ──────────────────
+  { name: "Bubu Bar (Basic Bu)",              category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
+  { name: "Bubu Bar (Dark Chocolate Crunch)", category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
+  { name: "Bubu Bar (Fancy Pants)",           category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
+  { name: "Bubu Bar (Golden Goodness)",       category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
+  { name: "Bubu Bar (Nuts For You)",          category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
+  { name: "Bubu Bar (You Little Monkey)",     category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
+  { name: "Bubu Bar (Coffee Cookie Trail)",   category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
+  { name: "Bubu Bar (Cookies & Cream)",       category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
+  { name: "Bubu Bar (Pineapple Creamsicle)",  category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
 ];
 
 export const CATALOG_MAP = new Map(CATALOG.map(i => [i.name, i]));

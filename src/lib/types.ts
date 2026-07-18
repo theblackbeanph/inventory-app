@@ -1,7 +1,7 @@
 import type { Role } from "./roles";
 
 export type Branch = "MKT" | "BF";
-export type Department = "kitchen" | "bar" | "cafe";
+export type Department = "kitchen" | "bar" | "cafe" | "dining";
 export type ItemCategory = "portion" | "packed" | "loose" | "supplier";
 export type AdjustmentType = "in" | "out" | "waste" | "count" | "sales_import" | "correction";
 export type PosType = "csv" | "storehub";
@@ -16,9 +16,11 @@ export interface CatalogItem {
   packSize: string;
   department: Department;
   location: string;       // storage location — used for stocktake filters (e.g. "front_kitchen")
-  ordersPerPack?: number; // loose items only — orders needed to consume 1 pack
-  branches?: Branch[];    // if set, only these branches carry this item
-  commissary?: true;      // if set, item is supplied by commissary and appears in pull-out requests
+  ordersPerPack?: number;  // loose items only — orders needed to consume 1 pack
+  orderUnit?: string;      // display unit for ordering (e.g. "tray", "cake", "case")
+  orderUnitSize?: number;  // how many stock units per order unit (e.g. 1 tray = 12 pcs)
+  branches?: Branch[];     // if set, only these branches carry this item
+  commissary?: true;       // if set, item is supplied by commissary and appears in pull-out requests
 }
 
 export interface ParLevelItem {

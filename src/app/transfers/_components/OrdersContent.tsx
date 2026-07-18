@@ -369,15 +369,16 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
         const catalogItem = CATALOG_MAP.get(ri.item);
         if (!catalogItem || ri.receivedQty <= 0) continue;
         const dept = catalogItem.department;
+        const qty  = ri.receivedQty * (catalogItem.orderUnitSize ?? 1);
         batch.set(
           doc(db, COLS.branchStock, stockDocId(branch, dept, ri.item)),
-          { qty: increment(ri.receivedQty), lastUpdated: receivedAt, lastUpdatedBy: receivedBy },
+          { qty: increment(qty), lastUpdated: receivedAt, lastUpdatedBy: receivedBy },
           { merge: true },
         );
         const adjRef = doc(collection(db, COLS.adjustments));
         batch.set(adjRef, {
           id: adjRef.id, branch, department: dept, date: receivedAt,
-          item: ri.item, type: "in", qty: ri.receivedQty, loggedBy: receivedBy,
+          item: ri.item, type: "in", qty, loggedBy: receivedBy,
           note: "commissary transfer",
         });
       }
