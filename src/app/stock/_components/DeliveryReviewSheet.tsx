@@ -31,14 +31,18 @@ export function DeliveryReviewSheet({ items, stocks, deliveryCounts, deliveryDat
       {/* Item list */}
       <div>
         {entered.map(item => {
-          const qty = Number(deliveryCounts[item.name]);
+          const rawCount = Number(deliveryCounts[item.name]);
+          const qty = rawCount * (item.orderUnitSize ?? 1);
           const currentStock = stocks[item.name]?.qty ?? 0;
           const newStock = currentStock + qty;
+          const unitLabel = item.orderUnit
+            ? `${rawCount} ${item.orderUnit}${rawCount !== 1 ? "s" : ""} = ${qty} ${item.unit}s`
+            : item.packSize;
           return (
             <div key={item.name} style={{ padding: "12px 16px", borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>{item.name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{item.packSize}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{unitLabel}</div>
               </div>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <div style={{ textAlign: "right" }}>
