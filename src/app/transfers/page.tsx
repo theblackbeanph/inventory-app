@@ -46,7 +46,7 @@ export default function TransfersPage() {
   useEffect(() => {
     const session = getSession();
     if (!session) { router.replace("/login"); return; }
-    if (session.department !== "kitchen") { router.replace("/stock"); return; }
+    if (session.department !== "kitchen" && session.department !== "dining") { router.replace("/stock"); return; }
     setBranch(session.branch);
     setCanOrder(hasMinRole(session.role, "admin"));
   }, [router]);
