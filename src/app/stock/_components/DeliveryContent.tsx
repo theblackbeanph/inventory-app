@@ -110,7 +110,9 @@ export function DeliveryContent({ items, stocks, deliveryCounts, deliveryDate, c
             <div key={item.name} style={{ background: "#fff", padding: "12px 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, borderBottom: "1px solid var(--border)" }}>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontWeight: 600, fontSize: 14, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{item.name}</div>
-                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{item.packSize}</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>
+                  {item.orderUnit ? `1 ${item.orderUnit}` : item.packSize}
+                </div>
               </div>
               <input
                 type="number"

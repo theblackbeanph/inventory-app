@@ -382,7 +382,7 @@ export default function StockPage() {
       for (const item of deptCatalog) {
         const val = deliveryCounts[item.name];
         if (val === undefined || val === "") continue;
-        const qty = Number(val);
+        const qty = Number(val) * (item.orderUnitSize ?? 1);
         if (isNaN(qty) || qty <= 0) continue;
         const adjRef = doc(collection(db, COLS.adjustments));
         batch.set(adjRef, {
@@ -399,7 +399,7 @@ export default function StockPage() {
       for (const item of deptCatalog) {
         const val = deliveryCounts[item.name];
         if (val === undefined || val === "") continue;
-        const qty = Number(val);
+        const qty = Number(val) * (item.orderUnitSize ?? 1);
         if (!isNaN(qty) && qty > 0) newItems[item.name] = qty;
       }
       const existingItems = (deliveryAdjClose ?? deliveryClose)?.items ?? {};
