@@ -64,7 +64,7 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - Skipped entirely in local dev (SHA = `"dev"`)
 
 ### Auth — Resolved 2026-04-29
-- Branch now uses: **email/password Firebase Auth** — role system (superadmin/admin/linecook), `__identity` cookie, route-protection middleware
+- Branch now uses: **email/password Firebase Auth** — role system (superadmin/admin/staff), `__identity` cookie, route-protection middleware
 - Commissary uses: **email/password Firebase Auth**
 - Firestore security rules updated (`firestore.rules`) — branch collections open to any authenticated user, commissary writes restricted to known emails
 - Phase 2 can proceed: both apps use proper Firebase Auth, shared collections are accessible to both
@@ -73,13 +73,14 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 ### Role Permissions
 - **superadmin**: full access — all branches/departments, access to `/orders` and `/production`
 - **admin**: branch/department-scoped — daily inventory, stocktake submit/review, delivery entries, sales import (CSV/StoreHub), pull-out requests, tap-to-correct confirmed stocktake/delivery counts, access to `/orders`
-- **linecook**: branch/department-scoped — view inventory, enter stocktake counts, view orders and receive stock; cannot create new orders
+- **staff**: branch/department-scoped — view inventory, enter stocktake counts, view orders and receive stock; cannot create new orders
+- Role string in Firestore and code is `"staff"` (renamed from `"linecook"` on 2026-07-19). Display label is "Staff".
 
 ### Route Access
-- `/orders` — min role: `linecook` (all users can view/receive; creating new orders requires `admin+`)
+- `/orders` — min role: `staff` (all users can view/receive; creating new orders requires `admin+`)
 - `/production` — min role: `superadmin`
 - `/settings` — min role: `admin`
-- All other routes (`/stock`, `/history`, `/pullout`, `/delivery`, `/dashboard`) — min role: `linecook`
+- All other routes (`/stock`, `/history`, `/pullout`, `/delivery`, `/dashboard`) — min role: `staff`
 
 ### Stocktake Count Correction (2026-05-06)
 - Admin and superadmin can tap any item in a confirmed (`isLocked: true`) stocktake to correct its count
@@ -114,7 +115,32 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - Items restricted to MKT only (`branches: ["MKT"]`): House Vinaigrette, Kimchi, Maple Syrup, Marinara Sauce, Marinara Sauce (Blend), Truffle Pasta Sauce, Tomahawk Porkchop
 - BF StoreHub mapping: `BF_MAPPING` in `src/lib/storehub-mapping.ts` — party trays deduct qty:3; Breakfast Sampler (T03) deducts qty:2
 
-### Catalog — Last SKU Added (2026-05-29)
+### Catalog — Last Added (2026-07-19): Dining Department
+- **New department**: `"dining"` added to `Department` type and `DEPARTMENT_LABELS`. New location: `"dining"`.
+- **23 dining items** added to `src/lib/items.ts` — commissary desserts, supplier desserts, Engkanto beers, Bubu Bars (BF only).
+- **`orderUnit` / `orderUnitSize`** — two new optional fields on `CatalogItem`:
+  - `orderUnit`: display unit for ordering (e.g. `"tray"`, `"cake"`, `"case"`)
+  - `orderUnitSize`: how many stock units per order unit (e.g. 1 tray = 12 pcs)
+  - Used in `OrdersContent.tsx` auto-IN: `qty = receivedQty × (orderUnitSize ?? 1)` — branch stock is incremented in stock units, not order units
+  - Only affects the commissary transfer receive flow; supplier deliveries are entered manually in stock units
+
+### Dining — Transfer Conversion (commissary desserts)
+- Tiramisu is ordered in **trays**, tracked in **pcs** (slices). 1 tray = 12 pcs.
+- Commissary tracks in trays; branch tracks in pcs. Transfer doc carries the tray qty. Branch auto-IN multiplies: `trays × 12 = pcs added`.
+- Same pattern for all commissary desserts with `orderUnit`/`orderUnitSize` set.
+
+### Dining — Mascarpone (loose pack, commissary-supplied)
+- `Classic Tiramisu Mascarpone` and `Hojicha Tiramisu Mascarpone` — `category: "loose"`, `unit: "pack"`, `packSize: "1kg"`, `ordersPerPack: 12`, `commissary: true`
+- Deducted via StoreHub sales (same pattern as kitchen loose items): DSRT02 → Classic Tiramisu Mascarpone at `ordersPerPack: 12`; DSRT08 (whole tray, qty:12) also deducts 1 jar.
+- 1 jar = 12 tiramisu servings. Branch stocks jars, deduction accumulates per slice sold.
+
+### Dining — Carrot Cake Naming (two suppliers, same product)
+- **BF**: `"Carrot Cake"` — Flour Jar supplier, SKU `DSRT04`
+- **MKT**: `"Oventime Carrot Cake"` — Oventime supplier, SKU `DSRT04-01`
+- Different names required because `CATALOG_MAP` keys by item name — same name would cause one branch to silently shadow the other.
+- Whole cake: DSRT09 → `"Carrot Cake"` (BF mapping only); no whole variant for MKT.
+
+### Catalog — Previous Notable Addition (2026-05-29)
 - **Ube Halaya** — `loose`, 500g pack, `ordersPerPack: 7`, reorder at 2, back kitchen, commissary-supplied, all branches
 - MKT StoreHub mapping: SKUs `S3` (Ube Grilled Cheese) + `70` (Tomahawk Porkchop dish)
 - Reference: Portion Guide L-018, MKT Item Mapping #50
