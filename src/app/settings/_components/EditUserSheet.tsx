@@ -17,7 +17,7 @@ interface Props {
 
 const ROLES: Role[]   = ["staff", "admin", "superadmin"];
 const BRANCHES        = ["MKT", "BF", "both"] as const;
-const DEPARTMENTS     = ["kitchen", "bar", "cafe", "all"] as const;
+const DEPARTMENTS     = ["kitchen", "bar", "cafe", "dining", "all"] as const;
 
 const ROLE_LABELS: Record<Role, string> = {
   staff:      "Staff",
@@ -115,7 +115,7 @@ export default function EditUserSheet({ user, onClose, onUpdated, onDeleted }: P
         <Field label="Department">
           <SegmentedControl
             options={[...DEPARTMENTS]}
-            labels={{ kitchen: "Kitchen", bar: "Bar", cafe: "Cafe", all: "All" }}
+            labels={{ kitchen: "Kitchen", bar: "Bar", cafe: "Cafe", dining: "Dining", all: "All" }}
             value={department}
             onChange={v => setDepartment(v as Department | "all")}
           />

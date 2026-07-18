@@ -5,7 +5,7 @@ import type { Branch, Department, StockAdjustment, DailyBeginning, DailyClose, S
 import { CATALOG, CATALOG_MAP, beginningDocId, stockDocId } from "@/lib/items";
 
 const BRANCHES: Branch[] = ["MKT", "BF"];
-const DEPARTMENTS: Department[] = ["kitchen", "bar", "cafe"];
+const DEPARTMENTS: Department[] = ["kitchen", "bar", "cafe", "dining"];
 
 function phtToday(): string {
   return new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);

@@ -17,7 +17,7 @@ const BADGE: Record<string, { bg: string; color: string }> = {
 };
 
 const BRANCH_LABEL: Record<string, string> = { MKT: "Makati", BF: "BF Homes", both: "Both" };
-const DEPT_LABEL:   Record<string, string> = { kitchen: "Kitchen", bar: "Bar", cafe: "Cafe", all: "All" };
+const DEPT_LABEL:   Record<string, string> = { kitchen: "Kitchen", bar: "Bar", cafe: "Cafe", dining: "Dining", all: "All" };
 
 export default function UserManagement() {
   const [users, setUsers]           = useState<UserRow[]>([]);

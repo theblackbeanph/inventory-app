@@ -10,6 +10,7 @@ const DEPARTMENTS: { id: Department; desc: string }[] = [
   { id: "kitchen", desc: "Daily food inventory" },
   { id: "bar",     desc: "Daily bar inventory" },
   { id: "cafe",    desc: "Monthly cafe stock" },
+  { id: "dining",  desc: "Desserts & beverages" },
 ];
 
 export default function LoginPage() {
