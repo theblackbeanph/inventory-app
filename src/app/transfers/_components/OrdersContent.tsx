@@ -975,9 +975,14 @@ function NewOrderForm({ branch, department, onBack }: { branch: Branch; departme
         // packs are never auto-selected — team fills manually
         if (item.unit === "pack") continue;
 
-        const gap = parLevel - currentStock;
+        const gap           = parLevel - currentStock;
+        const orderUnitSize = item.orderUnitSize ?? 1;
         if (gap > 0) {
-          autoSelected.set(item.name, Math.ceil(gap / 5) * 5);
+          if (orderUnitSize > 1) {
+            autoSelected.set(item.name, Math.ceil(gap / orderUnitSize));
+          } else {
+            autoSelected.set(item.name, Math.ceil(gap / 5) * 5);
+          }
         }
       }
 
@@ -1014,9 +1019,13 @@ function NewOrderForm({ branch, department, onBack }: { branch: Branch; departme
         n.delete(name);
       } else {
         // default to suggested if available, else 1
-        const ctx = stockCtx.get(name);
-        const gap = ctx ? ctx.parLevel - ctx.currentStock : 0;
-        n.set(name, gap > 0 ? Math.ceil(gap / 5) * 5 : 1);
+        const ctx           = stockCtx.get(name);
+        const orderUnitSize = CATALOG_MAP.get(name)?.orderUnitSize ?? 1;
+        const gap           = ctx ? ctx.parLevel - ctx.currentStock : 0;
+        const suggested     = gap > 0
+          ? (orderUnitSize > 1 ? Math.ceil(gap / orderUnitSize) : Math.ceil(gap / 5) * 5)
+          : 1;
+        n.set(name, suggested);
       }
       return n;
     });
@@ -1120,10 +1129,18 @@ function NewOrderForm({ branch, department, onBack }: { branch: Branch; departme
       ) : (
         <div style={{ padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
           {availableItems.map(item => {
-            const qty        = selectedItems.get(item.name);
-            const isSelected = qty !== undefined;
-            const ctx        = stockCtx.get(item.name);
-            const isPack     = item.unit === "pack";
+            const qty           = selectedItems.get(item.name);
+            const isSelected    = qty !== undefined;
+            const ctx           = stockCtx.get(item.name);
+            const isPack        = item.unit === "pack";
+            const orderUnitSize = item.orderUnitSize ?? 1;
+            const orderUnit     = item.orderUnit;
+            const stockDisplay  = orderUnitSize > 1 && ctx
+              ? `${Math.round(ctx.currentStock / orderUnitSize)} ${orderUnit}s`
+              : ctx ? String(ctx.currentStock) : null;
+            const parDisplay    = orderUnitSize > 1 && ctx
+              ? `${Math.round(ctx.parLevel / orderUnitSize)} ${orderUnit}s`
+              : ctx ? String(ctx.parLevel) : null;
 
             return (
               <div
@@ -1149,23 +1166,28 @@ function NewOrderForm({ branch, department, onBack }: { branch: Branch; departme
                       color:       item.category === "portion" ? "#7C3AED" : item.category === "packed" ? "#2563EB" : "#059669",
                       borderRadius: 4, padding: "1px 5px", fontSize: 10, fontWeight: 600,
                     }}>{item.category}</span>
-                    {ctx && (
+                    {ctx && stockDisplay && (
                       <span style={{ color: ctx.currentStock <= 0 ? "#DC2626" : "var(--text-secondary)" }}>
-                        Stock: {ctx.currentStock}{!isPack && ` · Par: ${ctx.parLevel}`}
+                        Stock: {stockDisplay}{!isPack && parDisplay && ` · Par: ${parDisplay}`}
                       </span>
                     )}
                   </div>
                 </div>
                 {isSelected && (
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                    <button onClick={() => setQty(item.name, (qty ?? 1) - 1)} style={qtyBtnStyle}>−</button>
-                    <input
-                      type="number"
-                      value={qty}
-                      onChange={e => setQty(item.name, Math.max(0, Number(e.target.value)))}
-                      style={{ width: 50, textAlign: "center", border: "1.5px solid var(--border)", borderRadius: 8, padding: "6px 4px", fontSize: 16, fontWeight: 700, background: "var(--bg)", color: "var(--text)" }}
-                    />
-                    <button onClick={() => setQty(item.name, (qty ?? 0) + 1)} style={qtyBtnStyle}>+</button>
+                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 2 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                      <button onClick={() => setQty(item.name, (qty ?? 1) - 1)} style={qtyBtnStyle}>−</button>
+                      <input
+                        type="number"
+                        value={qty}
+                        onChange={e => setQty(item.name, Math.max(0, Number(e.target.value)))}
+                        style={{ width: 50, textAlign: "center", border: "1.5px solid var(--border)", borderRadius: 8, padding: "6px 4px", fontSize: 16, fontWeight: 700, background: "var(--bg)", color: "var(--text)" }}
+                      />
+                      <button onClick={() => setQty(item.name, (qty ?? 0) + 1)} style={qtyBtnStyle}>+</button>
+                    </div>
+                    {orderUnit && (
+                      <div style={{ fontSize: 10, color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em" }}>{orderUnit}{(qty ?? 0) !== 1 ? "s" : ""}</div>
+                    )}
                   </div>
                 )}
               </div>
