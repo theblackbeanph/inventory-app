@@ -98,6 +98,7 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Truffle Mushroom Paste",  linkedSkus: ["APP08"] },
   { item: "Squash Soup",             linkedSkus: ["APP04"] },
   { item: "Tuna Spread",             linkedSkus: ["SW04"] },
+  { item: "Burrata",                 linkedSkus: ["FLATB02", "PSTA09"] },
   { item: "Flatbread",               linkedSkus: ["FLATB01", "FLATB02"] },
   { item: "Tomahawk Porkchop",       linkedSkus: ["MAIN09"] },
   { item: "Salted Egg Sauce",        linkedSkus: ["PSTA05", { sku: "PARTY08", qty: 3 }] },
