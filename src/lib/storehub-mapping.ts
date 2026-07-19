@@ -78,6 +78,8 @@ const MKT_MAPPING: StoreHubMappingEntry[] = [
   { item: "Engkanto Craft Beer (Live It Up)",     linkedSkus: ["ALC01-Live It Up"] },
   { item: "Engkanto Craft Beer (Mango Nation)",   linkedSkus: ["ALC01-Mango Nation"] },
   { item: "Engkanto Craft Beer (Paint Me Purple)", linkedSkus: ["ALC01-Paint Me Purple"] },
+  { item: "Bottled Water",   linkedSkus: ["NC11"] },
+  { item: "Sparkling Water", linkedSkus: ["NC14"] },
 ];
 
 // BF uses unified SKU IDs (MAIN05, BREAK01, etc.) — MKT will migrate to these eventually.
@@ -159,6 +161,9 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Bubu Bar (Coffee Cookie Trail)",   linkedSkus: ["DSRT11-Coffee Cookie Trail"] },
   { item: "Bubu Bar (Cookies & Cream)",       linkedSkus: ["DSRT11-Cookies & Cream"] },
   { item: "Bubu Bar (Pineapple Creamsicle)",  linkedSkus: ["DSRT11-Pineapple Creamsicle"] },
+  { item: "Bottled Water", linkedSkus: ["NC11"] },
+  { item: "Coke",          linkedSkus: ["NC12"] },
+  { item: "Coke Zero",     linkedSkus: ["NC13"] },
 ];
 
 const BRANCH_MAPPINGS: Record<string, StoreHubMappingEntry[]> = { MKT: MKT_MAPPING, BF: BF_MAPPING };

@@ -105,6 +105,11 @@ export const CATALOG: CatalogItem[] = [
   { name: "Bubu Bar (Coffee Cookie Trail)",   category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
   { name: "Bubu Bar (Cookies & Cream)",       category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
   { name: "Bubu Bar (Pineapple Creamsicle)",  category: "packed", unit: "pc", reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", branches: ["BF"] },
+  // ── DINING — DRINKS ─────────────────────────────────────────────
+  { name: "Bottled Water",   category: "packed", unit: "pc", reorderAt: 1, packSize: "1 bottle", department: "dining", location: "dining", orderUnit: "case", orderUnitSize: 24 },
+  { name: "Coke",            category: "packed", unit: "pc", reorderAt: 1, packSize: "1 can",    department: "dining", location: "dining", orderUnit: "case", orderUnitSize: 24, branches: ["BF"]  },
+  { name: "Coke Zero",       category: "packed", unit: "pc", reorderAt: 1, packSize: "1 can",    department: "dining", location: "dining", orderUnit: "case", orderUnitSize: 24, branches: ["BF"]  },
+  { name: "Sparkling Water", category: "packed", unit: "pc", reorderAt: 1, packSize: "1 bottle", department: "dining", location: "dining",                                       branches: ["MKT"] },
 ];
 
 export const CATALOG_MAP = new Map(CATALOG.map(i => [i.name, i]));
