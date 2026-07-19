@@ -162,7 +162,7 @@ const BF_MAPPING: StoreHubMappingEntry[] = [
   { item: "Bubu Bar (Cookies & Cream)",       linkedSkus: ["DSRT11-Cookies & Cream"] },
   { item: "Bubu Bar (Pineapple Creamsicle)",  linkedSkus: ["DSRT11-Pineapple Creamsicle"] },
   { item: "Bottled Water", linkedSkus: ["NC11"] },
-  { item: "Coke",          linkedSkus: ["NC12"] },
+  { item: "Coke Regular",  linkedSkus: ["NC12"] },
   { item: "Coke Zero",     linkedSkus: ["NC13"] },
 ];
 
