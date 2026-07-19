@@ -310,8 +310,9 @@ const BRANCHES: Branch[] = ["MKT", "BF"];
 
 export default function SalesPage() {
   const router = useRouter();
-  const [authed, setAuthed]   = useState(false);
-  const [view, setView]       = useState<View>("ALL");
+  const [authed, setAuthed]         = useState(false);
+  const [isSuperadmin, setIsSuperadmin] = useState(false);
+  const [view, setView]             = useState<View>("ALL");
   const [date, setDate]       = useState<string>(businessDatePHT());
   const [cache, setCache]     = useState<Record<string, DashboardData | null>>({});
   const [loading, setLoading] = useState(false);
@@ -337,7 +338,12 @@ export default function SalesPage() {
   useEffect(() => {
     const session = getSession();
     if (!session) { router.replace("/login"); return; }
-    if (!hasMinRole(session.role, "superadmin")) { router.replace("/stock"); return; }
+    if (!hasMinRole(session.role, "admin")) { router.replace("/stock"); return; }
+    if (session.role === "superadmin") {
+      setIsSuperadmin(true);
+    } else {
+      setView(session.branch);
+    }
     setAuthed(true);
   }, [router]);
 
@@ -474,27 +480,29 @@ export default function SalesPage() {
           />
         </div>
 
-        {/* Pills */}
-        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
-          {(["ALL", ...BRANCHES] as View[]).map(v => {
-            const active = view === v;
-            return (
-              <button
-                key={v}
-                onClick={() => setView(v)}
-                style={{
-                  borderRadius: 999, padding: "5px 14px", fontSize: 12, cursor: "pointer",
-                  fontWeight: active ? 600 : 400,
-                  background: active ? "#1A1A1A" : "#FFFFFF",
-                  color: active ? "#FFFFFF" : "var(--text-secondary)",
-                  border: active ? "1px solid #1A1A1A" : "1px solid var(--border)",
-                }}
-              >
-                {v === "ALL" ? "Both" : v}
-              </button>
-            );
-          })}
-        </div>
+        {/* Pills — superadmin only */}
+        {isSuperadmin && (
+          <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+            {(["ALL", ...BRANCHES] as View[]).map(v => {
+              const active = view === v;
+              return (
+                <button
+                  key={v}
+                  onClick={() => setView(v)}
+                  style={{
+                    borderRadius: 999, padding: "5px 14px", fontSize: 12, cursor: "pointer",
+                    fontWeight: active ? 600 : 400,
+                    background: active ? "#1A1A1A" : "#FFFFFF",
+                    color: active ? "#FFFFFF" : "var(--text-secondary)",
+                    border: active ? "1px solid #1A1A1A" : "1px solid var(--border)",
+                  }}
+                >
+                  {v === "ALL" ? "Both" : v}
+                </button>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div style={{ padding: "14px 14px 0" }}>

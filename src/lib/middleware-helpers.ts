@@ -16,7 +16,7 @@ const ROUTE_ROLES: { prefix: string; minRole: Role }[] = [
   { prefix: "/delivery",   minRole: "staff"   },
   { prefix: "/dashboard",  minRole: "staff"   },
   { prefix: "/settings",   minRole: "admin"      },
-  { prefix: "/sales",      minRole: "superadmin" },
+  { prefix: "/sales",      minRole: "admin" },
 ];
 
 export function getRedirectPath(

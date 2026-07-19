@@ -23,8 +23,8 @@ describe("getRedirectPath", () => {
   it("does not redirect /login (public path)", () => {
     expect(getRedirectPath(null, "/login")).toBeNull();
   });
-  it("redirects admin from /sales to /stock", () => {
-    expect(getRedirectPath({ role: "admin" }, "/sales")).toBe("/stock");
+  it("allows admin to access /sales", () => {
+    expect(getRedirectPath({ role: "admin" }, "/sales")).toBeNull();
   });
   it("redirects staff from /sales to /stock", () => {
     expect(getRedirectPath({ role: "staff" }, "/sales")).toBe("/stock");

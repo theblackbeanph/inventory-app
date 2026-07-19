@@ -41,13 +41,22 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **Discrepancy handling**: commissary adjusts their inventory + notifies branch; branch re-requests if replacement needed; no auto-replacement sends from commissary
 - **Cutover strategy**: cutover is complete — old commissary manual pull-out flow removed; ActionSheet Pull Out is now the only commissary entry point
 
-### Cron Jobs — Auto Sales Sync (2026-07-14)
-- **Scheduler**: cron-job.org (job ID: 8090135) — NOT Vercel crons. Vercel crons are defined in `vercel.json` but never fire on the Hobby plan. Do not rely on Vercel to trigger cron routes.
-- **Schedule**: daily at **1:00 AM PHT (17:00 UTC)** — 1 hour after the cafe closes at midnight PHT
-- **Endpoint**: `GET /api/cron/storehub-sync` — no auth required (`CRON_SECRET` not set; `if (process.env.CRON_SECRET && ...)` check is skipped)
-- **Date logic**: `syncDatePHT()` in the route returns **yesterday's PHT date** (subtracts 24h before computing the PHT date). At 1am PHT, "yesterday" = the full business day that just closed. Do NOT change this to return today's date.
+### Cron Jobs (2026-07-14 / 2026-07-19)
+> **Vercel crons are defined in `vercel.json` but NEVER fire on the Hobby plan. All cron routes must be registered on cron-job.org.**
+
+#### StoreHub Auto Sync (job ID: 8090135)
+- **Schedule**: daily at **1:00 AM PHT (17:00 UTC)**
+- **Endpoint**: `GET /api/cron/storehub-sync` — no auth required
+- **Date logic**: `syncDatePHT()` returns yesterday's PHT date. At 1am PHT, "yesterday" = the full business day that just closed. Do NOT change this.
 - **Firestore writes**: `branch_adjustments` docs with `type: "sales_import"` and `loggedBy: "system (auto-sync)"`. Doc ID pattern: `storehub__{branch}__kitchen__{date}__{itemSlug}`. Also writes `storehubUnmatched/{branch}__{date}` with unmatched SKUs.
-- **Verification**: query `branch_adjustments` where `loggedBy == "system (auto-sync)"` and `date == <yesterday>` — if docs exist, the sync ran. No docs = sync did not run.
+- **Verification**: query `branch_adjustments` where `loggedBy == "system (auto-sync)"` and `date == <yesterday>` — if docs exist, the sync ran.
+
+#### Daily Rollover (job ID: 8117880)
+- **Schedule**: daily at **2:00 AM PHT (18:00 UTC)** — 1 hour after storehub-sync
+- **Endpoint**: `GET /api/cron/rollover` — no auth required
+- **What it does**: for each branch/dept, if no manual stocktake was submitted for yesterday → auto-closes with expected values (BEG + IN - OUT), then carries end counts as today's `dailyBeginning`. If a manual stocktake was already submitted, it just reads its end counts and carries them forward.
+- **Why it matters**: the manual stocktake submit also writes next-day `dailyBeginning`, so on days when the team does a stocktake the rollover is redundant. But if a stocktake is skipped, the rollover is the only thing that propagates BEG to the next day. Without this job, skipping one night = all dashes in BEG the next morning.
+- **Verification**: check for a `dailyClose` doc `{branch}__{dept}__{yesterday}` with `countType: "system"` — if present, the auto-close ran.
 - **cron-job.org API key**: stored in macOS Keychain (service: `cronjob-org`, account: `chris@theblackbean.ph`)
 - **Manual trigger**: `curl -X GET https://inventory.theblackbean.ph/api/cron/storehub-sync` — syncs yesterday PHT
 
@@ -71,8 +80,8 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **`auth` is exported from `src/lib/firebase.ts`** — any client component that writes to Firestore must `await auth.authStateReady()` before the write, otherwise Firebase Auth may not have restored its session yet and the write will be rejected with PERMISSION_DENIED
 
 ### Role Permissions
-- **superadmin**: full access — all branches/departments, access to `/orders` and `/production`
-- **admin**: branch/department-scoped — daily inventory, stocktake submit/review, delivery entries, sales import (CSV/StoreHub), pull-out requests, tap-to-correct confirmed stocktake/delivery counts, access to `/orders`
+- **superadmin**: full access — all branches/departments, access to `/orders`, `/production`, and `/sales` (both-branch view)
+- **admin**: branch/department-scoped — daily inventory, stocktake submit/review, delivery entries, sales import (CSV/StoreHub), pull-out requests, tap-to-correct confirmed stocktake/delivery counts, access to `/orders` and `/sales` (own branch only — branch switcher pills hidden)
 - **staff**: branch/department-scoped — view inventory, enter stocktake counts, view orders and receive stock; cannot create new orders
 - Role string in Firestore and code is `"staff"` (renamed from `"linecook"` on 2026-07-19). Display label is "Staff".
 
@@ -80,6 +89,7 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - `/orders` — min role: `staff` (all users can view/receive; creating new orders requires `admin+`)
 - `/production` — min role: `superadmin`
 - `/settings` — min role: `admin`
+- `/sales` — min role: `admin`; superadmin sees both-branch switcher, admin sees their assigned branch only (view locked, no pills)
 - All other routes (`/stock`, `/history`, `/pullout`, `/delivery`, `/dashboard`) — min role: `staff`
 
 ### Stocktake Count Correction (2026-05-06)
