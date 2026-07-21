@@ -183,6 +183,15 @@ export function allMappedSkus(branch: string): Set<string> {
   return skus;
 }
 
+// All item names with a StoreHub mapping for a given branch (for filtering dashboard variance)
+export function allMappedItems(branch: string): Set<string> {
+  const items = new Set<string>();
+  for (const entry of getMappingForBranch(branch)) {
+    items.add(entry.item);
+  }
+  return items;
+}
+
 // Apply mapping: soldBySkuMap is { sku → qty sold }
 export function applyStoreHubMapping(
   soldBySkuMap: Record<string, number>,

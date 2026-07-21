@@ -12,6 +12,7 @@ import {
   type ItemSummary,
 } from "@/app/dashboard/_lib/variance";
 import { BRANCH_LABELS } from "@/lib/auth";
+import { allMappedItems } from "@/lib/storehub-mapping";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -380,12 +381,14 @@ export function VarianceReport({ branch, department }: {
     [adjustments, beginnings, allDates],
   );
 
+  const trackedItems = useMemo(() => allMappedItems(branch), [branch]);
+
   const filteredSummaries = useMemo(() => {
-    let filtered = rawSummaries.filter(s => Math.abs(s.periodVariance) >= threshold);
+    let filtered = rawSummaries.filter(s => trackedItems.has(s.item) && Math.abs(s.periodVariance) >= threshold);
     if (direction === "loss") filtered = filtered.filter(s => s.periodVariance < 0);
     if (direction === "surplus") filtered = filtered.filter(s => s.periodVariance > 0);
     return filtered;
-  }, [rawSummaries, threshold, direction]);
+  }, [rawSummaries, trackedItems, threshold, direction]);
 
   useEffect(() => {
     if (selectedItem && !filteredSummaries.find(s => s.item === selectedItem.item)) {
@@ -508,7 +511,7 @@ export function VarianceReport({ branch, department }: {
 
             {/* Loss Summary — for month-end charges */}
             {(() => {
-              const lossItems = rawSummaries.filter(s => s.periodVariance < 0);
+              const lossItems = rawSummaries.filter(s => trackedItems.has(s.item) && s.periodVariance < 0);
               return (
                 <div style={{ marginTop: 24 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>

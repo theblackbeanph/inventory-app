@@ -78,6 +78,9 @@ export const CATALOG: CatalogItem[] = [
   { name: "Pandesal",                category: "packed",  unit: "pc", reorderAt: 12, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Potato Buns",             category: "packed",  unit: "pc", reorderAt: 12, packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
   { name: "Brioche Loaf",            category: "packed",  unit: "pc", reorderAt: 3,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen" },
+  // ── MKT-ONLY — count only, no sales deduction ────────────────────────
+  { name: "Multi-grain Rice", category: "packed", unit: "pc", reorderAt: 5, packSize: "1 pc", department: "kitchen", location: "back_kitchen", branches: ["MKT"] },
+  { name: "Quinoa",           category: "packed", unit: "pc", reorderAt: 5, packSize: "1 pc", department: "kitchen", location: "back_kitchen", branches: ["MKT"] },
   // ── DINING — COMMISSARY ──────────────────────────────────────────────
   { name: "Classic Tiramisu",             category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "tray", orderUnitSize: 12, commissary: true },
   { name: "Hojicha Tiramisu",             category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "tray", orderUnitSize: 12, commissary: true },
