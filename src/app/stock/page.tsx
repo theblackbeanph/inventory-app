@@ -162,15 +162,27 @@ export default function StockPage() {
             firestoreCounts[item] = String(qty);
           }
         }
-        const lsRaw = localStorage.getItem(`stocktake_counts__${branch}__${department}__${stocktakeDate}`);
-        const localCounts: Record<string, string> = lsRaw ? JSON.parse(lsRaw) : {};
-        const merged = { ...firestoreCounts, ...localCounts };
-        if (Object.keys(merged).length > 0) setEndCounts(merged);
+        // Merge Firestore drafts into current state; prev (from localStorage, loaded below) wins.
+        if (Object.keys(firestoreCounts).length > 0) {
+          setEndCounts(prev => ({ ...firestoreCounts, ...prev }));
+        }
       }
       setDrafts(map);
     });
 
     return () => { unsubAdj(); unsubBeg(); unsubClose(); unsubDrafts(); };
+  }, [branch, department, stocktakeDate]);
+
+  // Restore localStorage immediately when branch/dept/date are known — independent of
+  // Firestore snapshot so staff (or any role) recover drafts even if the snapshot is slow.
+  useEffect(() => {
+    if (!branch || !department) return;
+    try {
+      const lsRaw = localStorage.getItem(`stocktake_counts__${branch}__${department}__${stocktakeDate}`);
+      if (!lsRaw) return;
+      const parsed: Record<string, string> = JSON.parse(lsRaw);
+      if (Object.keys(parsed).length > 0) setEndCounts(parsed);
+    } catch {}
   }, [branch, department, stocktakeDate]);
 
   useEffect(() => {
