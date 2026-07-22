@@ -9,7 +9,6 @@ export const maxDuration = 30;
 
 const BRANCHES = ["MKT", "BF"] as const;
 type SyncBranch = typeof BRANCHES[number];
-const DEPARTMENT = "kitchen" as const;
 const BASE_URL = "https://api.storehubhq.com";
 
 const CREDENTIALS: Record<SyncBranch, { user: string | undefined; pass: string | undefined }> = {
@@ -85,15 +84,16 @@ async function syncBranch(branch: SyncBranch, date: string) {
   for (const { item, qty, rawOrders } of matched) {
     const catalogItem = CATALOG_MAP.get(item);
     if (!catalogItem) continue;
-    const adjId = `storehub__${branch}__${DEPARTMENT}__${date}__${itemSlug(item)}`;
+    const dept = catalogItem.department;
+    const adjId = `storehub__${branch}__${dept}__${date}__${itemSlug(item)}`;
     batch.set(doc(db, COLS.adjustments, adjId), {
-      id: now, branch, department: DEPARTMENT, date, item,
+      id: now, branch, department: dept, date, item,
       type: "sales_import", qty, loggedBy: "system (auto-sync)",
       ...(rawOrders !== undefined && { rawOrders }),
     } as StockAdjustment);
-    const sid = stockDocId(branch, DEPARTMENT, item);
+    const sid = stockDocId(branch, dept, item);
     batch.set(doc(db, COLS.branchStock, sid), {
-      id: sid, branch, department: DEPARTMENT, item,
+      id: sid, branch, department: dept, item,
       category: catalogItem.category, unit: catalogItem.unit, qty: 0,
       reorderAt: catalogItem.reorderAt,
       lastUpdated: date, lastUpdatedBy: "system (auto-sync)",

@@ -13,6 +13,7 @@ import {
 } from "@/app/dashboard/_lib/variance";
 import { BRANCH_LABELS } from "@/lib/auth";
 import { allMappedItems } from "@/lib/storehub-mapping";
+import { CATALOG_MAP } from "@/lib/items";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -384,11 +385,15 @@ export function VarianceReport({ branch, department }: {
   const trackedItems = useMemo(() => allMappedItems(branch), [branch]);
 
   const filteredSummaries = useMemo(() => {
-    let filtered = rawSummaries.filter(s => trackedItems.has(s.item) && Math.abs(s.periodVariance) >= threshold);
+    let filtered = rawSummaries.filter(s =>
+      trackedItems.has(s.item) &&
+      CATALOG_MAP.get(s.item)?.department === department &&
+      Math.abs(s.periodVariance) >= threshold
+    );
     if (direction === "loss") filtered = filtered.filter(s => s.periodVariance < 0);
     if (direction === "surplus") filtered = filtered.filter(s => s.periodVariance > 0);
     return filtered;
-  }, [rawSummaries, trackedItems, threshold, direction]);
+  }, [rawSummaries, trackedItems, department, threshold, direction]);
 
   useEffect(() => {
     if (selectedItem && !filteredSummaries.find(s => s.item === selectedItem.item)) {
