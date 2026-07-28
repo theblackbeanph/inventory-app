@@ -664,7 +664,16 @@ function DiscrepancyDetail({ po, dn, branch, onBack, onUpdated }: {
         }
       });
 
-      batchW.update(doc(db, COLS.deliveryNotes, dn.id), { status: "RECEIVED" });
+      const resolvedReceivedItems = dn.items.map(it => ({
+        item: it.item,
+        unit: it.unit,
+        dispatchedQty: it.dispatchedQty,
+        receivedQty: it.dispatchedQty,
+      }));
+      batchW.update(doc(db, COLS.deliveryNotes, dn.id), {
+        status: "RECEIVED",
+        receivedItems: resolvedReceivedItems,
+      });
       batchW.update(doc(db, COLS.pullOuts, po.id), { status: "DONE", commissaryInvWritten: true });
       await batchW.commit();
       onUpdated({ ...po, status: "DONE" as PullOut["status"] });

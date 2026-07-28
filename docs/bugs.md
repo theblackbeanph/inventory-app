@@ -1,5 +1,22 @@
 # Bug Log — branch-inventory
 
+## [FIXED] Cancel Dispute leaves DN.receivedItems stale (PO shows 0 while stock has +N)
+**Date found:** 2026-07-28
+**Fixed:** 2026-07-28
+**File:** `src/app/transfers/_components/OrdersContent.tsx` (`cancelDispute`)
+
+### Symptom
+PO-26-0726-BF001 / DN-26-0727-BF002 showed Prosciutto `Dispatched: 10, Received: 0` (status Received), but BF/Kitchen Daily Inventory showed Prosciutto with +10 in the Delivery column and branchStock incremented by 10. Real-world: team marked Prosciutto missing on receipt, then found it later and tapped "Cancel Dispute".
+
+### Root cause
+`cancelDispute()` correctly wrote a `branch_adjustments {type:"in", note:"Dispute cancelled · <poRef>"}` doc and incremented `branchStock`, but only updated the delivery note's `status` field. `receivedItems[]` was left with the original (wrong) `receivedQty: 0` values, so every downstream reader of the DN (detail view, history) permanently shows the pre-dispute quantities.
+
+### Fix
+`cancelDispute` now writes `receivedItems` alongside `status` in the same batch, setting `receivedQty = dispatchedQty` for every item (matches the semantics of "accept dispatched quantities"). Preserves any per-item `note`.
+
+### Note
+Historical DNs already in `RECEIVED` state from prior cancelled disputes will still show the stale `receivedQty`. No backfill written — Prosciutto on DN-26-0727-BF002 will remain visually wrong until manually corrected in Firestore, if desired.
+
 ## [FIXED] Dashboard payment mix always showed 100% card
 **Date found:** 2026-07-07
 **Fixed:** 2026-07-07
