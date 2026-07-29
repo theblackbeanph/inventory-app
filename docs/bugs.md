@@ -1,5 +1,30 @@
 # Bug Log — branch-inventory
 
+## [FIXED] Rollover drops BEG for items not included in a partial manual stocktake
+**Date found:** 2026-07-29
+**Fixed:** 2026-07-29 (commit `09e67e7`)
+**File:** `src/app/api/cron/rollover/route.ts` (manual-close branch, lines ~156)
+
+### Symptom
+MKT / dining showed blank EXP for desserts on 2026-07-28 (BEG=—). Next day, mirror symptom on beers/water: BEG=— on 2026-07-29 → blank EXP. Only affected the dept-item combo not covered by that day's stocktake. Reported by Chris.
+
+### Root cause
+When a `daily_close` doc exists for a department, the rollover takes the "already manually closed" branch and only carries forward items listed in `existingClose.items`. If the team stocktakes a department in shifts (e.g. beers Monday, desserts Tuesday), the un-counted items silently drop their BEG the next day — no warning, no log, just "—" until the next full count. Auto-close (no manual close doc) doesn't have this problem — it builds `itemsWithData` from prior BEGs + adjustments and carries all of them.
+
+Trace confirmed in Firestore:
+- July 27 close (Kent) = beers/water only → July 28 desserts BEG dropped
+- July 28 close (Kent) = 7 desserts only → July 29 beers/water BEG dropped
+
+### Fix
+In the manual-close branch, after reading `endCounts` from `existingClose.items`, iterate items with prior BEG or adjustments yesterday that weren't in the close and fill `endCounts[item] = Math.max(0, beg + inQty - outQty)`. Same fallback formula auto-close uses. Log line now reports `filled N missing items` when this triggers.
+
+### Backfill
+July 29 MKT dining beer/water BEG seeded via `scripts/_seed-mkt-dining-beg-2026-07-29.mjs` (7 docs). Historical July 28 EXP blanks were not backfilled — cosmetic only, no math consequence.
+
+### Watch out
+- The same shape could affect any dept with sub-team stocktakes (bar shifts, kitchen prep vs line).
+- Fix only kicks in on the 2am PHT rollover — for a same-day fix (e.g. team notices BEG missing this morning), the seed pattern in `_seed-mkt-dining-beg-2026-07-29.mjs` is the template.
+
 ## [FIXED] Cancel Dispute leaves DN.receivedItems stale (PO shows 0 while stock has +N)
 **Date found:** 2026-07-28
 **Fixed:** 2026-07-28
