@@ -1,12 +1,30 @@
 # Bug Log — branch-inventory
 
+## Index
+
+| Date | Status | Title | File |
+|---|---|---|---|
+| 2026-07-29 | [FIXED] `09e67e7` | Rollover drops BEG for items not in partial manual stocktake | `api/cron/rollover/route.ts` |
+| 2026-07-28 | [FIXED] `35907aa` | Cancel Dispute leaves DN.receivedItems stale | `transfers/_components/OrdersContent.tsx` |
+| 2026-07-07 | [FIXED] `24d2136` | Dashboard payment mix always showed 100% card | `api/storehub/dashboard/route.ts` |
+| 2026-07-07 | [FIXED] `6b8e810` | BF StoreHub sync undercounts sales (`includeOnline` default) | `api/storehub/*`, `lib/storehub-mapping.ts` |
+| 2026-07-02 | [FIXED] `e1a67c1`, `2efbf87` | Daily/dashboard END ignores tap-to-correct adjustments | `stock/_lib/helpers.ts`, `dashboard/_lib/variance.ts` |
+| 2026-07-02 | [OPEN] | NewOrderForm auto-fill ignores tap-to-correct adjustments | `transfers/_components/OrdersContent.tsx` |
+
+## Entry template
+
+When logging a bug, include: **Date found**, **Fixed date + commit SHA** (or **[OPEN]**), **File(s)**, **Reported by / How found**, **Symptom**, **Root cause** (including dead-end hypotheses ruled out), **Fix**, **How to verify** (concrete command or Firestore query), optional **Backfill / Watch out / Still open**. Log [OPEN] at the moment the mechanism is confirmed — don't wait for the fix.
+
+---
+
 ## [FIXED] Rollover drops BEG for items not included in a partial manual stocktake
 **Date found:** 2026-07-29
 **Fixed:** 2026-07-29 (commit `09e67e7`)
 **File:** `src/app/api/cron/rollover/route.ts` (manual-close branch, lines ~156)
+**Reported by:** Chris — noticed blank EXP column on MKT/dining Daily tab for July 28 desserts, then mirror symptom on July 29 beers.
 
 ### Symptom
-MKT / dining showed blank EXP for desserts on 2026-07-28 (BEG=—). Next day, mirror symptom on beers/water: BEG=— on 2026-07-29 → blank EXP. Only affected the dept-item combo not covered by that day's stocktake. Reported by Chris.
+MKT / dining showed blank EXP for desserts on 2026-07-28 (BEG=—). Next day, mirror symptom on beers/water: BEG=— on 2026-07-29 → blank EXP. Only affected the dept-item combo not covered by that day's stocktake.
 
 ### Root cause
 When a `daily_close` doc exists for a department, the rollover takes the "already manually closed" branch and only carries forward items listed in `existingClose.items`. If the team stocktakes a department in shifts (e.g. beers Monday, desserts Tuesday), the un-counted items silently drop their BEG the next day — no warning, no log, just "—" until the next full count. Auto-close (no manual close doc) doesn't have this problem — it builds `itemsWithData` from prior BEGs + adjustments and carries all of them.
@@ -21,9 +39,33 @@ In the manual-close branch, after reading `endCounts` from `existingClose.items`
 ### Backfill
 July 29 MKT dining beer/water BEG seeded via `scripts/_seed-mkt-dining-beg-2026-07-29.mjs` (7 docs). Historical July 28 EXP blanks were not backfilled — cosmetic only, no math consequence.
 
+### How to verify
+Query Firestore for the day after a partial stocktake and confirm every item that had prior-day activity now has a `daily_beginning` doc:
+```
+where("branch","==",<BRANCH>) where("department","==",<DEPT>) where("date","==",<TODAY>)
+```
+Doc count should equal the set of items with (yesterday's BEG ∪ yesterday's adjustments). Also inspect rollover route log for `filled N missing items` — that's the new fallback firing.
+
 ### Watch out
 - The same shape could affect any dept with sub-team stocktakes (bar shifts, kitchen prep vs line).
 - Fix only kicks in on the 2am PHT rollover — for a same-day fix (e.g. team notices BEG missing this morning), the seed pattern in `_seed-mkt-dining-beg-2026-07-29.mjs` is the template.
+
+## [OPEN] NewOrderForm auto-fill ignores tap-to-correct adjustments when computing current stock
+**Date found:** 2026-07-02 (identified in tap-to-correct fix's "Still open" note)
+**Status:** OPEN — deferred; team reviews order quantities before submit
+**File:** `src/app/transfers/_components/OrdersContent.tsx` (`NewOrderForm`, ~line 951)
+
+### Symptom
+On new-order auto-fill, the "current stock" figure that drives auto-selected quantities is computed only from `type: "count"` adjustments, ignoring `type: "correction"`. On days when a stocktake was corrected via tap-to-correct, the suggested order quantity is based on the pre-correction count.
+
+### Root cause
+Same blindness as the fixed `computeMetrics` and `computeVarianceRows` bugs — the reducer only handles `type: "count"` for `countMap`. Correction adjustments write `type: "correction"` and are silently skipped.
+
+### Proposed fix
+Add a `correctionMap` (parallel to `countMap`) and let it override count when present, mirroring the pattern in `stock/_lib/helpers.ts` `computeMetrics` (post-2026-07-02 fix).
+
+### Impact
+Low — auto-fill is a suggestion; team reviews quantities before submitting. Would matter more once auto-submit or bulk-order features arrive.
 
 ## [FIXED] Cancel Dispute leaves DN.receivedItems stale (PO shows 0 while stock has +N)
 **Date found:** 2026-07-28
@@ -97,4 +139,4 @@ Added a `latestCorrection` tracker (separate from `latestCount`) in `computeMetr
 - **`src/app/dashboard/_lib/variance.ts`** — `computeVarianceRows` and `computeItemSummaries` had the same blind spot. Both now track `type: "correction"` and use corrections over counts. Dashboard END values, period variance, status, trend, and CSV exports are now correct.
 
 ### Still open
-- **`src/app/transfers/_components/OrdersContent.tsx`** (`NewOrderForm`) — auto-fill prefill ignores corrections when computing current stock for order quantity suggestions. Minor — team reviews quantities before submitting.
+- **`src/app/transfers/_components/OrdersContent.tsx`** (`NewOrderForm`) — promoted to its own [OPEN] entry above.
