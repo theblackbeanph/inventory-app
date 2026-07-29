@@ -88,6 +88,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Hojicha Tiramisu Mascarpone",  category: "loose",   unit: "pack", reorderAt: 1, packSize: "1kg",  department: "dining", location: "dining", ordersPerPack: 12,                    commissary: true },
   // ── DINING — SUPPLIER DESSERTS ───────────────────────────────────────
   { name: "Tres Leches",                  category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "tray", orderUnitSize: 6  },
+  { name: "Confetti Cake",                category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "tray", orderUnitSize: 6, branches: ["MKT"] },
   { name: "Carrot Cake",                  category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "cake", orderUnitSize: 8,  branches: ["BF"]  },
   { name: "Oventime Carrot Cake",         category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "cake", orderUnitSize: 8,  branches: ["MKT"] },
   { name: "Matilda",                      category: "portion", unit: "pc",   reorderAt: 1, packSize: "1 pc", department: "dining", location: "dining", orderUnit: "cake", orderUnitSize: 8,  branches: ["BF"]  },

@@ -71,6 +71,7 @@ const MKT_MAPPING: StoreHubMappingEntry[] = [
   { item: "Classic Tiramisu Mascarpone", linkedSkus: ["DSRT02", { sku: "DSRT08", qty: 12 }], ordersPerPack: 12 },
   { item: "Hojicha Tiramisu Mascarpone", linkedSkus: ["DSRT03"],                              ordersPerPack: 12 },
   { item: "Tres Leches",                 linkedSkus: ["DSRT01", { sku: "DSRT07", qty: 6 }] },
+  { item: "Confetti Cake",               linkedSkus: ["DSRT12"] },
   { item: "Oventime Carrot Cake",        linkedSkus: ["DSRT04-01", { sku: "DSRT09", qty: 8 }] },
   { item: "Brulee Basque Cheesecake",    linkedSkus: ["DSRT06"] },
   { item: "Engkanto Craft Beer (Green Lava)",     linkedSkus: ["ALC01-Green Lava"] },
