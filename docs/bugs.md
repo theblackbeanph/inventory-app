@@ -69,7 +69,7 @@ Low — auto-fill is a suggestion; team reviews quantities before submitting. Wo
 
 ## [FIXED] Cancel Dispute leaves DN.receivedItems stale (PO shows 0 while stock has +N)
 **Date found:** 2026-07-28
-**Fixed:** 2026-07-28
+**Fixed:** 2026-07-28 (commit `35907aa`)
 **File:** `src/app/transfers/_components/OrdersContent.tsx` (`cancelDispute`)
 
 ### Symptom
@@ -86,7 +86,7 @@ Historical DNs already in `RECEIVED` state from prior cancelled disputes will st
 
 ## [FIXED] Dashboard payment mix always showed 100% card
 **Date found:** 2026-07-07
-**Fixed:** 2026-07-07
+**Fixed:** 2026-07-07 (commit `24d2136`)
 **File:** `src/app/api/storehub/dashboard/route.ts`
 
 ### Symptom
@@ -100,7 +100,7 @@ GrabFood transactions currently normalize to "card" — if a separate GrabFood s
 
 ## [FIXED] BF StoreHub sync undercounts sales — online orders excluded by API default
 **Date found:** 2026-07-06 (root cause found 2026-07-07)
-**Fixed:** 2026-07-07
+**Fixed:** 2026-07-07 (commit `6b8e810`)
 **Files:** `src/app/api/storehub/sales/route.ts`, `src/app/api/cron/storehub-sync/route.ts`, `src/app/api/storehub/dashboard/route.ts`, `src/lib/storehub-mapping.ts`
 
 ### Symptom
@@ -123,7 +123,7 @@ Appended `&includeOnline=true` to all three `/transactions` fetch sites (manual 
 
 ## [FIXED] Daily tab END column ignores tap-to-correct adjustments
 **Date found:** 2026-07-02  
-**Fixed:** 2026-07-02  
+**Fixed:** 2026-07-02 (commits `e1a67c1` — computeMetrics, `2efbf87` — dashboard variance)
 **File:** `src/app/stock/_lib/helpers.ts` → `computeMetrics`
 
 ### Symptom
