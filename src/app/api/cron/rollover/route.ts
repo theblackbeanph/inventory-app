@@ -163,7 +163,32 @@ export async function GET(request: NextRequest) {
             endCounts[item] = data.endCount;
           }
         }
-        log.push(`${branch}/${dept}: already closed (manual)`);
+
+        // Partial-stocktake safety: items with prior BEG or activity yesterday
+        // but not included in the manual close would otherwise lose their BEG
+        // carry-forward. Fall back to expected = max(0, beg + in - out).
+        const closedItems = new Set(Object.keys(existingClose?.items ?? {}));
+        const inQtyMap: Record<string, number> = {};
+        const outQtyMap: Record<string, number> = {};
+        for (const adj of deptAdj) {
+          if (adj.type === "in") inQtyMap[adj.item] = (inQtyMap[adj.item] ?? 0) + adj.qty;
+          else if (adj.type === "out" || adj.type === "waste" || adj.type === "sales_import") {
+            outQtyMap[adj.item] = (outQtyMap[adj.item] ?? 0) + adj.qty;
+          }
+        }
+        const beginnings: Record<string, number> = {};
+        for (const b of deptBeg) beginnings[b.item] = b.qty;
+        const itemsWithData = new Set([...deptBeg.map(b => b.item), ...deptAdj.map(a => a.item)]);
+        let filled = 0;
+        for (const item of itemsWithData) {
+          if (closedItems.has(item)) continue;
+          const beg = beginnings[item] ?? 0;
+          const inQ = inQtyMap[item] ?? 0;
+          const outQ = outQtyMap[item] ?? 0;
+          endCounts[item] = Math.max(0, beg + inQ - outQ);
+          filled++;
+        }
+        log.push(`${branch}/${dept}: already closed (manual)${filled > 0 ? `, filled ${filled} missing items` : ""}`);
       }
 
       // ── Clean up any leftover draft docs for this dept ──────────────────
