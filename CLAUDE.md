@@ -32,7 +32,7 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **BF**: StoreHub API — live; mapping in `src/lib/storehub-mapping.ts` (`BF_MAPPING`); credentials set in Vercel env (`STOREHUB_BF_USERNAME`, `STOREHUB_BF_PASSWORD`, `STOREHUB_BF_STORE_ID`)
 - CSV/Utak import (previously BF) has been removed — `csv-mapping.ts` and `CSVImportModal.tsx` are deleted
 - Both branches show "Sync sales" button unconditionally (no more `BRANCH_POS_TYPE` conditional)
-- SKU IDs are branch-specific for now (BF uses M-/B-/S-/PF-/T-/A-/EX- prefixes); unified SKU IDs across branches are a future milestone
+- BF uses unified SKU prefixes: MAIN, BREAK, PARTY, SW, PSTA, EXT (party trays deduct qty:3; PARTY03 Breakfast Sampler deducts qty:2). MKT is migrating to the same scheme — some new SKUs (e.g. PSTA11) are already shared across both stores.
 
 ### Phase 2 Transfer Flow Design (agreed 2026-04-28)
 - **Branch-only initiation**: all pull-out requests MUST come from the branch (`pull_outs` collection)

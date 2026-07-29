@@ -14,6 +14,7 @@ interface StoreHubMappingEntry {
 const MKT_MAPPING: StoreHubMappingEntry[] = [
   // ── PORTIONS ─────────────────────────────────────────────────────────────
   { item: "Cobbler",                 linkedSkus: ["66", { sku: "156", qty: 3 }, "B5"] },
+  { item: "Meatballs",               linkedSkus: ["PSTA11"] },
   { item: "Smoked Salmon",           linkedSkus: ["63", "175", "160"] },
   { item: "Aburi Salmon",            linkedSkus: ["53", { sku: "150", qty: 3 }] },
   { item: "Beef Tapa",               linkedSkus: ["58", { sku: "151", qty: 3 }] },
@@ -88,6 +89,7 @@ const MKT_MAPPING: StoreHubMappingEntry[] = [
 const BF_MAPPING: StoreHubMappingEntry[] = [
   // ── PORTIONS ─────────────────────────────────────────────────────────────
   { item: "Cobbler",                 linkedSkus: ["MAIN05", { sku: "PARTY05", qty: 3 }] },
+  { item: "Meatballs",               linkedSkus: ["PSTA11"] },
   { item: "Salmon Fillet",           linkedSkus: ["MAIN04"] },
   { item: "Smoked Salmon",           linkedSkus: ["BREAK09", "EXT15", "BREAK16"] },
   { item: "Aburi Salmon",            linkedSkus: ["BREAK01", { sku: "PARTY01", qty: 3 }] },

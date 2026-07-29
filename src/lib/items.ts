@@ -24,6 +24,7 @@ export const CATALOG: CatalogItem[] = [
   { name: "Buttermilk Chicken 300g", category: "portion", unit: "pc", reorderAt: 15, parLevel: 40,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Chicken BBQ",             category: "portion", unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Cobbler",                 category: "portion", unit: "pc", reorderAt: 25, parLevel: 80,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
+  { name: "Meatballs",               category: "portion", unit: "pc", reorderAt: 15, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Mozzarella Sticks",       category: "portion", unit: "pc", reorderAt: 5,  parLevel: 20,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Prosciutto",              category: "portion", unit: "pc", reorderAt: 10, parLevel: 30,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
   { name: "Roast Beef",              category: "portion", unit: "pc", reorderAt: 5,  parLevel: 20,  packSize: "1 pc",    department: "kitchen", location: "front_kitchen", commissary: true },
