@@ -38,16 +38,16 @@ export function StoreHubSyncModal({ branch, department, today, onClose, onComple
       for (const { item, qty, rawOrders } of matched) {
         const catalogItem = CATALOG_MAP.get(item);
         if (!catalogItem) continue;
-        const adjId = `storehub__${branch}__${department}__${today}__${itemSlug(item)}`;
+        const adjId = `storehub__${branch}__${catalogItem.department}__${today}__${itemSlug(item)}`;
         const adj: StockAdjustment = {
-          id: now, branch, department, date: today, item,
+          id: now, branch, department: catalogItem.department, date: today, item,
           type: "sales_import", qty, loggedBy: BRANCH_LABELS[branch],
           ...(rawOrders !== undefined && { rawOrders }),
         };
         batch.set(doc(db, COLS.adjustments, adjId), adj);
-        const sid = stockDocId(branch, department, item);
+        const sid = stockDocId(branch, catalogItem.department, item);
         batch.set(doc(db, COLS.branchStock, sid), {
-          id: sid, branch, department, item, category: catalogItem.category,
+          id: sid, branch, department: catalogItem.department, item, category: catalogItem.category,
           unit: catalogItem.unit, qty: 0,
           reorderAt: catalogItem.reorderAt,
           lastUpdated: today, lastUpdatedBy: BRANCH_LABELS[branch],

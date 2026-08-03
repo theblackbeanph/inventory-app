@@ -180,14 +180,53 @@ export async function GET(request: NextRequest) {
         for (const b of deptBeg) beginnings[b.item] = b.qty;
         const itemsWithData = new Set([...deptBeg.map(b => b.item), ...deptAdj.map(a => a.item)]);
         let filled = 0;
+        const filledCloseItems: DailyClose["items"] = {};
+        const batch = writeBatch(db);
+        const now = Date.now();
+
         for (const item of itemsWithData) {
           if (closedItems.has(item)) continue;
           const beg = beginnings[item] ?? 0;
           const inQ = inQtyMap[item] ?? 0;
           const outQ = outQtyMap[item] ?? 0;
-          endCounts[item] = Math.max(0, beg + inQ - outQ);
+          const expected = Math.max(0, beg + inQ - outQ);
+          endCounts[item] = expected;
           filled++;
+
+          // Write count adjustment for the fallback item
+          const adjRef = doc(collection(db, COLS.adjustments));
+          batch.set(adjRef, {
+            id: now + Math.random(), branch, department: dept, date: yesterday,
+            item, type: "count", qty: expected,
+            loggedBy: "system", note: "Auto-filled (partial stocktake)",
+          } as StockAdjustment);
+
+          // Update branchStock
+          const catalogItem = deptCatalog.find(c => c.name === item);
+          if (catalogItem) {
+            const sId = stockDocId(branch, dept, item);
+            batch.set(doc(db, COLS.branchStock, sId), {
+              id: sId, branch, department: dept, item,
+              category: catalogItem.category, unit: catalogItem.unit,
+              qty: expected, reorderAt: catalogItem.reorderAt,
+              lastUpdated: yesterday, lastUpdatedBy: "system",
+            }, { merge: true });
+          }
+
+          // Build close doc entry for merge
+          filledCloseItems[item] = {
+            beginning: beg, inQty: inQ, outQty: outQ,
+            expected, endCount: expected, variance: 0,
+          };
         }
+
+        // Merge filled items into the existing close doc
+        if (filled > 0) {
+          const closeId = `${branch}__${dept}__${yesterday}`;
+          batch.set(doc(db, COLS.dailyClose, closeId), { items: filledCloseItems }, { merge: true });
+          await batch.commit();
+        }
+
         log.push(`${branch}/${dept}: already closed (manual)${filled > 0 ? `, filled ${filled} missing items` : ""}`);
       }
 

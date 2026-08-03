@@ -4,6 +4,8 @@
 
 | Date | Status | Title | File |
 |---|---|---|---|
+| 2026-08-03 | [FIXED] TBD | Partial stocktake fallback didn't write count-adj / merge close-items | `api/cron/rollover/route.ts` |
+| 2026-08-03 | [FIXED] TBD | Manual "Sync sales" wrote sales_import with wrong department (contaminated 14 closes) | `stock/_components/StoreHubSyncModal.tsx` |
 | 2026-07-29 | [FIXED] `09e67e7` | Rollover drops BEG for items not in partial manual stocktake | `api/cron/rollover/route.ts` |
 | 2026-07-28 | [FIXED] `35907aa` | Cancel Dispute leaves DN.receivedItems stale | `transfers/_components/OrdersContent.tsx` |
 | 2026-07-07 | [FIXED] `24d2136` | Dashboard payment mix always showed 100% card | `api/storehub/dashboard/route.ts` |
@@ -14,6 +16,87 @@
 ## Entry template
 
 When logging a bug, include: **Date found**, **Fixed date + commit SHA** (or **[OPEN]**), **File(s)**, **Reported by / How found**, **Symptom**, **Root cause** (including dead-end hypotheses ruled out), **Fix**, **How to verify** (concrete command or Firestore query), optional **Backfill / Watch out / Still open**. Log [OPEN] at the moment the mechanism is confirmed — don't wait for the fix.
+
+---
+
+## [FIXED] Partial stocktake fallback didn't write count-adjustments or merge close-items
+**Date found:** 2026-07-29 (initial fix incomplete; real bug found 2026-08-03)
+**Fixed:** 2026-08-03 (commit TBD — user will fill in after merge)
+**File:** `src/app/api/cron/rollover/route.ts` (partial-stocktake fallback, lines 196–228)
+**Reported by:** Chris — Daily tab END column blank indefinitely for un-counted items, even though BEG carry-forward worked.
+
+### Symptom
+After a partial manual stocktake (e.g. team counted beers only, not desserts), the next day's BEG correctly propagated for desserts via the 2026-07-29 fix. However, the Daily tab END column for those desserts remained blank indefinitely. Manual stocktakes the next day would fill it, but auto-close branches showed END correctly.
+
+### Root cause
+The 2026-07-29 fix added the fallback `endCounts` calculation for un-counted items, but left two writes incomplete in the partial-stocktake branch:
+1. No `type: "count"` adjustment doc written for fallback-filled items
+2. No merge of `daily_close.items[item]` with the fallback endCount
+
+Consequence: `computeMetrics()` reads END column from count/correction adjustments only (see 2026-07-02 fix), so the Daily tab showed blank END. The next day's BEG correctly used `endCounts`, but the ledger entry was missing.
+
+Trace confirmed 2026-08-03 via pre-flight script: close doc entry *existed* with correct endCount (written by unknown path, possibly `handleAddMissingStocktakeItem`), but no matching count adjustment.
+
+### Fix
+Added three missing writes inside the fallback loop (lines 196–220), mirroring the auto-close branch (lines 127–140):
+1. Write `type: "count"` adjustment doc with `note: "Auto-filled (partial stocktake)"` (lines 196–202)
+2. Merge branchStock with `{ merge: true }` (lines 204–214)
+3. Build close-item entry and merge into daily_close via `batch.set(..., { merge: true })` (lines 216–226)
+
+All three writes batched and committed before draft cleanup (line 227).
+
+### Backfill
+**No historical backfill.** User chose truthful ledger over cosmetic fix — July 28–Aug 2 will show blank END indefinitely, which accurately reflects the missing writes. Next cron run (2026-08-04 rollover) and all subsequent partial stocktakes will now write END correctly.
+
+### How to verify
+1. Query `daily_close` for a date after a partial stocktake and confirm `items[item]` exists for un-counted items
+2. Confirm a matching `type: "count"` adjustment exists: `branch_adjustments` where `type == "count"` and `note` contains `"Auto-filled"`
+3. Next day's `daily_beginning` should show the fallback qty
+4. Inspect rollover log: `"filled N missing items"` message will fire for partial closes
+
+### Watch out
+The partial-stocktake branch and auto-close branch must stay in sync. Any future edit touching either path must keep all three writes (count-adj + branchStock + close-merge) parallel.
+
+## [FIXED] Manual "Sync sales" wrote sales_import with wrong department
+**Date found:** 2026-07-18 (root cause found 2026-08-03)
+**Fixed:** 2026-08-03 (commit TBD — user will fill in after merge)
+**Files:** `src/app/stock/_components/StoreHubSyncModal.tsx` (lines 41, 43, 48, 50)
+**Cleanup:** `scripts/cleanup-kitchen-contamination.mjs` (created 2026-08-03, applied 2026-08-03)
+
+### Symptom
+MKT/dining daily_close docs from July 18 onward contained ~37–49 kitchen items (Eggs, Butter, Calamansi, etc.) that should never appear in dining. BF/dining similarly polluted from July 18–Aug 2. Kitchen items showed up with `department: "dining"` in both `branch_adjustments` (sales_import) and `branchStock` docs. Rollover auto-perpetuated via BEG carry-forward (15+ days of contamination).
+
+### Root cause
+Manual "Sync sales" modal (`StoreHubSyncModal.tsx`) was hard-coded to use the modal's `department` prop (the tab the user was on) instead of each item's true `catalogItem.department`. When someone at MKT opened the dining tab (added 2026-07-19) and hit "Sync sales" around 2026-07-18, every StoreHub item matched — including kitchen items — got `department: "dining"`. The catalog item field exists and is accurate, but wasn't consulted.
+
+Scope: 628 item-keys in 14 daily_close docs (MKT: 7 dates 2026-07-19 through 2026-08-02; BF: 7 dates 2026-07-18 through 2026-08-02). 757 spurious sales_import adjustments written with wrong department.
+
+### Fix
+Updated all four references in `StoreHubSyncModal.tsx` to derive `department` from `catalogItem.department`:
+- Line 41 (adjId): now uses `catalogItem.department`
+- Line 43 (adj object): now uses `catalogItem.department`
+- Line 48 (stockDocId call): now uses `catalogItem.department`
+- Line 50 (branchStock doc): now uses `catalogItem.department`
+
+The cron auto-sync (`src/app/api/cron/storehub-sync/route.ts`) already does this correctly and serves as the reference pattern.
+
+### Cleanup
+Cleanup script `scripts/cleanup-kitchen-contamination.mjs` created to:
+- Scan all dining daily_close docs from 2026-07-15 onward
+- Identify item-keys not in `CATALOG.filter(i => i.department === "dining")`
+- Remove all such keys from daily_close (628 total across 14 docs)
+- Delete matching sales_import branch_adjustments (757 docs)
+- Verify zero pollution remains
+
+Dry-run 2026-08-03 23:50 UTC: 628 keys, 14 docs, 757 adjustments identified.
+Applied 2026-08-03 23:55 UTC: all deleted, verification passed.
+Re-verified dry-run 2026-08-03 23:58 UTC: 0 keys, 0 docs, 0 adjustments found.
+
+### Note
+The modal was designed before the multi-department dining addition. When dining was added, the modal-prop-based department attribution silently miscategorized sync runs from any non-kitchen tab. No user error — the UI invited this bug.
+
+### Watch out
+Any new UI writer of `branch_adjustments` must derive `department` from `CATALOG_MAP.get(item).department`, never from screen context. This includes future sync modals, manual adjustments, imports, etc.
 
 ---
 
