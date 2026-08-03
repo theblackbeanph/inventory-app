@@ -4,8 +4,8 @@
 
 | Date | Status | Title | File |
 |---|---|---|---|
-| 2026-08-03 | [FIXED] TBD | Partial stocktake fallback didn't write count-adj / merge close-items | `api/cron/rollover/route.ts` |
-| 2026-08-03 | [FIXED] TBD | Manual "Sync sales" wrote sales_import with wrong department (contaminated 14 closes) | `stock/_components/StoreHubSyncModal.tsx` |
+| 2026-08-03 | [FIXED] `5d86ce4` | Partial stocktake fallback didn't write count-adj / merge close-items | `api/cron/rollover/route.ts` |
+| 2026-08-03 | [FIXED] `5d86ce4` | Manual "Sync sales" wrote sales_import with wrong department (contaminated 14 closes) | `stock/_components/StoreHubSyncModal.tsx` |
 | 2026-07-29 | [FIXED] `09e67e7` | Rollover drops BEG for items not in partial manual stocktake | `api/cron/rollover/route.ts` |
 | 2026-07-28 | [FIXED] `35907aa` | Cancel Dispute leaves DN.receivedItems stale | `transfers/_components/OrdersContent.tsx` |
 | 2026-07-07 | [FIXED] `24d2136` | Dashboard payment mix always showed 100% card | `api/storehub/dashboard/route.ts` |
@@ -21,7 +21,7 @@ When logging a bug, include: **Date found**, **Fixed date + commit SHA** (or **[
 
 ## [FIXED] Partial stocktake fallback didn't write count-adjustments or merge close-items
 **Date found:** 2026-07-29 (initial fix incomplete; real bug found 2026-08-03)
-**Fixed:** 2026-08-03 (commit TBD — user will fill in after merge)
+**Fixed:** 2026-08-03 (commit `5d86ce4`)
 **File:** `src/app/api/cron/rollover/route.ts` (partial-stocktake fallback, lines 196–228)
 **Reported by:** Chris — Daily tab END column blank indefinitely for un-counted items, even though BEG carry-forward worked.
 
@@ -59,7 +59,7 @@ The partial-stocktake branch and auto-close branch must stay in sync. Any future
 
 ## [FIXED] Manual "Sync sales" wrote sales_import with wrong department
 **Date found:** 2026-07-18 (root cause found 2026-08-03)
-**Fixed:** 2026-08-03 (commit TBD — user will fill in after merge)
+**Fixed:** 2026-08-03 (commit `5d86ce4`)
 **Files:** `src/app/stock/_components/StoreHubSyncModal.tsx` (lines 41, 43, 48, 50)
 **Cleanup:** `scripts/cleanup-kitchen-contamination.mjs` (created 2026-08-03, applied 2026-08-03)
 
