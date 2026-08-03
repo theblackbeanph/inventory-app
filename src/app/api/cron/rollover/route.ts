@@ -180,27 +180,14 @@ export async function GET(request: NextRequest) {
         for (const b of deptBeg) beginnings[b.item] = b.qty;
         const itemsWithData = new Set([...deptBeg.map(b => b.item), ...deptAdj.map(a => a.item)]);
         let filled = 0;
-        const filledItems: Record<string, DailyClose["items"][string]> = {};
         for (const item of itemsWithData) {
           if (closedItems.has(item)) continue;
           const beg = beginnings[item] ?? 0;
           const inQ = inQtyMap[item] ?? 0;
           const outQ = outQtyMap[item] ?? 0;
-          const expected = Math.max(0, beg + inQ - outQ);
-          endCounts[item] = expected;
-          filledItems[item] = { beginning: beg, inQty: inQ, outQty: outQ, expected, endCount: expected, variance: 0 };
+          endCounts[item] = Math.max(0, beg + inQ - outQ);
           filled++;
         }
-
-        // Write filled items back to the daily_close record
-        if (filled > 0) {
-          const closeId = `${branch}__${dept}__${yesterday}`;
-          const updateItems = { ...existingClose?.items, ...filledItems };
-          const updateBatch = writeBatch(db);
-          updateBatch.set(doc(db, COLS.dailyClose, closeId), { items: updateItems }, { merge: true });
-          await updateBatch.commit();
-        }
-
         log.push(`${branch}/${dept}: already closed (manual)${filled > 0 ? `, filled ${filled} missing items` : ""}`);
       }
 
