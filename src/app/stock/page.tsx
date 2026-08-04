@@ -293,6 +293,11 @@ export default function StockPage() {
   const dailyMetrics = useMemo(() => computeMetrics(deptCatalog, adjustments, beginnings), [deptCatalog, adjustments, beginnings]);
   const summaryMetrics = useMemo(() => computeMetrics(deptCatalog, summaryAdj, summaryBeg), [deptCatalog, summaryAdj, summaryBeg]);
   const stocktakeMetrics = useMemo(() => computeMetrics(deptCatalog, stocktakeAdjustments, stocktakeBeginnings), [deptCatalog, stocktakeAdjustments, stocktakeBeginnings]);
+  const autoFilledStocktakeItems = useMemo(() => new Set(
+    stocktakeAdjustments
+      .filter(a => (a.type === "count" || a.type === "correction") && a.loggedBy === "system" && (a.note ?? "").includes("Auto-filled"))
+      .map(a => a.item)
+  ), [stocktakeAdjustments]);
   const filtered = useMemo(() => deptCatalog.filter(item => matchesFilter(item, categoryFilter)), [deptCatalog, categoryFilter]);
   const deliveryItems = useMemo(() => filtered.filter(i => !i.commissary), [filtered]);
 
@@ -771,6 +776,7 @@ export default function StockPage() {
               onCorrect={handleCorrectCount}
               missingItems={missingStocktakeItems}
               onAddMissing={handleAddMissingStocktakeItem}
+              autoFilledItems={autoFilledStocktakeItems}
             />
           : <StocktakeContent
               items={filtered}

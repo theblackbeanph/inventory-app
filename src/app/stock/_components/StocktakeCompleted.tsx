@@ -9,11 +9,18 @@ interface Props {
   onCorrect?: (item: string, newQty: number) => Promise<void>;
   missingItems?: string[];
   onAddMissing?: (item: string, qty: number) => Promise<void>;
+  autoFilledItems?: Set<string>;
 }
 
-export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [], onAddMissing }: Props) {
+export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [], onAddMissing, autoFilledItems }: Props) {
   const rows = Object.entries(dayClose.items).sort(([a], [b]) => a.localeCompare(b));
   const closedTime = new Date(dayClose.closedAt).toLocaleTimeString("en-PH", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const autoFilled = autoFilledItems ?? new Set<string>();
+  const totalItems = rows.length;
+  const autoCount = rows.filter(([item]) => autoFilled.has(item)).length;
+  const manualCount = totalItems - autoCount;
+  const isFullyAuto = dayClose.countType !== "manual";
+  const isMixed = !isFullyAuto && autoCount > 0;
 
   const [selected, setSelected] = useState<string | null>(null);
   const [newCount, setNewCount] = useState("");
@@ -89,15 +96,35 @@ export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [
 
   return (
     <div style={{ paddingBottom: 24 }}>
-      <div style={{ margin: "12px 16px", background: "#F0FDF4", borderRadius: 12, padding: "14px 16px" }}>
-        <div style={{ fontSize: 14, fontWeight: 700, color: "#15803D" }}>Count Confirmed ✓</div>
-        <div style={{ fontSize: 12, color: "#16A34A", marginTop: 2 }}>
-          {dayClose.countType === "manual" ? `${dayClose.closedBy} · ${closedTime}` : "Auto-closed by system"}
+      {isFullyAuto ? (
+        <div style={{ margin: "12px 16px", background: "#F1F5F9", borderRadius: 12, padding: "14px 16px" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#334155" }}>Auto-closed by system</div>
+          <div style={{ fontSize: 12, color: "#64748B", marginTop: 2 }}>
+            All {totalItems} {totalItems === 1 ? "item" : "items"} filled from expected values · no manual count
+          </div>
         </div>
-      </div>
+      ) : isMixed ? (
+        <div style={{ margin: "12px 16px", background: "#FFFBEB", borderRadius: 12, padding: "14px 16px", border: "1px solid #FDE68A" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#92400E" }}>Partial count</div>
+          <div style={{ fontSize: 12, color: "#B45309", marginTop: 2 }}>
+            {manualCount} of {totalItems} confirmed by {dayClose.closedBy} · {closedTime}
+          </div>
+          <div style={{ fontSize: 12, color: "#B45309", marginTop: 2 }}>
+            {autoCount} {autoCount === 1 ? "item" : "items"} auto-filled by system
+          </div>
+        </div>
+      ) : (
+        <div style={{ margin: "12px 16px", background: "#F0FDF4", borderRadius: 12, padding: "14px 16px" }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: "#15803D" }}>Count Confirmed ✓</div>
+          <div style={{ fontSize: 12, color: "#16A34A", marginTop: 2 }}>
+            {dayClose.closedBy} · {closedTime}
+          </div>
+        </div>
+      )}
 
       <div>
         {rows.map(([item, data]) => {
+          const isAuto = autoFilled.has(item);
           const varColor = data.variance === 0 ? "#16A34A" : data.variance > 0 ? "#D97706" : "#DC2626";
           return (
             <div
@@ -118,10 +145,14 @@ export function StocktakeCompleted({ dayClose, role, onCorrect, missingItems = [
                 <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>Expected: {data.expected} · BEG: {data.beginning}</div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 18, fontWeight: 700 }}>{data.endCount}</div>
-                <div style={{ fontSize: 12, fontWeight: 600, color: varColor }}>
-                  {data.variance > 0 ? `+${data.variance}` : data.variance === 0 ? "✓" : String(data.variance)}
-                </div>
+                <div style={{ fontSize: 18, fontWeight: 700, color: isAuto ? "#64748B" : undefined }}>{data.endCount}</div>
+                {isAuto ? (
+                  <div style={{ fontSize: 10, fontWeight: 600, color: "#64748B", textTransform: "uppercase", letterSpacing: 0.4 }}>Auto</div>
+                ) : (
+                  <div style={{ fontSize: 12, fontWeight: 600, color: varColor }}>
+                    {data.variance > 0 ? `+${data.variance}` : data.variance === 0 ? "✓" : String(data.variance)}
+                  </div>
+                )}
               </div>
             </div>
           );
