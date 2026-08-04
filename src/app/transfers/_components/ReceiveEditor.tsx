@@ -166,7 +166,8 @@ export function ReceiveEditor(props: ReceiveEditorProps): React.ReactElement {
         )}
         <button
           onClick={() => setShowReview(true)}
-          style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: primaryColor, color: "#FFF", fontWeight: 700, fontSize: 16, cursor: "pointer" }}
+          disabled={loading}
+          style={{ width: "100%", padding: "15px 0", borderRadius: 14, border: "none", background: primaryColor, color: "#FFF", fontWeight: 700, fontSize: 16, cursor: loading ? "not-allowed" : "pointer" }}
         >
           {submitLabel(hasDiscrepancy)}
         </button>
