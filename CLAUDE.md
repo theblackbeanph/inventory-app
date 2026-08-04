@@ -194,9 +194,21 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **Firestore**: `dispute_notices` collection — `{ poRef, pullOutId, branch, resolvedAt, resolvedBy, superadminNote, correctedItems[], branchAcknowledged, branchAcknowledgedAt? }`. Pre-computed at resolution time (denormalized snapshot). `COLS.disputeNotices = "dispute_notices"` in `src/lib/firebase.ts`
 - **`branch_stock` updates**: always use `FieldValue.increment(delta)` — never plain `{ qty: delta }` with merge, which overwrites instead of adding
 
+### Dispute Edit Flow (2026-08-04)
+- **Trigger**: `DiscrepancyDetail` (branch view of a `DISCREPANCY` order) now shows two stacked buttons — new **"Edit Received Counts"** (primary, dark) above the existing **Cancel Dispute** (secondary outline).
+- **Why it exists**: closes the gap where a false/miskeyed dispute could only be resolved by accepting dispatched quantities wholesale. Motivated by 2026-08-03 incident (see `docs/bugs.md`).
+- **`EditReceiveView`** (`OrdersContent.tsx`): pre-fills qty adjusters from `dn.receivedItems[].receivedQty` (fallback `dispatchedQty` if missing). Reuses the shared `<ReceiveEditor>` primitive extracted from `ActiveDetail`. Two submit end-states:
+  - **Fully matched** (all `receivedQty === dispatchedQty`): mirrors `cancelDispute` exactly — invEntries at `dispatchedQty`, PO → `DONE` with `commissaryInvWritten: true`, DN → `RECEIVED`. Only differs from `cancelDispute` in the note string (`"branch edited counts during dispute"`).
+  - **Still discrepant**: writes ONLY branch-side effects — `branch_adjustments` (deltas from prior `receivedQty`), `branch_stock` `increment(delta)`, and DN `receivedItems` in place. PO stays `DISCREPANCY`, `commissaryInvWritten` untouched. Safety: commissary's auto-write listener is gated on `status === "RECEIVED" && !commissaryInvWritten`, so Path 2 CANNOT trigger premature inventory settlement.
+- **DN audit fields** (locked contract with commissary app — do NOT rename): `receivedItemsEditedAt: number`, `receivedItemsEditedBy: string`, `receivedItemsEditCount: number`. Written on every edit; commissary's DiscrepancyModal reads them for audit note + staleness banner when `receivedItemsEditedAt > modalOpenedAt`.
+- **`<ReceiveEditor>`** at `src/app/transfers/_components/ReceiveEditor.tsx` — shared qty-adjuster + review overlay used by both `ActiveDetail` (normal receive) and `EditReceiveView` (dispute edit). `showCheckUX` prop toggles the per-item checkboxes (true for ActiveDetail, false for EditReceiveView).
+- **View state**: `OrdersContent` view union has a `"detail-edit-dispute"` variant; `EditReceiveView`'s `onBack` always returns to the Orders list (not back to DiscrepancyDetail) to avoid rendering a stale detail view after Path 1 flips the PO to DONE.
+- **Design spec**: `docs/superpowers/specs/2026-08-04-edit-received-counts-during-dispute-design.md`
+- **Known deferred bug** (`docs/bugs.md`, open): both `cancelDispute` and `EditReceiveView` hardcode `department: "kitchen"` on `branch_adjustments`. Analytical impact only (branchStock uses `catalogItem.department` correctly). Fix when a dining-transfer dispute first surfaces.
+
 ### Orders Tab — UI Decisions (2026-06-26)
 - **Tab placement**: `DISCREPANCY` stays in the **Active** tab (not History) — dispute is still unresolved, so it should remain visible as an action item. Active tab count badge includes both `DISPATCHED` and `DISCREPANCY`.
-- **`DISCREPANCY` detail view**: opens `DiscrepancyDetail` (not `ActiveDetail`) — read-only view showing a status banner, discrepancy items highlighted at top, all items below, and only the "Cancel Dispute" button. No qty adjusters or "Confirm Receipt" button.
+- **`DISCREPANCY` detail view**: opens `DiscrepancyDetail` (not `ActiveDetail`) — status banner, discrepancy items highlighted at top, all items below. Two footer buttons: **"Edit Received Counts"** (primary, opens `EditReceiveView` — see Dispute Edit Flow section) and **"Cancel Dispute — Accept Dispatched Quantities"** (secondary). No inline qty adjusters — those live in EditReceiveView.
 - **`DISCREPANCY` card subtext** (Active tab): "Dispute filed — pending commissary review" (amber)
 - **`DISPUTED` card subtext** (History tab): "Escalated — pending admin decision" (purple)
 - **`DONE` label**: displays as **"Received"** — `DONE` is the outcome of cancelling a dispute; from the branch's perspective the stock was still received, so the label should match `RECEIVED`
