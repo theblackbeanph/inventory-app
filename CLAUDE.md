@@ -98,6 +98,15 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - Scoped to today and yesterday only (inherits stocktake date picker limitation)
 - Component: `src/app/stock/_components/StocktakeCompleted.tsx`, handler: `handleCorrectCount` in `src/app/stock/page.tsx`
 
+### Partial Stocktake Rendering (2026-08-04)
+- `StocktakeCompleted.tsx` distinguishes three close states in the confirmed view:
+  - **Fully manual** — green "Count Confirmed ✓" banner
+  - **Partial** (manual close, some items auto-filled by rollover cron) — amber "Partial count" banner showing `X of Y confirmed by <closedBy>` + `Z items auto-filled by system`
+  - **Fully auto** (`countType !== "manual"`) — neutral slate banner
+- Per-row: cron-filled items show a muted **AUTO** chip (in slate) in place of the green variance ✓, with the qty rendered in slate rather than black
+- Detection: parent computes `autoFilledStocktakeItems: Set<string>` from `stocktakeAdjustments` where `type ∈ {count, correction}` AND `loggedBy === "system"` AND `note` contains `"Auto-filled"` — matches the marker written by rollover `route.ts:196–202`. Passed to `StocktakeCompleted` as the `autoFilledItems` prop.
+- Any new writer of auto-filled count adjustments MUST use the same `loggedBy: "system"` + `note: "Auto-filled ..."` convention or these items will render as manual and mislead the team.
+
 ### Stocktake Auto-Save (2026-06-11)
 - Counts are auto-saved to `localStorage` 800ms after each keystroke — device-local, no cross-user interference
 - Key: `stocktake_counts__${branch}__${department}__${date}`

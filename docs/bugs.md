@@ -4,6 +4,7 @@
 
 | Date | Status | Title | File |
 |---|---|---|---|
+| 2026-08-04 | [FIXED] `eb2e90d` | Confirmed stocktake view showed cron-auto-filled items as if manually verified | `stock/_components/StocktakeCompleted.tsx` |
 | 2026-08-03 | [FIXED] `5d86ce4` | Partial stocktake fallback didn't write count-adj / merge close-items | `api/cron/rollover/route.ts` |
 | 2026-08-03 | [FIXED] `5d86ce4` | Manual "Sync sales" wrote sales_import with wrong department (contaminated 14 closes) | `stock/_components/StoreHubSyncModal.tsx` |
 | 2026-07-29 | [FIXED] `09e67e7` | Rollover drops BEG for items not in partial manual stocktake | `api/cron/rollover/route.ts` |
@@ -16,6 +17,37 @@
 ## Entry template
 
 When logging a bug, include: **Date found**, **Fixed date + commit SHA** (or **[OPEN]**), **File(s)**, **Reported by / How found**, **Symptom**, **Root cause** (including dead-end hypotheses ruled out), **Fix**, **How to verify** (concrete command or Firestore query), optional **Backfill / Watch out / Still open**. Log [OPEN] at the moment the mechanism is confirmed — don't wait for the fix.
+
+---
+
+## [FIXED] Confirmed stocktake view rendered cron-auto-filled items as if manually verified
+
+**Found:** 2026-08-04 (Chris — reviewing MKT/dining 2026-08-03 Stocktake tab morning after the Bug 2 fix went live)
+**Fixed:** 2026-08-04 (commit `eb2e90d`)
+**File:** `src/app/stock/_components/StocktakeCompleted.tsx` (+ prop wire-up in `src/app/stock/page.tsx`)
+**Category:** UX / audit-trail integrity
+
+### Symptom
+After the 2026-08-03 rollover fix (`5d86ce4`) started writing count adjustments for cron-auto-filled items in partial stocktakes, every row in the confirmed-stocktake view rendered identically — same green ✓ variance marker regardless of whether staff physically counted the item or the cron filled it in from `expected = beg + in - out`. The header banner also said "Count Confirmed ✓ Makati FOH · 12:30 AM" even when 8 of 15 items were actually filled by the system at 2 AM. Reviewing the screen or auditing later, it was impossible to tell which numbers reflected a physical count vs a calculation.
+
+### Root cause
+`StocktakeCompleted` only received `dayClose.items` and had no signal for item source. Every row was rendered with the same variance chip. The banner switched only on `dayClose.countType` (manual vs system), which flags fully-auto closes but not the mixed case where a manual close was submitted AND cron auto-filled the skipped items.
+
+### Fix
+Parent computes `autoFilledStocktakeItems: Set<string>` from `stocktakeAdjustments` where `type ∈ {count, correction}` AND `loggedBy === "system"` AND `note` includes `"Auto-filled"` (marker written by rollover `route.ts:196–202`). Passed as new `autoFilledItems` prop.
+
+Three render states in the component:
+- Fully manual → green "Count Confirmed ✓" banner (unchanged)
+- Partial → amber "Partial count" banner: `X of Y confirmed by <closedBy>` + `Z items auto-filled by system`
+- Fully auto → neutral slate banner
+
+Auto-filled rows show a muted `AUTO` chip instead of the variance ✓, with qty rendered in slate rather than black.
+
+### How to verify
+Open Stocktake tab for a dept where the team did a partial stocktake the previous day (e.g. MKT/dining 2026-08-03 with 7 desserts counted + 8 auto-filled): banner should read amber "Partial count · 7 of 15 confirmed by Makati FOH · 12:30 AM · 8 items auto-filled by system". Auto-filled rows show `AUTO` chip; manually counted rows show green ✓.
+
+### Watch out
+Any FUTURE writer of automated count adjustments MUST follow the same convention (`loggedBy: "system"`, `note` containing `"Auto-filled"`) or those items will render as manual counts and mislead the team. If the note text ever changes, update the `.includes("Auto-filled")` check in the `autoFilledStocktakeItems` `useMemo` in `stock/page.tsx`.
 
 ---
 
