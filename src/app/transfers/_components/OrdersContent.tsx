@@ -479,13 +479,14 @@ function DiscrepancyDetail({ po, dn, branch, onBack, onUpdated, onEditRequested 
         const recv  = ri?.receivedQty ?? it.dispatchedQty;
         const delta = it.dispatchedQty - recv;
         if (delta === 0) return;
+        const catalogItem = CATALOG_MAP.get(it.item);
+        const dept        = catalogItem?.department ?? "kitchen";
         const adjRef = doc(collection(db, COLS.adjustments));
         batchW.set(adjRef, {
-          id: adjRef.id, branch, department: "kitchen", date: today,
+          id: adjRef.id, branch, department: dept, date: today,
           item: it.item, type: delta > 0 ? "in" : "out", qty: Math.abs(delta),
           loggedBy, note: `Dispute cancelled · ${po.poRef}`,
         });
-        const catalogItem = CATALOG_MAP.get(it.item);
         if (catalogItem) {
           batchW.set(
             doc(db, COLS.branchStock, `${branch}_${catalogItem.department}_${it.item}`),
@@ -671,13 +672,14 @@ function EditReceiveView({ po, dn, branch, onBack, onUpdated }: {
         const prior = priorReceived[ri.item] ?? ri.dispatchedQty;
         const delta = ri.receivedQty - prior;
         if (delta === 0) return;
+        const catalogItem = CATALOG_MAP.get(ri.item);
+        const dept        = catalogItem?.department ?? "kitchen";
         const adjRef = doc(collection(db, COLS.adjustments));
         batch.set(adjRef, {
-          id: adjRef.id, branch, department: "kitchen", date: today,
+          id: adjRef.id, branch, department: dept, date: today,
           item: ri.item, type: delta > 0 ? "in" : "out", qty: Math.abs(delta),
           loggedBy, note: `Dispute edit · ${po.poRef}`,
         });
-        const catalogItem = CATALOG_MAP.get(ri.item);
         if (catalogItem) {
           batch.set(
             doc(db, COLS.branchStock, `${branch}_${catalogItem.department}_${ri.item}`),

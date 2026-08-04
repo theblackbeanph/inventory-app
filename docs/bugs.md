@@ -5,7 +5,7 @@
 | Date | Status | Title | File |
 |---|---|---|---|
 | 2026-08-04 | [FIXED] | False-dispute path had no correction option, forced auto-receive at dispatched qty | `transfers/_components/OrdersContent.tsx`, `DiscrepancyDetail` |
-| 2026-08-04 | [OPEN] | `cancelDispute` and `EditReceiveView` hardcode `department: "kitchen"` on branch_adjustments | `transfers/_components/OrdersContent.tsx` |
+| 2026-08-04 | [FIXED] | `cancelDispute` and `EditReceiveView` hardcode `department: "kitchen"` on branch_adjustments | `transfers/_components/OrdersContent.tsx` |
 | 2026-08-04 | [FIXED] `eb2e90d` | Confirmed stocktake view showed cron-auto-filled items as if manually verified | `stock/_components/StocktakeCompleted.tsx` |
 | 2026-08-03 | [FIXED] `5d86ce4` | Partial stocktake fallback didn't write count-adj / merge close-items | `api/cron/rollover/route.ts` |
 | 2026-08-03 | [FIXED] `5d86ce4` | Manual "Sync sales" wrote sales_import with wrong department (contaminated 14 closes) | `stock/_components/StoreHubSyncModal.tsx` |
@@ -47,9 +47,9 @@ Put a DN in `DISCREPANCY` status, open it on the branch app → "Edit Received C
 
 ---
 
-## [OPEN] `cancelDispute` and `EditReceiveView` hardcode `department: "kitchen"` on branch_adjustments
+## [FIXED] `cancelDispute` and `EditReceiveView` hardcode `department: "kitchen"` on branch_adjustments
 **Date found:** 2026-08-04 (flagged during final code review of Edit Received Counts branch)
-**Status:** OPEN — deferred; impact is analytical only, not operational
+**Date fixed:** 2026-08-04 (same-day fix; deployed on main)
 **Files:** `src/app/transfers/_components/OrdersContent.tsx` (`cancelDispute` handler, `EditReceiveView` submit handler)
 
 ### Symptom
@@ -61,11 +61,8 @@ Both handlers hardcode `department: "kitchen"` in the adjustment write rather th
 ### Impact
 Branch stock itself (`branchStock`) is unaffected — those writes use `catalogItem.department` correctly. The miscategorization is limited to the `branch_adjustments` ledger entries: reporting or aggregation queries that filter by department will misattribute disputed-transfer adjustments for non-kitchen items.
 
-### Proposed fix
-In both handlers, replace the hardcoded `"kitchen"` with `CATALOG_MAP.get(item.item)?.department ?? "kitchen"`, mirroring the pattern in `ActiveDetail.confirmReceipt`.
-
-### Priority
-Low — impact is analytical, not operational. Branch stock totals are correct. Defer until a dining-transfer dispute is actually filed (which would expose the miscategorization in reports).
+### Fix
+Both handlers now look up `CATALOG_MAP.get(item)?.department ?? "kitchen"` before the adjustment write and use that value. The `"kitchen"` fallback preserves the previous behavior for items missing from the catalog (should never happen in practice). Historical `branch_adjustments` docs written before the fix retain the incorrect `department: "kitchen"` — no backfill (analytical impact, small volume, would need per-doc CATALOG_MAP lookups against a moving catalog).
 
 ---
 
