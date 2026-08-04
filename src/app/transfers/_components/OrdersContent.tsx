@@ -75,6 +75,13 @@ const qtyBtnStyle: React.CSSProperties = {
   color: "#1A1A1A", display: "flex", alignItems: "center", justifyContent: "center",
 };
 
+// ── GoBackOnMount ─────────────────────────────────────────────────────────────
+
+function GoBackOnMount({ onBack }: { onBack: () => void }) {
+  useEffect(() => { onBack(); }, [onBack]);
+  return null;
+}
+
 // ── OrdersContent ─────────────────────────────────────────────────────────────
 
 type View = "list" | "detail" | "detail-edit-dispute" | "new";
@@ -142,9 +149,9 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, department
         />
       );
     }
-    // No DN — shouldn't happen; fall through to list
-    goBack();
-    return null;
+    // No DN — shouldn't happen; navigate back after mount (calling a state-setter
+    // during render is a React contract violation).
+    return <GoBackOnMount onBack={goBack} />;
   }
 
   if (view === "detail" && selected) {
