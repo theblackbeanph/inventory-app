@@ -38,11 +38,10 @@ export function ReceiveEditor(props: ReceiveEditorProps): React.ReactElement {
   const [loading,      setLoading]      = useState(false);
   const [error,        setError]        = useState("");
 
-  // re-sync on dn.id change (matches ActiveDetail's original behavior)
+  // re-sync when the parent swaps the DN or updates the baseline qtys
   useEffect(() => {
-    setReceivedQtys(Object.fromEntries(dn.items.map(i => [i.item, i.dispatchedQty])));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dn.id]);
+    setReceivedQtys(initialReceivedQtys); // eslint-disable-line react-hooks/set-state-in-effect
+  }, [dn.id, initialReceivedQtys]);
 
   function toggleChecked(itemName: string) {
     setCheckedItems(prev => {

@@ -4,6 +4,8 @@
 
 | Date | Status | Title | File |
 |---|---|---|---|
+| 2026-08-04 | [FIXED] | False-dispute path had no correction option, forced auto-receive at dispatched qty | `transfers/_components/OrdersContent.tsx`, `DiscrepancyDetail` |
+| 2026-08-04 | [OPEN] | `cancelDispute` and `EditReceiveView` hardcode `department: "kitchen"` on branch_adjustments | `transfers/_components/OrdersContent.tsx` |
 | 2026-08-04 | [FIXED] `eb2e90d` | Confirmed stocktake view showed cron-auto-filled items as if manually verified | `stock/_components/StocktakeCompleted.tsx` |
 | 2026-08-03 | [FIXED] `5d86ce4` | Partial stocktake fallback didn't write count-adj / merge close-items | `api/cron/rollover/route.ts` |
 | 2026-08-03 | [FIXED] `5d86ce4` | Manual "Sync sales" wrote sales_import with wrong department (contaminated 14 closes) | `stock/_components/StoreHubSyncModal.tsx` |
@@ -17,6 +19,53 @@
 ## Entry template
 
 When logging a bug, include: **Date found**, **Fixed date + commit SHA** (or **[OPEN]**), **File(s)**, **Reported by / How found**, **Symptom**, **Root cause** (including dead-end hypotheses ruled out), **Fix**, **How to verify** (concrete command or Firestore query), optional **Backfill / Watch out / Still open**. Log [OPEN] at the moment the mechanism is confirmed — don't wait for the fix.
+
+---
+
+## [FIXED] False-dispute path had no correction option — tapping Cancel Dispute auto-received at dispatched qty
+**Found:** 2026-08-03 (Chris — team filed a mistaken dispute; discovered recovery path was broken)
+**Fixed:** 2026-08-04 (this branch — "Edit Received Counts" feature)
+**Files:** `src/app/transfers/_components/OrdersContent.tsx` (`DiscrepancyDetail`), `src/app/transfers/_components/ReceiveEditor.tsx` (new shared component)
+**Category:** UX / data integrity — transfers dispute flow
+
+### Symptom
+On 2026-08-03, the team filed a dispute in error (reported a quantity discrepancy that did not actually exist). When they tapped "Cancel Dispute" to back out, the handler auto-received the order at dispatched quantities (no user input) and immediately wrote stock adjustments. There was no opportunity to correct the originally declared received counts before accepting. Recovery required a manual stock adjustment after the fact.
+
+### Root cause
+`DiscrepancyDetail` only offered "Cancel Dispute", which hard-wired `receivedQty = dispatchedQty` for all items and immediately committed. There was no edit path for branches to correct their own received counts once a dispute was in the `DISCREPANCY` state.
+
+### Fix
+Added "Edit Received Counts" flow on `DiscrepancyDetail`:
+- New `EditReceiveView` component wraps `ReceiveEditor` with `initialReceivedQtys` seeded from `dn.receivedItems` (the branch's prior-declared counts, not dispatched)
+- Branch can adjust counts and re-submit; if resulting counts match dispatched quantities, DN resolves to `RECEIVED` directly; if still discrepant, a new dispute is filed
+- "Cancel Dispute (accept all)" remains available as a one-tap path for branches that want to accept dispatched quantities without adjustment
+
+**Spec:** `docs/superpowers/specs/2026-08-04-edit-received-counts-during-dispute-design.md`
+
+### How to verify
+Put a DN in `DISCREPANCY` status, open it on the branch app → "Edit Received Counts" button should appear. Adjust a qty → submit → DN should resolve or re-dispute per the new quantities. Original "Cancel Dispute (accept all)" should still write `receivedQty = dispatchedQty` for all items.
+
+---
+
+## [OPEN] `cancelDispute` and `EditReceiveView` hardcode `department: "kitchen"` on branch_adjustments
+**Date found:** 2026-08-04 (flagged during final code review of Edit Received Counts branch)
+**Status:** OPEN — deferred; impact is analytical only, not operational
+**Files:** `src/app/transfers/_components/OrdersContent.tsx` (`cancelDispute` handler, `EditReceiveView` submit handler)
+
+### Symptom
+Any `branch_adjustments` doc written by `cancelDispute` or `EditReceiveView`'s submit path is filed with `department: "kitchen"` regardless of the item's actual department. For example, a dining dessert involved in a dispute would get its adjustment miscategorized as kitchen.
+
+### Root cause
+Both handlers hardcode `department: "kitchen"` in the adjustment write rather than looking up `CATALOG_MAP.get(item)?.department`. The pattern for deriving department from the catalog already exists in `ActiveDetail.confirmReceipt` and in `StoreHubSyncModal` (post-2026-08-03 fix).
+
+### Impact
+Branch stock itself (`branchStock`) is unaffected — those writes use `catalogItem.department` correctly. The miscategorization is limited to the `branch_adjustments` ledger entries: reporting or aggregation queries that filter by department will misattribute disputed-transfer adjustments for non-kitchen items.
+
+### Proposed fix
+In both handlers, replace the hardcoded `"kitchen"` with `CATALOG_MAP.get(item.item)?.department ?? "kitchen"`, mirroring the pattern in `ActiveDetail.confirmReceipt`.
+
+### Priority
+Low — impact is analytical, not operational. Branch stock totals are correct. Defer until a dining-transfer dispute is actually filed (which would expose the miscategorization in reports).
 
 ---
 
