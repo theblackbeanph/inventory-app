@@ -204,7 +204,7 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **`<ReceiveEditor>`** at `src/app/transfers/_components/ReceiveEditor.tsx` — shared qty-adjuster + review overlay used by both `ActiveDetail` (normal receive) and `EditReceiveView` (dispute edit). `showCheckUX` prop toggles the per-item checkboxes (true for ActiveDetail, false for EditReceiveView).
 - **View state**: `OrdersContent` view union has a `"detail-edit-dispute"` variant; `EditReceiveView`'s `onBack` always returns to the Orders list (not back to DiscrepancyDetail) to avoid rendering a stale detail view after Path 1 flips the PO to DONE.
 - **Design spec**: `docs/superpowers/specs/2026-08-04-edit-received-counts-during-dispute-design.md`
-- **Known deferred bug** (`docs/bugs.md`, open): both `cancelDispute` and `EditReceiveView` hardcode `department: "kitchen"` on `branch_adjustments`. Analytical impact only (branchStock uses `catalogItem.department` correctly). Fix when a dining-transfer dispute first surfaces.
+- **Department attribution**: both `cancelDispute` and `EditReceiveView` derive `department` for `branch_adjustments` from `CATALOG_MAP.get(item)?.department ?? "kitchen"` (fixed 2026-08-04 — previously hardcoded to `"kitchen"`, misattributing dining/back-kitchen items in dept-sliced reports). Pre-2026-08-04 adjustment docs from these two paths retain the wrong dept; no backfill.
 
 ### Orders Tab — UI Decisions (2026-06-26)
 - **Tab placement**: `DISCREPANCY` stays in the **Active** tab (not History) — dispute is still unresolved, so it should remain visible as an action item. Active tab count badge includes both `DISPATCHED` and `DISCREPANCY`.
