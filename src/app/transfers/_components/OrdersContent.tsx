@@ -77,7 +77,7 @@ const qtyBtnStyle: React.CSSProperties = {
 
 // ── OrdersContent ─────────────────────────────────────────────────────────────
 
-type View = "list" | "detail" | "new";
+type View = "list" | "detail" | "detail-edit-dispute" | "new";
 
 interface Props {
   tab:           "pending" | "active" | "history";
@@ -129,6 +129,24 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, department
     return <NewOrderForm branch={branch} department={department} onBack={goBack} />;
   }
 
+  if (view === "detail-edit-dispute" && selected) {
+    const dn = deliveryNotes.find(d => d.pullOutId === selected.id) ?? null;
+    if (dn) {
+      return (
+        <EditReceiveView
+          po={selected}
+          dn={dn}
+          branch={branch}
+          onBack={goBack}
+          onUpdated={updated => setSelected(updated)}
+        />
+      );
+    }
+    // No DN — shouldn't happen; fall through to list
+    goBack();
+    return null;
+  }
+
   if (view === "detail" && selected) {
     if (selected.status === "PENDING_REVIEW") {
       return (
@@ -160,6 +178,7 @@ export function OrdersContent({ tab, pullOuts, deliveryNotes, branch, department
           branch={branch}
           onBack={goBack}
           onUpdated={updated => setSelected(updated)}
+          onEditRequested={() => setView("detail-edit-dispute")}
         />
       );
     }
@@ -410,12 +429,13 @@ function ActiveDetail({ po, dn, branch, onBack, onUpdated }: {
 
 // ── DiscrepancyDetail ─────────────────────────────────────────────────────────
 
-function DiscrepancyDetail({ po, dn, branch, onBack, onUpdated }: {
+function DiscrepancyDetail({ po, dn, branch, onBack, onUpdated, onEditRequested }: {
   po: PullOut;
   dn: DeliveryNote | null;
   branch: Branch;
   onBack: () => void;
   onUpdated: (po: PullOut) => void;
+  onEditRequested: () => void;
 }) {
   const [loading, setLoading] = useState(false);
   const [error,   setError]   = useState("");
@@ -505,7 +525,7 @@ function DiscrepancyDetail({ po, dn, branch, onBack, onUpdated }: {
         )}
 
         <div style={{ background: "#FEF3C7", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#D97706" }}>
-          Dispute filed — commissary has been notified and is reviewing the quantities.
+          Dispute filed — commissary has been notified and is reviewing the quantities. <strong>You can also edit your counts if the dispute was filed by mistake.</strong>
         </div>
 
         {discrepancyItems.length > 0 && (
@@ -564,7 +584,17 @@ function DiscrepancyDetail({ po, dn, branch, onBack, onUpdated }: {
         })}
       </div>
 
-      <div style={{ position: "fixed", bottom: "var(--nav-h)", left: 0, right: 0, background: "#FFF", borderTop: "1px solid var(--border)", padding: "12px 16px" }}>
+      <div style={{ position: "fixed", bottom: "var(--nav-h)", left: 0, right: 0, background: "#FFF", borderTop: "1px solid var(--border)", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 8 }}>
+        <button
+          onClick={() => onEditRequested()}
+          style={{
+            width: "100%", padding: "14px 0", borderRadius: 14,
+            border: "none", background: "#111827",
+            color: "#FFF", fontWeight: 700, fontSize: 15, cursor: "pointer",
+          }}
+        >
+          ✏ Edit Received Counts
+        </button>
         <button
           onClick={cancelDispute}
           disabled={loading}
@@ -581,6 +611,133 @@ function DiscrepancyDetail({ po, dn, branch, onBack, onUpdated }: {
           Confirms commissary was correct. Adjusts your stock to match dispatched quantities.
         </div>
       </div>
+    </div>
+  );
+}
+
+// ── EditReceiveView ───────────────────────────────────────────────────────────
+
+function EditReceiveView({ po, dn, branch, onBack, onUpdated }: {
+  po: PullOut;
+  dn: DeliveryNote;
+  branch: Branch;
+  onBack: () => void;
+  onUpdated: (po: PullOut) => void;
+}) {
+  // Pre-fill from current receivedItems; fall back to dispatchedQty if a row is missing.
+  const initialReceivedQtys = Object.fromEntries(
+    dn.items.map(i => {
+      const ri = dn.receivedItems?.find(r => r.item === i.item);
+      return [i.item, ri?.receivedQty ?? i.dispatchedQty];
+    }),
+  );
+
+  async function submitEdit(receivedItems: ReceivedItem[]): Promise<{ error?: string } | void> {
+    try {
+      await auth.authStateReady();
+      const loggedBy = auth.currentUser?.displayName || BRANCH_LABELS[branch];
+      const today    = todayPHT();
+      const now      = Date.now();
+      const poRef    = `${po.poRef} · ${dn.dnRef}`;
+      const batch    = writeBatch(db);
+
+      const fullyMatched = receivedItems.every(ri => ri.receivedQty === ri.dispatchedQty);
+      const priorReceived: Record<string, number> = Object.fromEntries(
+        (dn.receivedItems ?? []).map(ri => [ri.item, ri.receivedQty]),
+      );
+
+      if (fullyMatched) {
+        // Path 1 — full resolution. Mirrors cancelDispute writes with edit-tracking fields.
+        dn.items.forEach((it, i) => {
+          batch.set(doc(db, COLS.invEntries, String(now + i)), {
+            id: now + i, date: today, item: it.item, type: "out",
+            qty: it.dispatchedQty,
+            note: `Transfer to ${po.branch} · ${poRef} · branch edited counts during dispute`,
+            loggedBy, poRef: po.poRef,
+          });
+        });
+      }
+
+      // Both paths: write branch_adjustments + branchStock deltas for items whose received qty
+      // CHANGED from the prior stored value. Delta is (new - prior). Positive = "in", negative = "out".
+      receivedItems.forEach(ri => {
+        const prior = priorReceived[ri.item] ?? ri.dispatchedQty;
+        const delta = ri.receivedQty - prior;
+        if (delta === 0) return;
+        const adjRef = doc(collection(db, COLS.adjustments));
+        batch.set(adjRef, {
+          id: adjRef.id, branch, department: "kitchen", date: today,
+          item: ri.item, type: delta > 0 ? "in" : "out", qty: Math.abs(delta),
+          loggedBy, note: `Dispute edit · ${po.poRef}`,
+        });
+        const catalogItem = CATALOG_MAP.get(ri.item);
+        if (catalogItem) {
+          batch.set(
+            doc(db, COLS.branchStock, `${branch}_${catalogItem.department}_${ri.item}`),
+            { qty: increment(delta), lastUpdated: today, lastUpdatedBy: loggedBy },
+            { merge: true },
+          );
+        }
+      });
+
+      const dnUpdate: Partial<DeliveryNote> = {
+        receivedItems,
+        receivedItemsEditedAt: now,
+        receivedItemsEditedBy: loggedBy,
+        receivedItemsEditCount: (dn.receivedItemsEditCount ?? 0) + 1,
+      };
+      if (fullyMatched) {
+        dnUpdate.status = "RECEIVED";
+      }
+      batch.update(doc(db, COLS.deliveryNotes, dn.id), dnUpdate as Partial<DeliveryNote>);
+
+      if (fullyMatched) {
+        batch.update(doc(db, COLS.pullOuts, po.id), { status: "DONE", commissaryInvWritten: true });
+      }
+
+      await batch.commit();
+
+      if (fullyMatched) {
+        onUpdated({ ...po, status: "DONE" as PullOut["status"] });
+      }
+      onBack(); // always navigate back (to list per parent's onBack binding)
+    } catch {
+      return { error: "Failed to save changes. Try again." };
+    }
+  }
+
+  return (
+    <div style={{ minHeight: "100dvh", background: "var(--bg)", paddingBottom: "calc(var(--nav-h) + 100px)" }}>
+      <div style={{ background: "#FFF", borderBottom: "1px solid var(--border)", padding: "16px 16px 14px", position: "sticky", top: 0, zIndex: 40, display: "flex", alignItems: "center", gap: 12 }}>
+        <button onClick={onBack} style={{ background: "none", border: "none", cursor: "pointer", padding: 4, color: "var(--text-secondary)", fontSize: 20 }}>←</button>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 700, fontSize: 16 }}>{po.poRef}</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)" }}>Editing during dispute</div>
+        </div>
+        <span style={{ background: "#FEF3C7", color: "#D97706", padding: "2px 8px", borderRadius: 10, fontSize: 11, fontWeight: 600 }}>EDITING</span>
+      </div>
+
+      <ReceiveEditor
+        dn={dn}
+        poRef={po.poRef}
+        initialReceivedQtys={initialReceivedQtys}
+        showCheckUX={false}
+        infoBanner={
+          <div style={{ background: "#FEF3C7", borderRadius: 12, padding: "10px 14px", fontSize: 13, color: "#D97706" }}>
+            Adjust any quantity that was recorded incorrectly. If everything matches dispatched on submit, the dispute is resolved automatically.
+          </div>
+        }
+        submitLabel={hasDisc => hasDisc ? "Save Edited Counts (still discrepant)" : "Confirm Receipt — All Matched"}
+        reviewHeaderText={hasDisc => hasDisc
+          ? { headline: "Still has discrepancy — commissary will see the updated numbers" }
+          : { headline: "All items match dispatched — dispute will be resolved on submit" }
+        }
+        reviewFooterNote={hasDisc => hasDisc
+          ? "Commissary's review will refresh with your new counts."
+          : "Stock will be adjusted and the order will move to Received."
+        }
+        onSubmit={submitEdit}
+      />
     </div>
   );
 }

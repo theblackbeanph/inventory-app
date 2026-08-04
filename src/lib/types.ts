@@ -156,7 +156,8 @@ export interface ReceivedItem {
   unit: string;
 }
 
-// Matches commissary's DeliveryNote exactly (commissary creates, branch reads + updates)
+// Matches commissary's DeliveryNote exactly (commissary creates, branch reads + updates).
+// Fields written by branch during dispute-edit flow: receivedItemsEdited{At,By,Count}.
 export interface DeliveryNote {
   id: string;
   dnRef: string;
@@ -170,6 +171,9 @@ export interface DeliveryNote {
   receivedItems?: ReceivedItem[];
   receivedAt?: string;
   receivedBy?: string;
+  receivedItemsEditedAt?: number;
+  receivedItemsEditedBy?: string;
+  receivedItemsEditCount?: number;
 }
 
 // ── Production module ─────────────────────────────────────────────────────────
