@@ -41,6 +41,13 @@ async function commitWrites(writes: PlanWrite[]): Promise<void> {
       case "begSet":
         batch.set(doc(db, COLS.dailyBeginning, w.id), w.data);
         break;
+      case "anomalySet":
+        // Idempotent per (branch, dept, item, today) — a re-run of rollover
+        // that finds the same divergence overwrites with identical content;
+        // a re-run that finds agreement (because the first run overwrote BEG)
+        // writes nothing.
+        batch.set(doc(db, COLS.rolloverAnomalies, w.id), w.data);
+        break;
     }
   }
   await batch.commit();

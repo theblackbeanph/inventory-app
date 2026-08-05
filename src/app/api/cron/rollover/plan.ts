@@ -13,12 +13,25 @@ import { CATALOG_MAP, beginningDocId, stockDocId } from "@/lib/items";
 
 // ── Plan primitives ─────────────────────────────────────────────────────────
 
+export interface RolloverAnomaly {
+  id: string;
+  branch: Branch;
+  dept: Department;
+  item: string;
+  date: string;              // the `today` value whose BEG diverged
+  existingQty: number;
+  existingSetBy: string;
+  expectedQty: number;       // the close endCount that BEG should have matched
+  detectedAt: string;        // clock.nowISO at cron run
+}
+
 export type PlanWrite =
   | { kind: "adjAutoId"; data: StockAdjustment }
   | { kind: "closeSet"; id: string; data: DailyClose }
   | { kind: "closeMerge"; id: string; items: Record<string, DailyCloseItem> }
   | { kind: "branchStockMerge"; id: string; data: BranchStock }
-  | { kind: "begSet"; id: string; data: DailyBeginning };
+  | { kind: "begSet"; id: string; data: DailyBeginning }
+  | { kind: "anomalySet"; id: string; data: RolloverAnomaly };
 
 export interface RolloverPlan {
   closeWrites: PlanWrite[];        // auto-close batch OR partial-fill batch
@@ -53,9 +66,6 @@ export function computeRolloverPlan(input: RolloverInput): RolloverPlan {
   const deptAdj = input.adjustments.filter(a => a.department === dept);
   const deptBeg = input.beginnings.filter(b => b.department === dept);
   const closedDepts = new Set(input.closes.map(c => c.department));
-  const todayBegItems = new Set(
-    input.todayBeginnings.filter(b => b.department === dept).map(b => b.item)
-  );
 
   const logs: string[] = [];
   const closeWrites: PlanWrite[] = [];
@@ -282,12 +292,51 @@ export function computeRolloverPlan(input: RolloverInput): RolloverPlan {
   }
 
   // ── BEG carry-forward (both paths) ────────────────────────────────────────
+  // Guard behavior: compare pre-existing today-BEG against the source close's
+  // endCount. Agreement → skip (no-op). Divergence → overwrite with the close
+  // value AND write a rollover_anomalies doc so the divergence is detectable
+  // from the app, not just Vercel logs.
+  //
+  // Why overwrite is safe: no legitimate user handler produces BEG↔close
+  // divergence. handleSubmitAll / handleCorrectCount / handleAddMissingStocktakeItem
+  // all write BEG atomically with the close in the same batch, using the same
+  // endCount value. Divergence implies an out-of-band write (ad-hoc script,
+  // Firestore Console, cross-app write, or a future bug). Preserving the
+  // divergent value is the current failure mode (OCC MKT/dining 2026-08-03:
+  // BEG=14 preserved against close endCount=9, propagated for 2 days).
+  const todayBegByItem = new Map(
+    input.todayBeginnings
+      .filter(b => b.department === dept)
+      .map(b => [b.item, b] as const)
+  );
   let begCount = 0;
+  let anomalyCount = 0;
   for (const [item, qty] of Object.entries(endCounts)) {
-    if (todayBegItems.has(item)) continue;
     const catalogItem = deptCatalog.find(c => c.name === item);
     if (!catalogItem) continue;
     const begId = beginningDocId(branch, dept, item, today);
+    const existing = todayBegByItem.get(item);
+
+    if (existing) {
+      if (existing.qty === qty) continue; // agreement — leave as-is
+      const anomalyId = `${branch}__${dept}__${item}__${today}`;
+      begWrites.push({
+        kind: "anomalySet",
+        id: anomalyId,
+        data: {
+          id: anomalyId, branch, dept, item, date: today,
+          existingQty: existing.qty,
+          existingSetBy: existing.setBy,
+          expectedQty: qty,
+          detectedAt: clock.nowISO,
+        },
+      });
+      logs.push(
+        `${branch}/${dept}: BEG divergence for ${item} — existing ${existing.qty} (setBy=${existing.setBy}) vs close endCount ${qty}, overwriting with close value`
+      );
+      anomalyCount++;
+    }
+
     begWrites.push({
       kind: "begSet",
       id: begId,
@@ -300,6 +349,9 @@ export function computeRolloverPlan(input: RolloverInput): RolloverPlan {
   }
   if (begCount > 0) {
     logs.push(`${branch}/${dept}: carried ${begCount} beginnings → ${today}`);
+  }
+  if (anomalyCount > 0) {
+    logs.push(`${branch}/${dept}: recorded ${anomalyCount} BEG divergence anomal${anomalyCount === 1 ? "y" : "ies"}`);
   }
 
   return { closeWrites, draftDeletes, begWrites, logs };

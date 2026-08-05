@@ -376,15 +376,126 @@ describe("computeRolloverPlan", () => {
     });
   });
 
-  describe("cross-cutting", () => {
-    it("skips today's BEG when it already exists (does not overwrite)", () => {
+  describe("Test 9 — BEG divergence overwrites and logs (OCC 2026-08-03 class of failure)", () => {
+    it("overwrites a divergent today-BEG with the close endCount and writes an anomaly doc", () => {
+      // Regression: OCC MKT/dining 2026-08-03 had BEG=14/setBy=Kent written
+      // out-of-band before the 2am rollover. Old guard unconditionally skipped;
+      // wrong value propagated for 2 days.
       const plan = computeRolloverPlan(baseInput({
-        beginnings: [beg(ITEM_A, 10)],
-        adjustments: [adj(ITEM_A, "in", 5, 1)],
+        beginnings: [beg(ITEM_A, 14)],
+        adjustments: [adj(ITEM_A, "out", 5, 1)],   // expected = 9
         todayBeginnings: [{
           id: `${BRANCH}__${DEPT}__${ITEM_A}__${TODAY}`,
           branch: BRANCH, department: DEPT, item: ITEM_A, date: TODAY,
-          qty: 999, setBy: "admin", updatedAt: TODAY,
+          qty: 14, setBy: "Kent", updatedAt: YESTERDAY,   // out-of-band write
+        }],
+      }));
+
+      // BEG overwrite fires with the close value + system attribution
+      const begWrite = plan.begWrites.find(w => w.kind === "begSet" && (w as any).data.item === ITEM_A) as any;
+      expect(begWrite).toBeTruthy();
+      expect(begWrite.data).toMatchObject({ item: ITEM_A, qty: 9, setBy: "system", date: TODAY });
+
+      // Anomaly doc written with the diagnostic fingerprint
+      const anomalyWrite = plan.begWrites.find(w => w.kind === "anomalySet") as any;
+      expect(anomalyWrite).toBeTruthy();
+      expect(anomalyWrite.id).toBe(`${BRANCH}__${DEPT}__${ITEM_A}__${TODAY}`);
+      expect(anomalyWrite.data).toMatchObject({
+        branch: BRANCH, dept: DEPT, item: ITEM_A, date: TODAY,
+        existingQty: 14, existingSetBy: "Kent", expectedQty: 9,
+      });
+      expect(anomalyWrite.data.detectedAt).toBe("2026-08-04T02:00:00.000Z");
+
+      // Log line names the divergence
+      expect(plan.logs.some(l => /BEG divergence for Burger Patty/.test(l))).toBe(true);
+    });
+  });
+
+  describe("Test 10 — BEG agreement is preserved (no writes)", () => {
+    it("skips both BEG and anomaly writes when existing today-BEG matches close", () => {
+      const plan = computeRolloverPlan(baseInput({
+        beginnings: [beg(ITEM_A, 14)],
+        adjustments: [adj(ITEM_A, "out", 5, 1)],   // expected = 9
+        todayBeginnings: [{
+          id: `${BRANCH}__${DEPT}__${ITEM_A}__${TODAY}`,
+          branch: BRANCH, department: DEPT, item: ITEM_A, date: TODAY,
+          qty: 9, setBy: "admin", updatedAt: TODAY,   // matches close endCount
+        }],
+      }));
+      expect(plan.begWrites.filter(w => (w as any).data.item === ITEM_A)).toEqual([]);
+      expect(plan.begWrites.filter(w => w.kind === "anomalySet")).toEqual([]);
+      expect(plan.logs.some(l => /divergence/.test(l))).toBe(false);
+    });
+  });
+
+  describe("Test 11 — mixed BEG state (agree / diverge / no-existing)", () => {
+    it("only diverging and no-existing items get BEG writes; agreement preserved untouched", () => {
+      const ITEM_C = "Beef Tapa";
+      const plan = computeRolloverPlan(baseInput({
+        beginnings: [beg(ITEM_A, 10), beg(ITEM_B, 8), beg(ITEM_C, 5)],
+        // ITEM_A expected = 10, ITEM_B expected = 8, ITEM_C expected = 5
+        adjustments: [],
+        todayBeginnings: [
+          // ITEM_A agrees with expected — should be skipped
+          { id: `${BRANCH}__${DEPT}__${ITEM_A}__${TODAY}`, branch: BRANCH, department: DEPT, item: ITEM_A, date: TODAY, qty: 10, setBy: "admin", updatedAt: TODAY },
+          // ITEM_B diverges — overwrite + anomaly
+          { id: `${BRANCH}__${DEPT}__${ITEM_B}__${TODAY}`, branch: BRANCH, department: DEPT, item: ITEM_B, date: TODAY, qty: 99, setBy: "Kent", updatedAt: YESTERDAY },
+          // ITEM_C has no existing today-BEG — normal carry
+        ],
+      }));
+
+      // ITEM_A: no writes
+      const aWrites = plan.begWrites.filter(w => (w as any).data.item === ITEM_A);
+      expect(aWrites).toEqual([]);
+
+      // ITEM_B: both BEG overwrite + anomaly
+      const bBeg = plan.begWrites.find(w => w.kind === "begSet" && (w as any).data.item === ITEM_B) as any;
+      expect(bBeg.data.qty).toBe(8);
+      const bAnomaly = plan.begWrites.find(w => w.kind === "anomalySet" && (w as any).data.item === ITEM_B) as any;
+      expect(bAnomaly).toBeTruthy();
+      expect(bAnomaly.data).toMatchObject({ existingQty: 99, existingSetBy: "Kent", expectedQty: 8 });
+
+      // ITEM_C: BEG only, no anomaly
+      const cBeg = plan.begWrites.find(w => w.kind === "begSet" && (w as any).data.item === ITEM_C) as any;
+      expect(cBeg.data.qty).toBe(5);
+      const cAnomaly = plan.begWrites.find(w => w.kind === "anomalySet" && (w as any).data.item === ITEM_C);
+      expect(cAnomaly).toBeFalsy();
+
+      // Only one anomaly in the whole plan
+      expect(plan.begWrites.filter(w => w.kind === "anomalySet")).toHaveLength(1);
+    });
+  });
+
+  describe("Test 12 — anomaly doc shape and idempotent ID", () => {
+    it("uses branch__dept__item__today as the doc ID so re-runs overwrite in place", () => {
+      const plan = computeRolloverPlan(baseInput({
+        beginnings: [beg(ITEM_A, 20)],
+        adjustments: [],
+        todayBeginnings: [{
+          id: `${BRANCH}__${DEPT}__${ITEM_A}__${TODAY}`,
+          branch: BRANCH, department: DEPT, item: ITEM_A, date: TODAY,
+          qty: 5, setBy: "phantom", updatedAt: YESTERDAY,
+        }],
+      }));
+      const anomaly = plan.begWrites.find(w => w.kind === "anomalySet") as any;
+      expect(anomaly.id).toBe(`${BRANCH}__${DEPT}__${ITEM_A}__${TODAY}`);
+      // The data.id must equal the doc id (idempotency contract with route.ts)
+      expect(anomaly.data.id).toBe(anomaly.id);
+    });
+  });
+
+  describe("cross-cutting", () => {
+    it("skips today's BEG when it already exists AND matches close endCount", () => {
+      // Agreement path: existing today-BEG == derived endCount → no writes.
+      // (Legitimate user handlers always produce this shape: BEG and close
+      // written in the same batch using the same value.)
+      const plan = computeRolloverPlan(baseInput({
+        beginnings: [beg(ITEM_A, 10)],
+        adjustments: [adj(ITEM_A, "in", 5, 1)],   // expected = 15
+        todayBeginnings: [{
+          id: `${BRANCH}__${DEPT}__${ITEM_A}__${TODAY}`,
+          branch: BRANCH, department: DEPT, item: ITEM_A, date: TODAY,
+          qty: 15, setBy: "admin", updatedAt: TODAY,
         }],
       }));
       expect(plan.begWrites).toEqual([]);
