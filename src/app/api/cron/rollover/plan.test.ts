@@ -307,6 +307,75 @@ describe("computeRolloverPlan", () => {
     });
   });
 
+  describe("Test 8 — partial close, draft-only item (Commit B fix)", () => {
+    it("carries a draft-only item forward using the draft count (no BEG, no adj)", () => {
+      // Prior behavior: this draft was silently dropped by partial-fill.
+      // Fixed: draft-only items are included, treated as endCount with variance.
+      const plan = computeRolloverPlan(baseInput({
+        adjustments: [adj(ITEM_A, "in", 5, 1)],
+        beginnings: [beg(ITEM_A, 10)],
+        closes: [close({
+          [ITEM_A]: { beginning: 10, inQty: 5, outQty: 0, expected: 15, endCount: 15, variance: 0 },
+        })],
+        drafts: [draft({ [ITEM_B]: 12 })],   // ITEM_B: no BEG, no adj, not in close
+      }));
+
+      // Assertion 1: count adj written with draft qty + the AUTO-chip marker
+      const adjs = adjWrites(plan.closeWrites);
+      expect(adjs).toHaveLength(1);
+      expect(adjs[0].data).toMatchObject({
+        item: ITEM_B, type: "count", qty: 12,
+        loggedBy: "system", note: "Auto-filled (partial stocktake)",
+      });
+
+      // Assertion 2: branchStock upsert at draft qty (NOT 0)
+      const stockWrite = findWrite(plan.closeWrites, "branchStockMerge", w => w.data.item === ITEM_B) as any;
+      expect(stockWrite.data.qty).toBe(12);
+
+      // Assertion 3: close doc merges the draft-only item with variance = draftCount
+      // (intentional — surfaces "we didn't know this existed" on the dashboard)
+      const mergeWrite = findWrite(plan.closeWrites, "closeMerge", () => true) as any;
+      expect(mergeWrite.items[ITEM_B]).toEqual({
+        beginning: 0, inQty: 0, outQty: 0,
+        expected: 0, endCount: 12, variance: 12,
+      });
+
+      // BEG carry uses the draft count
+      const begB = plan.begWrites.find(w => (w as any).data.item === ITEM_B) as any;
+      expect(begB.data.qty).toBe(12);
+    });
+
+    it("manual count wins over draft in partial-fill path", () => {
+      // Symmetry with auto-close: manual > draft > expected.
+      const plan = computeRolloverPlan(baseInput({
+        closes: [close({
+          [ITEM_A]: { beginning: 0, inQty: 0, outQty: 0, expected: 0, endCount: 0, variance: 0 },
+        })],
+        adjustments: [adj(ITEM_B, "count", 7, 5)],  // manual count
+        drafts: [draft({ [ITEM_B]: 12 })],           // draft (ignored)
+      }));
+      const adjs = adjWrites(plan.closeWrites);
+      expect(adjs).toHaveLength(1);
+      expect(adjs[0].data.qty).toBe(7);   // manual won
+    });
+
+    it("draft count is used when BEG + adj exist but no manual count", () => {
+      const plan = computeRolloverPlan(baseInput({
+        closes: [close({
+          [ITEM_A]: { beginning: 0, inQty: 0, outQty: 0, expected: 0, endCount: 0, variance: 0 },
+        })],
+        beginnings: [beg(ITEM_B, 5)],
+        adjustments: [adj(ITEM_B, "in", 3, 1)],  // expected would be 8
+        drafts: [draft({ [ITEM_B]: 15 })],        // draft wins
+      }));
+      const mergeWrite = findWrite(plan.closeWrites, "closeMerge", () => true) as any;
+      expect(mergeWrite.items[ITEM_B]).toEqual({
+        beginning: 5, inQty: 3, outQty: 0,
+        expected: 8, endCount: 15, variance: 7,
+      });
+    });
+  });
+
   describe("cross-cutting", () => {
     it("skips today's BEG when it already exists (does not overwrite)", () => {
       const plan = computeRolloverPlan(baseInput({

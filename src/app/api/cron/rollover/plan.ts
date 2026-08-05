@@ -177,20 +177,36 @@ export function computeRolloverPlan(input: RolloverInput): RolloverPlan {
     const closedItems = new Set(Object.keys(existingClose?.items ?? {}));
     const inQtyMap: Record<string, number> = {};
     const outQtyMap: Record<string, number> = {};
+    const latestManualCount: Record<string, { qty: number; id: number }> = {};
     for (const adj of deptAdj) {
       if (adj.type === "in") inQtyMap[adj.item] = (inQtyMap[adj.item] ?? 0) + adj.qty;
       else if (adj.type === "out" || adj.type === "waste" || adj.type === "sales_import") {
         outQtyMap[adj.item] = (outQtyMap[adj.item] ?? 0) + adj.qty;
+      } else if (adj.type === "count") {
+        if (!latestManualCount[adj.item] || adj.id > latestManualCount[adj.item].id) {
+          latestManualCount[adj.item] = { qty: adj.qty, id: adj.id };
+        }
       }
     }
     const beginnings: Record<string, number> = {};
     for (const b of deptBeg) beginnings[b.item] = b.qty;
 
-    // NOTE: draft-only items (no BEG, no adj) are intentionally excluded here
-    // to preserve current behavior. Commit B adds them; see Test 8.
+    // Merge draft counts (mirrors auto-close path lines 82-89 conventions).
+    const draftCounts: Record<string, number> = {};
+    for (const { data: draft } of input.drafts) {
+      if (draft.department !== dept) continue;
+      for (const [item, qty] of Object.entries(draft.counts)) {
+        if (!(item in draftCounts)) draftCounts[item] = qty;
+      }
+    }
+
+    // Include draft-only items so partial stocktakes don't silently drop counts
+    // for items with no BEG/adj history (new catalog items, dormant wake-ups,
+    // upstream cron failures, migration residue). Priority: manual > draft > expected.
     const itemsWithData = new Set<string>([
       ...deptBeg.map(b => b.item),
       ...deptAdj.map(a => a.item),
+      ...Object.keys(draftCounts),
     ]);
 
     let filled = 0;
@@ -202,7 +218,15 @@ export function computeRolloverPlan(input: RolloverInput): RolloverPlan {
       const inQ = inQtyMap[item] ?? 0;
       const outQ = outQtyMap[item] ?? 0;
       const expected = Math.max(0, beg + inQ - outQ);
-      endCounts[item] = expected;
+      const manualCount = latestManualCount[item];
+      const finalEnd = manualCount?.qty ?? draftCounts[item] ?? expected;
+      // INTENTIONAL: variance = finalEnd - expected (matches auto-close path).
+      // For draft-only items (no BEG/IN/OUT chain), variance surfaces the
+      // "we didn't know this existed" signal on the dashboard. Do NOT change
+      // to variance: 0 — that would suppress the anomaly this fix is meant to
+      // catch. See Commit B rationale.
+      const variance = finalEnd - expected;
+      endCounts[item] = finalEnd;
       filled++;
 
       closeWrites.push({
@@ -210,7 +234,7 @@ export function computeRolloverPlan(input: RolloverInput): RolloverPlan {
         data: {
           id: clock.nextAdjId(),
           branch, department: dept, date: yesterday,
-          item, type: "count", qty: expected,
+          item, type: "count", qty: finalEnd,
           loggedBy: "system", note: "Auto-filled (partial stocktake)",
         },
       });
@@ -226,7 +250,7 @@ export function computeRolloverPlan(input: RolloverInput): RolloverPlan {
           data: {
             id: sId, branch, department: dept, item,
             category: catalogItem.category, unit: catalogItem.unit,
-            qty: expected, reorderAt: catalogItem.reorderAt,
+            qty: finalEnd, reorderAt: catalogItem.reorderAt,
             lastUpdated: yesterday, lastUpdatedBy: "system",
           },
         });
@@ -234,7 +258,7 @@ export function computeRolloverPlan(input: RolloverInput): RolloverPlan {
 
       filledCloseItems[item] = {
         beginning: beg, inQty: inQ, outQty: outQ,
-        expected, endCount: expected, variance: 0,
+        expected, endCount: finalEnd, variance,
       };
     }
 
