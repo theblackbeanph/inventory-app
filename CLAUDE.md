@@ -60,6 +60,19 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
 - **cron-job.org API key**: stored in macOS Keychain (service: `cronjob-org`, account: `chris@theblackbean.ph`)
 - **Manual trigger**: `curl -X GET https://inventory.theblackbean.ph/api/cron/storehub-sync` — syncs yesterday PHT
 
+#### Rollover Architecture (2026-08-05)
+- **Split**: `src/app/api/cron/rollover/plan.ts` (`computeRolloverPlan`, pure function, injectable `now`/`nowISO`/`nextAdjId`) + `route.ts` (thin fetch → compute → execute handler). The 3-batch atomicity contract is preserved: auto-close/partial-fill → draft cleanup → BEG carry.
+- **Tests**: `plan.test.ts` — 21 cases covering auto-close, partial-fill fallback, draft-only carry, manual > draft > expected priority, and divergence guard. Run with `npm test`.
+- **Smoke script**: `scripts/smoke-rollover-plan.mts` — replays the plan against real prod snapshots for yesterday, prints per-(branch, dept) diff without writing. Reusable for future cron work (`storehub-sync`, `generate-pullouts`).
+- **Draft-only carry (Commit B)**: partial-fill path includes items with drafts but no BEG/adj — writes with `note: "Auto-filled (partial stocktake)"` and `variance = draftCount - 0` (intentional — surfaces "we didn't know this existed" on dashboard; do NOT change to 0).
+
+#### BEG Divergence Guard (2026-08-05)
+- **What it does**: during BEG carry-forward, if a `daily_beginning` doc for today already exists but its `qty` diverges from the close's `endCount`, rollover overwrites the BEG with the close value and writes a doc to `rollover_anomalies`.
+- **Why**: all four user handlers (`handleSubmitAll`, `handleCorrectCount`, `handleAddMissingStocktakeItem`, tap-to-correct) batch-write BEG atomically with the close using the same `endCount`. Any BEG-vs-close divergence therefore implies an out-of-band write (script, Firestore Console, cross-app write, or a future code bug). The close doc is the audit-locked source of truth; divergence means the BEG is wrong.
+- **Precipitated by**: Aug 3 2026 phantom BEG=14 for MKT/dining Oventime Carrot Cake (setBy=Kent, source unrecoverable — log retention exceeded). Rollover's prior unconditional guard preserved the phantom and cascaded it into Aug 3 close + Aug 4 BEG. Cleaned up via `scripts/patch-oventime-carrot-cake-0803-beg.mjs`.
+- **`rollover_anomalies` collection**: doc ID `{branch}__{dept}__{item}__{date}` (idempotent — re-running rollover on same state overwrites with identical content). Schema: `{ branch, dept, item, date, existingQty, existingSetBy, expectedQty, detectedAt }`. Rules: any authenticated user can read/write (matches other rollover-written collections). Query for the dashboard surface via `where("detectedAt", ">=", <ts>)`.
+- **False positive check**: if this ever fires, first confirm no legitimate handler could have produced the divergence. If the handlers changed to write BEG asymmetrically with the close, the guard would clobber legitimate user data — audit before shipping any handler edit that touches BEG.
+
 ### Business Date vs. Calendar Date
 - **`businessDatePHT()`** in `src/app/stock/_lib/helpers.ts` — use this (not `todayPHT()`) for all stocktake writes and queries
 - Before 2am PHT, the active business day is still yesterday — matches the rollover cron schedule (`0 18 * * *` UTC = 02:00 PHT)
@@ -104,7 +117,7 @@ https://www.notion.so/Inventory-App-Context-34cd0e7b27b6807d8866e68d368c8ed6
   - **Partial** (manual close, some items auto-filled by rollover cron) — amber "Partial count" banner showing `X of Y confirmed by <closedBy>` + `Z items auto-filled by system`
   - **Fully auto** (`countType !== "manual"`) — neutral slate banner
 - Per-row: cron-filled items show a muted **AUTO** chip (in slate) in place of the green variance ✓, with the qty rendered in slate rather than black
-- Detection: parent computes `autoFilledStocktakeItems: Set<string>` from `stocktakeAdjustments` where `type ∈ {count, correction}` AND `loggedBy === "system"` AND `note` contains `"Auto-filled"` — matches the marker written by rollover `route.ts:196–202`. Passed to `StocktakeCompleted` as the `autoFilledItems` prop.
+- Detection: parent computes `autoFilledStocktakeItems: Set<string>` from `stocktakeAdjustments` where `type ∈ {count, correction}` AND `loggedBy === "system"` AND `note` contains `"Auto-filled"` — matches the marker written by rollover's partial-fill path (`plan.ts` after the 2026-08-05 extraction; historically `route.ts:196–202`). Passed to `StocktakeCompleted` as the `autoFilledItems` prop.
 - Any new writer of auto-filled count adjustments MUST use the same `loggedBy: "system"` + `note: "Auto-filled ..."` convention or these items will render as manual and mislead the team.
 
 ### Stocktake Auto-Save (2026-06-11)
